@@ -200,6 +200,40 @@ html[dir=rtl] .modal-close{right:auto;left:16px}
 .empty-state{text-align:center;padding:60px;color:var(--muted);font-size:14px}
 .empty-state i{font-size:48px;opacity:.3;display:block;margin-bottom:12px}
 select.status-sel{background:var(--card2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 8px;font-size:12px;cursor:pointer}
+.messages-wrap{display:flex;gap:16px;height:calc(100vh - 160px);min-height:500px}
+.conv-list-wrap{width:300px;flex-shrink:0;background:var(--card);border:1px solid var(--border);border-radius:14px;display:flex;flex-direction:column;overflow:hidden}
+.conv-list-head{padding:14px 16px;border-bottom:1px solid var(--border);font-weight:700;font-size:14px}
+.conv-list{flex:1;overflow-y:auto}
+.conv-item{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:.2s}
+.conv-item:hover{background:rgba(37,99,235,.06)}
+.conv-item.active{background:rgba(37,99,235,.15)}
+.conv-avatar{width:38px;height:38px;border-radius:50%;background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.conv-info{flex:1;min-width:0}
+.conv-name{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.conv-last{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.conv-time{font-size:10px;color:var(--muted);flex-shrink:0}
+.conv-right-wrap{flex:1;background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;display:flex;flex-direction:column}
+.conv-chat-panel{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.conv-chat-head{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.conv-messages{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:8px}
+.msg-bubble-wrap{display:flex}
+.msg-bubble-wrap.msg-out{justify-content:flex-end}
+.msg-bubble-wrap.msg-in{justify-content:flex-start}
+.msg-bubble{max-width:70%;padding:9px 13px;border-radius:14px;font-size:13px;position:relative}
+.msg-in .msg-bubble{background:var(--card2);border-bottom-left-radius:4px}
+.msg-out .msg-bubble{background:var(--accent);color:#fff;border-bottom-right-radius:4px}
+.msg-meta{font-size:9px;opacity:.7;margin-top:4px}
+.conv-chat-input{padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px}
+.conv-chat-input textarea{flex:1;background:var(--card2);border:1px solid var(--border);color:var(--text);border-radius:10px;padding:9px 12px;font-size:13px;resize:none;min-height:40px;max-height:100px;font-family:inherit}
+.conv-back-btn{display:none;background:none;border:none;color:var(--accent);font-size:13px;cursor:pointer;font-weight:700}
+@media(max-width:768px){
+  .messages-wrap{flex-direction:column;height:auto}
+  .conv-list-wrap{width:100%;height:400px}
+  .conv-list-wrap.hide-mobile{display:none}
+  .conv-right-wrap{display:none;height:520px}
+  .conv-right-wrap.show-mobile{display:flex}
+  .conv-back-btn{display:inline-block}
+}
 </style>
 </head>
 <body>
@@ -393,6 +427,9 @@ select.status-sel{background:var(--card2);border:1px solid var(--border);color:v
     </div>
     <div class="nav-item" onclick="showSection('bot')">
       <i class="bi bi-robot"></i><span data-i18n="nav_bot">Bot AI</span>
+    </div>
+    <div class="nav-item" onclick="showSection('messages')">
+      <i class="bi bi-chat-dots"></i><span data-i18n="nav_messages">Messages</span>
     </div>
     <div class="nav-item" onclick="showSection('integrations')">
       <i class="bi bi-plug"></i><span data-i18n="nav_integrations">ربط المتجر</span>
@@ -648,6 +685,50 @@ select.status-sel{background:var(--card2);border:1px solid var(--border);color:v
               </button>
             </div>
             <div id="botLogs" style="max-height:400px;overflow-y:auto;padding:12px;font-size:12px"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="sec_messages" class="section">
+    <div id="messagesComingSoon" class="plan-gate" style="display:none">
+      <i class="bi bi-chat-dots"></i>
+      <h5 data-i18n="bot_coming_soon_title">🚀 قريباً</h5>
+      <p data-i18n="bot_coming_soon_desc">نعمل دروك على تفعيل المساعد الذكي رسمياً (بانتظار موافقة Meta على إنستغرام). راح نخبرك أول واحد وقت يطلع!</p>
+    </div>
+    <div id="messagesLocked" class="plan-gate" style="display:none">
+      <i class="bi bi-chat-dots"></i>
+      <h5 data-i18n="locked_messages">المحادثات غير متاحة</h5>
+      <p data-i18n="upgrade_messages">قم بالترقية إلى Pro أو Full</p>
+      <button class="btn-primary" style="margin-top:16px" onclick="showSection('plans')">
+        <span data-i18n="see_plans">Voir les abonnements</span>
+      </button>
+    </div>
+    <div id="messagesContent" class="messages-wrap" style="display:none">
+      <div class="conv-list-wrap" id="convListWrap">
+        <div class="conv-list-head" data-i18n="nav_messages">المحادثات</div>
+        <div class="conv-list" id="convList"><div class="empty-state"><span class="spinner"></span></div></div>
+      </div>
+      <div class="conv-right-wrap" id="convRightWrap">
+        <div class="empty-state" id="convEmptyState" style="flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column">
+          <i class="bi bi-chat-square-text"></i>
+          <div data-i18n="select_conversation">اختر محادثة لعرضها</div>
+        </div>
+        <div class="conv-chat-panel" id="convChatPanel" style="display:none">
+          <div class="conv-chat-head">
+            <div style="display:flex;align-items:center;gap:10px">
+              <button class="conv-back-btn" onclick="backToConvList()">←</button>
+              <div>
+                <div id="convChatName" style="font-weight:700;font-size:14px">—</div>
+                <div id="convChatPlatform" style="font-size:11px;color:var(--muted)">—</div>
+              </div>
+            </div>
+          </div>
+          <div class="conv-messages" id="convMessages"></div>
+          <div class="conv-chat-input">
+            <textarea id="convInput" data-i18n-placeholder="type_message" placeholder="اكتب رسالة..."></textarea>
+            <button class="btn-primary" id="convSendBtn" onclick="sendCustomerMessage()"><i class="bi bi-send"></i></button>
           </div>
         </div>
       </div>
@@ -995,7 +1076,10 @@ var I18N = {
     pf_bot_soon_cap:"Bot AI (3 000 messages/mois)",pf_order_cap:"300 commandes/mois max",
     pf_lifetime:"Paiement unique — à vie",
     home_cost_th:"🏠 Domicile (coût)",home_cust_th:"🏠 Domicile (client)",
-    desk_cost_th:"🏢 Bureau (coût)",desk_cust_th:"🏢 Bureau (client)"
+    desk_cost_th:"🏢 Bureau (coût)",desk_cust_th:"🏢 Bureau (client)",
+    nav_messages:"Messages",locked_messages:"Messages non disponibles",
+    upgrade_messages:"Passez au plan Pro ou Full",no_conversations:"Aucune conversation",
+    select_conversation:"Sélectionnez une conversation",type_message:"Écrire un message..."
   },
   AR:{
     nav_dashboard:"الرئيسية",nav_orders:"الطلبات",nav_products:"المنتجات",
@@ -1033,7 +1117,10 @@ var I18N = {
     pf_bot_soon_cap:"بوت AI (سقف 3,000 رسالة/شهر)",pf_order_cap:"سقف 300 طلب/شهر",
     pf_lifetime:"دفعة واحدة — مدى الحياة",
     home_cost_th:"🏠 منزل (تكلفة)",home_cust_th:"🏠 منزل (زبون)",
-    desk_cost_th:"🏢 مكتب (تكلفة)",desk_cust_th:"🏢 مكتب (زبون)"
+    desk_cost_th:"🏢 مكتب (تكلفة)",desk_cust_th:"🏢 مكتب (زبون)",
+    nav_messages:"المحادثات",locked_messages:"المحادثات غير متاحة",
+    upgrade_messages:"قم بالترقية إلى Pro أو Full",no_conversations:"لا توجد محادثات",
+    select_conversation:"اختر محادثة لعرضها",type_message:"اكتب رسالة..."
   },
   EN:{
     nav_dashboard:"Dashboard",nav_orders:"Orders",nav_products:"Products",
@@ -1071,7 +1158,10 @@ var I18N = {
     pf_bot_soon_cap:"AI Bot (3,000 msgs/month cap)",pf_order_cap:"300 orders/month cap",
     pf_lifetime:"One-time payment — lifetime",
     home_cost_th:"🏠 Home (cost)",home_cust_th:"🏠 Home (customer)",
-    desk_cost_th:"🏢 Office (cost)",desk_cust_th:"🏢 Office (customer)"
+    desk_cost_th:"🏢 Office (cost)",desk_cust_th:"🏢 Office (customer)",
+    nav_messages:"Messages",locked_messages:"Messages Unavailable",
+    upgrade_messages:"Upgrade to Pro or Full",no_conversations:"No conversations",
+    select_conversation:"Select a conversation",type_message:"Type a message..."
   }
 };
 
@@ -1101,6 +1191,10 @@ function applyLang(lang){
   if(lb) lb.textContent = t("login_btn");
   document.querySelectorAll(".currency").forEach(function(el){
     el.textContent = lang==="AR"?"دج":lang==="EN"?"$":"€";
+  });
+  document.querySelectorAll("[data-i18n-placeholder]").forEach(function(el){
+    var k = el.getAttribute("data-i18n-placeholder");
+    el.setAttribute("placeholder", t(k));
   });
 }
 
@@ -1164,6 +1258,8 @@ function logout(){
   authToken   = null;
   localStorage.removeItem("of_token");
   stopOrdersPolling();
+  stopConvListPolling();
+  stopConvPolling();
   document.getElementById("loginPage").style.display="flex";
   document.getElementById("loginUser").value="";
   document.getElementById("loginPass").value="";
@@ -1217,7 +1313,7 @@ function showSection(s){
   var titles = {
     dashboard:t("nav_dashboard"),orders:t("nav_orders"),products:t("nav_products"),
     customers:t("nav_customers"),cities:t("nav_cities"),store:t("nav_store"),
-    bot:t("nav_bot"),integrations:t("nav_integrations"),plans:t("nav_plans"),settings:t("nav_settings")
+    bot:t("nav_bot"),messages:t("nav_messages"),integrations:t("nav_integrations"),plans:t("nav_plans"),settings:t("nav_settings")
   };
   document.getElementById("pageTitle").textContent = titles[s]||s;
 
@@ -1228,9 +1324,11 @@ function showSection(s){
   else if(s==="cities") loadCities();
   else if(s==="store") loadStore();
   else if(s==="bot") loadBot();
+  else if(s==="messages") loadMessagesSection();
   else if(s==="integrations") loadIntegrations();
   else if(s==="plans") highlightCurrentPlan();
   else if(s==="settings") loadSettings();
+  if(s!=="messages"){ stopConvListPolling(); stopConvPolling(); }
 
   if(window.innerWidth <= 768){
     document.getElementById("sidebar").classList.remove("open");
@@ -1755,6 +1853,147 @@ async function loadBot(){
   }catch(e){}
   loadBotLogs();
 }
+
+// =========================================================
+// MESSAGES / CONVERSATIONS — إرسال واستقبال رسائل العملاء عبر Meta API
+// =========================================================
+var CURRENT_CONV_SENDER   = null;
+var CURRENT_CONV_PLATFORM = null;
+var _convPollTimer     = null;
+var _convListPollTimer = null;
+
+function loadMessagesSection(){
+  var hasBot = planHas("bot");
+  document.getElementById("messagesComingSoon").style.display = (hasBot && !BOT_LAUNCHED) ? "block" : "none";
+  document.getElementById("messagesLocked").style.display     = (!hasBot) ? "block" : "none";
+  document.getElementById("messagesContent").style.display    = (hasBot && BOT_LAUNCHED) ? "flex" : "none";
+  if(!hasBot || !BOT_LAUNCHED){ stopConvListPolling(); stopConvPolling(); return; }
+  loadConversations();
+  startConvListPolling();
+}
+
+async function loadConversations(){
+  try{
+    var r = await apiGet("/getConversations", {});
+    if(r.status==="ok") renderConversationsList(r.data||[]);
+  }catch(e){ console.error(e); }
+}
+
+function renderConversationsList(list){
+  var el = document.getElementById("convList");
+  if(!list.length){
+    el.innerHTML = '<div class="empty-state"><i class="bi bi-chat-dots"></i>'+t("no_conversations")+'</div>';
+    return;
+  }
+  el.innerHTML = list.map(function(c){
+    var icon = c.platform==="wa" ? "📱" : c.platform==="ig" ? "📷" : "📘";
+    var active = (c.senderId===CURRENT_CONV_SENDER) ? " active" : "";
+    var dirIcon = c.lastDirection==="out" ? "↩️ " : "";
+    var timeTxt = c.lastTimestamp ? new Date(c.lastTimestamp*1000).toLocaleString("fr-DZ",{hour:"2-digit",minute:"2-digit",day:"2-digit",month:"2-digit"}) : "";
+    var safeSid  = String(c.senderId).replace(/'/g,"\\'");
+    var safeName = String(c.name||"").replace(/'/g,"\\'");
+    return '<div class="conv-item'+active+'" onclick="openConversation(\''+safeSid+'\',\''+c.platform+'\',\''+safeName+'\')">'+
+      '<div class="conv-avatar">'+icon+'</div>'+
+      '<div class="conv-info">'+
+        '<div class="conv-name">'+(c.name||c.senderId)+'</div>'+
+        '<div class="conv-last">'+dirIcon+(c.lastMessage||"").substring(0,40)+'</div>'+
+      '</div>'+
+      '<div class="conv-time">'+timeTxt+'</div>'+
+    '</div>';
+  }).join("");
+}
+
+function openConversation(senderId, platform, name){
+  CURRENT_CONV_SENDER   = senderId;
+  CURRENT_CONV_PLATFORM = platform;
+  document.getElementById("convEmptyState").style.display = "none";
+  document.getElementById("convChatPanel").style.display  = "flex";
+  document.getElementById("convChatName").textContent = name || senderId;
+  var icon = platform==="wa" ? "📱 WhatsApp" : platform==="ig" ? "📷 Instagram" : "📘 Facebook";
+  document.getElementById("convChatPlatform").textContent = icon;
+  loadConversationMessages(senderId);
+  startConvPolling();
+  loadConversations();
+  if(window.innerWidth<=768){
+    document.getElementById("convListWrap").classList.add("hide-mobile");
+    document.getElementById("convRightWrap").classList.add("show-mobile");
+  }
+}
+
+function backToConvList(){
+  document.getElementById("convListWrap").classList.remove("hide-mobile");
+  document.getElementById("convRightWrap").classList.remove("show-mobile");
+}
+
+async function loadConversationMessages(senderId){
+  var box = document.getElementById("convMessages");
+  box.innerHTML = '<div style="text-align:center;padding:30px"><span class="spinner"></span></div>';
+  try{
+    var r = await apiGet("/getConversationMessages", {senderId: senderId});
+    if(r.status==="ok") renderConversationMessages(r.data||[]);
+    else box.innerHTML = '<div class="empty-state">'+(r.message||"Erreur")+'</div>';
+  }catch(e){ box.innerHTML = '<div class="empty-state">Erreur</div>'; }
+}
+
+function renderConversationMessages(items){
+  var box = document.getElementById("convMessages");
+  if(!items.length){ box.innerHTML='<div class="empty-state"><i class="bi bi-chat"></i></div>'; return; }
+  box.innerHTML = items.map(function(m){
+    var cls = m.direction==="out" ? "msg-out" : "msg-in";
+    var viaBadge = m.via==="manual" ? " 👤" : m.via==="bot" ? " 🤖" : "";
+    var safeText = (m.text||"").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    return '<div class="msg-bubble-wrap '+cls+'"><div class="msg-bubble">'+safeText+'<div class="msg-meta">'+(m.date||"")+viaBadge+'</div></div></div>';
+  }).join("");
+  box.scrollTop = box.scrollHeight;
+}
+
+async function sendCustomerMessage(){
+  var input = document.getElementById("convInput");
+  var text  = input.value.trim();
+  if(!text || !CURRENT_CONV_SENDER) return;
+  var btn = document.getElementById("convSendBtn");
+  btn.disabled = true;
+  try{
+    var r = await apiPost("/sendMessage", {senderId: CURRENT_CONV_SENDER, text: text});
+    if(r.status==="ok"){
+      input.value = "";
+      loadConversationMessages(CURRENT_CONV_SENDER);
+      loadConversations();
+    } else { toast("❌ "+r.message,"err"); }
+  }catch(e){ toast("Erreur réseau","err"); }
+  finally{ btn.disabled = false; }
+}
+
+function startConvListPolling(){
+  stopConvListPolling();
+  _convListPollTimer = setInterval(function(){
+    var activeSec = document.querySelector(".section.active");
+    if(!activeSec || activeSec.id!=="sec_messages") return;
+    loadConversations();
+  }, 10000);
+}
+function stopConvListPolling(){
+  if(_convListPollTimer){ clearInterval(_convListPollTimer); _convListPollTimer=null; }
+}
+
+function startConvPolling(){
+  stopConvPolling();
+  _convPollTimer = setInterval(function(){
+    var activeSec = document.querySelector(".section.active");
+    if(!activeSec || activeSec.id!=="sec_messages" || !CURRENT_CONV_SENDER) return;
+    loadConversationMessages(CURRENT_CONV_SENDER);
+  }, 6000);
+}
+function stopConvPolling(){
+  if(_convPollTimer){ clearInterval(_convPollTimer); _convPollTimer=null; }
+}
+
+document.addEventListener("DOMContentLoaded", function(){
+  var ci = document.getElementById("convInput");
+  if(ci) ci.addEventListener("keydown", function(e){
+    if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); sendCustomerMessage(); }
+  });
+});
 
 // =========================================================
 // INTEGRATIONS — WooCommerce
