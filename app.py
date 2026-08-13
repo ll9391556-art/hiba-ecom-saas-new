@@ -1312,6 +1312,85 @@ def api_update_bot_settings():
         _settings_cache.clear()
     return ok_json(True)
 
+# ── Conversations / Messages — إرسال واستقبال رسائل العملاء ──────────
+@app.route("/api/getConversations", methods=["GET"])
+@require_auth
+def api_get_conversations():
+    """قائمة محادثات العملاء لهذا التاجر، مرتبة بآخر رسالة أولاً."""
+    uid = request.auth_uid
+    raw = _fb_get(f"conversations_meta/{uid}") or {}
+    result = []
+    if isinstance(raw, dict):
+        for sender_id, m in raw.items():
+            if not isinstance(m, dict): continue
+            result.append({
+                "senderId": sender_id, "platform": m.get("platform",""),
+                "lastMessage": m.get("lastMessage",""), "lastTimestamp": m.get("lastTimestamp",0),
+                "lastDirection": m.get("lastDirection",""), "name": m.get("name","") or sender_id,
+            })
+    result.sort(key=lambda x: x.get("lastTimestamp",0), reverse=True)
+    return ok_json(result)
+
+@app.route("/api/getConversationMessages", methods=["GET"])
+@require_auth
+def api_get_conversation_messages():
+    """سجل رسائل محادثة واحدة مرتب زمنياً (الأقدم أولاً) لعرضه في واجهة الدردشة."""
+    uid = request.auth_uid
+    sender_id = request.args.get("senderId","").strip()
+    if not sender_id: return err_json("Missing senderId")
+    raw = _fb_get(f"conversations/{uid}/{sender_id}") or {}
+    items = []
+    if isinstance(raw, dict):
+        for k, v in raw.items():
+            if isinstance(v, dict):
+                row = dict(v); row["id"] = k
+                items.append(row)
+    items.sort(key=lambda x: x.get("timestamp", 0))
+    return ok_json(items)
+
+@app.route("/api/sendMessage", methods=["POST"])
+@require_auth
+def api_send_message():
+    """يرسل رسالة يدوية من لوحة التحكم للعميل عبر نفس القناة (فيسبوك/إنستغرام/واتساب)
+    التي راسل بها آخر مرة، باستخدام Meta Graph API — ويسجّلها في سجل المحادثة."""
+    body = request.get_json(silent=True) or {}
+    uid  = request.auth_uid
+    sender_id = str(body.get("senderId") or "").strip()
+    text      = str(body.get("text") or "").strip()
+    if not sender_id or not text:
+        return err_json("Missing fields")
+    if not PLANS.get(get_user_plan(uid), {}).get("bot", False):
+        return err_json("هذه الميزة تتطلب خطة Pro أو أعلى", 403)
+    meta = _fb_get(f"conversations_meta/{uid}/{sender_id}") or {}
+    platform = meta.get("platform","fb")
+    page_id  = meta.get("pageId","")
+    if not meta:
+        return err_json("لا توجد محادثة سابقة مع هذا العميل — لا يمكن بدء محادثة جديدة بسبب قيود ميتا", 404)
+    bot_settings = _fb_get(f"users/{request.auth_username}") or {}
+    ok = False
+    if platform == "wa":
+        token = str(bot_settings.get("whtsapp_token") or "").strip()
+        phone_number_id = page_id or str(bot_settings.get("phone_number_id") or "").strip()
+        if not token or not phone_number_id:
+            return err_json("إعدادات واتساب غير مكتملة")
+        ok = send_whatsapp_message(phone_number_id, sender_id, text, token)
+    elif platform == "ig":
+        token  = str(bot_settings.get("instgram_access_token") or "").strip()
+        fb_pid = page_id or str(bot_settings.get("page_id_FB") or "").strip()
+        if not token:
+            return err_json("إعدادات إنستغرام غير مكتملة")
+        ok = send_facebook_message(sender_id, text, token, page_id=(fb_pid or None))
+    else:
+        token  = str(bot_settings.get("fb_access_token") or "").strip()
+        fb_pid = page_id or str(bot_settings.get("page_id_FB") or "").strip()
+        if not token:
+            return err_json("إعدادات فيسبوك غير مكتملة")
+        ok = send_facebook_message(sender_id, text, token, page_id=(fb_pid or None))
+    if not ok:
+        return err_json("فشل إرسال الرسالة — تحقق من اتصال Facebook/Instagram/WhatsApp", 502)
+    _log_conversation(uid, sender_id, "out", text, platform, via="manual", page_id=page_id)
+    return ok_json(True)
+
 # ── Plans / Subscriptions ─────────────────────────────────
 @app.route("/api/getUserPlan", methods=["GET"])
 @require_auth
@@ -1726,6 +1805,35 @@ def log_ai_message(sender_id, user_msg, bot_msg, platform="FB", merchant_uid="")
     except Exception as e:
         logging.error(f"log_ai_message: {e}")
 
+def _log_conversation(uid, sender_id, direction, text, platform, via="", page_id="", name=""):
+    """يسجّل رسالة (واردة أو صادرة) في سجل محادثة موحّد لكل عميل، ويحدّث ملخّص المحادثة
+    (آخر رسالة، القناة، معرّف الصفحة/الرقم المستعمل) — يغذّي واجهة 'المحادثات' الجديدة
+    بدون أي تأثير على ai_logs أو chats الموجودة مسبقاً."""
+    if not uid or not sender_id:
+        return
+    now = time.time()
+    entry = {
+        "direction": direction, "text": (text or "")[:2000], "platform": platform,
+        "timestamp": now, "date": time.strftime("%Y-%m-%d %H:%M:%S"),
+    }
+    if via: entry["via"] = via
+    try:
+        _firebase_ref(f"conversations/{uid}/{sender_id}").push(entry)
+        meta_patch = {
+            "lastMessage": (text or "")[:200], "lastTimestamp": now,
+            "lastDirection": direction, "platform": platform,
+        }
+        if page_id: meta_patch["pageId"] = page_id
+        if name: meta_patch["name"] = name
+        existing_meta = _fb_get(f"conversations_meta/{uid}/{sender_id}")
+        if existing_meta:
+            _fb_patch(f"conversations_meta/{uid}/{sender_id}", meta_patch)
+        else:
+            meta_patch.setdefault("name", name or sender_id)
+            _fb_put(f"conversations_meta/{uid}/{sender_id}", meta_patch)
+    except Exception as e:
+        logging.error(f"_log_conversation: {e}")
+
 def get_products_text(bot_settings):
     try:
         uid      = bot_settings.get("User_ID")
@@ -1906,7 +2014,7 @@ def ask_gemini(sender_id, user_message, bot_settings,
         return "عذراً، حاول مرة أخرى بعد قليل.", None
 
 def process_bg(sender_id, user_text, bot, send_fn,
-               media_bytes=b"", mime_type="", is_voice=False, is_image=False, platform="fb"):
+               media_bytes=b"", mime_type="", is_voice=False, is_image=False, platform="fb", page_id=""):
     def task():
         logging.info(f"🔄 process_bg START | sender={sender_id} | platform={platform} | text={user_text[:80]!r}")
         try:
@@ -1928,6 +2036,8 @@ def process_bg(sender_id, user_text, bot, send_fn,
             try:
                 ok = send_fn(reply)
                 logging.info(f"📨 send_fn result for {sender_id}: {ok}")
+                if ok and merchant_uid:
+                    _log_conversation(merchant_uid, sender_id, "out", reply, platform, via="bot", page_id=page_id)
             except Exception as send_err:
                 logging.error(f"send_fn raised exception ({sender_id}): {send_err}")
             if order:
@@ -1986,6 +2096,7 @@ def webhook():
                             continue
                         wa_tok = str(bot.get("whtsapp_token") or "").strip()
                         if not wa_tok: continue
+                        merchant_uid_wa = bot.get("User_ID", "")
                         for msg in val.get("messages",[]) or []:
                             sid=msg.get("from",""); mtype=msg.get("type","")
                             utxt=""; mdata=b""; mime=""; isvoc=isimg=False
@@ -2006,9 +2117,12 @@ def webhook():
                                 def _s(reply,_sid=sid,_pid=phone_id,_tok=wa_tok): return send_whatsapp_message(_pid,_sid,reply,_tok)
                                 _executor.submit(lambda fn=_s: fn(sticker_reply())); continue
                             if not utxt and not mdata: continue
+                            log_text_wa = utxt or ("🎙️ [رسالة صوتية]" if isvoc else "🖼️ [صورة]" if isimg else "")
+                            if merchant_uid_wa:
+                                _log_conversation(merchant_uid_wa, sid, "in", log_text_wa, "wa", page_id=phone_id)
                             if is_rate_limited(sid,"wa"): continue
                             def wa_fn(reply,_sid=sid,_pid=phone_id,_tok=wa_tok): return send_whatsapp_message(_pid,_sid,reply,_tok)
-                            process_bg(sid,utxt,bot,wa_fn,mdata,mime,isvoc,isimg,"wa")
+                            process_bg(sid,utxt,bot,wa_fn,mdata,mime,isvoc,isimg,"wa",phone_id)
                 elif "messaging" in entry:
                     page_id=str(entry.get("id","") or "").strip()
                     bot=get_user_settings(page_id)
@@ -2037,6 +2151,8 @@ def webhook():
                     # Meta تفرض استعمال معرف صفحة فيسبوك (fb_pid) أو الكلمة "me" مع توكن الصفحة، وإلا يرجع خطأ (#3).
                     send_pid = (fb_pid or None) if is_instagram else page_id
                     logging.info(f"🔑 Using {'Instagram' if is_instagram else 'Facebook'} token for page_id={page_id} | send_pid={send_pid or 'me'}")
+                    platform_str = "ig" if is_instagram else "fb"
+                    merchant_uid_fb = bot.get("User_ID", "")
                     msging_list = entry.get("messaging",[]) or []
                     logging.info(f"📋 messaging entries count: {len(msging_list)}")
                     for me in msging_list:
@@ -2069,11 +2185,14 @@ def webhook():
                             # ويبقى البوت ساكت (هذا كان سبب توقف الرد على إنستغرام).
                             logging.info(f"⏭️ skipped: no text/media extracted from message (utxt empty, mdata empty) | me={me}")
                             continue
+                        log_text_fb = utxt or ("🎙️ [رسالة صوتية]" if isvoc else "🖼️ [صورة]" if isimg else "")
+                        if merchant_uid_fb:
+                            _log_conversation(merchant_uid_fb, sid, "in", log_text_fb, platform_str, page_id=(send_pid or page_id))
                         if is_rate_limited(sid,"fb"):
                             logging.info(f"⏭️ skipped: rate limited for sid={sid}")
                             continue
                         def fb_fn(reply,_sid=sid,_tok=tok,_pid=send_pid): return send_facebook_message(_sid,reply,_tok,page_id=_pid)
-                        process_bg(sid,utxt,bot,fb_fn,mdata,mime,isvoc,isimg,"fb")
+                        process_bg(sid,utxt,bot,fb_fn,mdata,mime,isvoc,isimg,platform_str,(send_pid or page_id))
         except Exception as e:
             logging.error(f"handle() error: {e}")
     _executor.submit(handle, data)
