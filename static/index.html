@@ -240,6 +240,9 @@ select.status-sel{background:var(--card2);border:1px solid var(--border);color:v
 .chart-canvas-wrap{position:relative;height:220px;flex:1}
 .chart-caption{font-size:11px;color:var(--muted);text-align:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);line-height:1.6}
 .chart-caption strong{color:var(--text)}
+.perm-chip{display:flex;align-items:center;gap:6px;background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:12px;cursor:pointer;user-select:none}
+.perm-chip input{cursor:pointer}
+.member-perm-badge{display:inline-block;background:rgba(139,92,246,.12);color:#a78bfa;border-radius:6px;padding:2px 7px;font-size:10px;margin:1px}
 </style>
 </head>
 <body>
@@ -439,6 +442,9 @@ select.status-sel{background:var(--card2);border:1px solid var(--border);color:v
     </div>
     <div class="nav-item" onclick="showSection('integrations')">
       <i class="bi bi-plug"></i><span data-i18n="nav_integrations">ربط المتجر</span>
+    </div>
+    <div class="nav-item" id="navTeam" onclick="showSection('team')" style="display:none">
+      <i class="bi bi-person-badge"></i><span data-i18n="nav_team">الفريق</span>
     </div>
     <div class="nav-item" id="navPlans" onclick="showSection('plans')">
       <i class="bi bi-star"></i><span data-i18n="nav_plans">Abonnements</span>
@@ -811,6 +817,42 @@ select.status-sel{background:var(--card2);border:1px solid var(--border);color:v
     </div>
   </div>
 
+  <div id="sec_team" class="section">
+    <div id="teamLocked" class="plan-gate" style="display:none">
+      <i class="bi bi-person-badge"></i>
+      <h5 data-i18n="locked_team">ميزة الفريق غير متاحة</h5>
+      <p data-i18n="upgrade_team">قم بالترقية إلى Starter أو أعلى</p>
+      <button class="btn-primary" style="margin-top:16px" onclick="showSection('plans')">
+        <span data-i18n="see_plans">Voir les abonnements</span>
+      </button>
+    </div>
+    <div id="teamContent">
+      <div class="table-wrap">
+        <div class="table-head">
+          <h5 data-i18n="nav_team">الفريق</h5>
+          <div style="display:flex;align-items:center;gap:10px">
+            <span id="teamCountLabel" style="font-size:12px;color:var(--muted)">—</span>
+            <button class="btn-primary btn-sm" id="addMemberBtn" onclick="openAddMemberModal()">
+              <i class="bi bi-plus-lg"></i> <span data-i18n="add_member">إضافة عضو</span>
+            </button>
+          </div>
+        </div>
+        <div style="overflow-x:auto">
+          <table>
+            <thead><tr>
+              <th data-i18n="member_username">اسم المستخدم</th>
+              <th data-i18n="member_name">الاسم</th>
+              <th data-i18n="permissions">الصلاحيات</th>
+              <th data-i18n="status">الحالة</th>
+              <th></th>
+            </tr></thead>
+            <tbody id="teamTbl"><tr><td colspan="5" class="empty-state"><span class="spinner"></span></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="sec_plans" class="section">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
       <h4 class="mb-0" data-i18n="nav_plans">Abonnements</h4>
@@ -1013,6 +1055,32 @@ select.status-sel{background:var(--card2);border:1px solid var(--border);color:v
   </div>
 </div>
 
+<div id="teamMemberModal" class="modal-overlay">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeModal('teamMemberModal')">✕</button>
+    <h4 id="teamModalTitle" data-i18n="add_member">إضافة عضو</h4>
+    <input type="hidden" id="tm_original_username" value=""/>
+    <div class="form-group"><label data-i18n="member_username">اسم المستخدم</label><input id="tm_username" class="form-control" autocomplete="off"/></div>
+    <div class="form-group"><label data-i18n="member_name">الاسم</label><input id="tm_name" class="form-control"/></div>
+    <div class="form-group"><label id="tm_password_label" data-i18n="member_password">كلمة السر</label><input id="tm_password" class="form-control" type="text" autocomplete="new-password"/>
+      <small id="tm_password_hint" style="display:none;color:var(--muted);font-size:11px"></small>
+    </div>
+    <div class="form-group">
+      <label data-i18n="permissions">الصلاحيات</label>
+      <div id="tm_perms" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+    </div>
+    <div class="form-group" id="tm_active_wrap" style="display:none">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;color:var(--text)">
+        <input type="checkbox" id="tm_active"/> <span data-i18n="active">نشط</span>
+      </label>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+      <button class="btn-outline" onclick="closeModal('teamMemberModal')"><span data-i18n="cancel">Annuler</span></button>
+      <button class="btn-primary" onclick="saveTeamMember()"><span data-i18n="save">Enregistrer</span></button>
+    </div>
+  </div>
+</div>
+
 <div class="toast-wrap" id="toastWrap"></div>
 
 <script>
@@ -1029,11 +1097,16 @@ var allOrders    = [];
 var allCustomers = [];
 var currentLang  = localStorage.getItem("of_lang") || "FR";
 var currentPlan  = "free";
+var currentRole  = "owner";
 var merchantCurrency = "DZD";
 var BOT_LAUNCHED = false;
 var PLAN_USAGE = {};
 var USER_SOURCE = "local";
 var LIFETIME_SLOTS_LEFT = null;
+var TEAM_MEMBERS = [];
+var TEAM_COUNT = 0;
+var TEAM_MAX = 6;
+var TEAM_PERM_KEYS = ["orders","products","customers","cities","store","bot","messages","integrations"];
 var CURRENCY_SYMBOLS = {DZD:"دج", EUR:"€", USD:"$"};
 function curSym(){ return CURRENCY_SYMBOLS[merchantCurrency] || merchantCurrency; }
 
@@ -1111,7 +1184,13 @@ var I18N = {
     nav_messages:"Messages",locked_messages:"Messages non disponibles",
     upgrade_messages:"Passez au plan Pro ou Full",no_conversations:"Aucune conversation",
     select_conversation:"Sélectionnez une conversation",type_message:"Écrire un message...",
-    chart_status:"📊 Répartition des statuts",chart_trend:"📈 Bénéfice (7 derniers jours)",chart_topproducts:"🏆 Meilleurs produits"
+    chart_status:"📊 Répartition des statuts",chart_trend:"📈 Bénéfice (7 derniers jours)",chart_topproducts:"🏆 Meilleurs produits",
+    nav_team:"Équipe",add_member:"Ajouter un membre",member_username:"Nom d'utilisateur",member_name:"Nom",
+    member_password:"Mot de passe",permissions:"Permissions",active:"Actif",inactive:"Inactif",
+    locked_team:"Fonctionnalité Équipe non disponible",upgrade_team:"Passez au plan Starter ou supérieur",
+    edit:"Modifier",delete:"Supprimer",confirm_delete_member:"Supprimer ce membre de l'équipe ?",
+    team_count_of:"membre(s) sur",leave_blank_password:"Laisser vide pour ne pas changer",
+    owner_only_feature:"Fonctionnalité réservée au propriétaire du compte"
   },
   AR:{
     nav_dashboard:"الرئيسية",nav_orders:"الطلبات",nav_products:"المنتجات",
@@ -1153,7 +1232,13 @@ var I18N = {
     nav_messages:"المحادثات",locked_messages:"المحادثات غير متاحة",
     upgrade_messages:"قم بالترقية إلى Pro أو Full",no_conversations:"لا توجد محادثات",
     select_conversation:"اختر محادثة لعرضها",type_message:"اكتب رسالة...",
-    chart_status:"📊 توزيع حالة الطلبات",chart_trend:"📈 الأرباح خلال 7 أيام",chart_topproducts:"🏆 أفضل المنتجات مبيعاً"
+    chart_status:"📊 توزيع حالة الطلبات",chart_trend:"📈 الأرباح خلال 7 أيام",chart_topproducts:"🏆 أفضل المنتجات مبيعاً",
+    nav_team:"الفريق",add_member:"إضافة عضو",member_username:"اسم المستخدم",member_name:"الاسم",
+    member_password:"كلمة السر",permissions:"الصلاحيات",active:"نشط",inactive:"معطّل",
+    locked_team:"ميزة الفريق غير متاحة",upgrade_team:"قم بالترقية إلى Starter أو أعلى",
+    edit:"تعديل",delete:"حذف",confirm_delete_member:"حذف هذا العضو من الفريق؟",
+    team_count_of:"عضو من أصل",leave_blank_password:"اتركها فارغة إذا ما بغيتيش تبدّلها",
+    owner_only_feature:"هذه الميزة متاحة فقط لصاحب الحساب"
   },
   EN:{
     nav_dashboard:"Dashboard",nav_orders:"Orders",nav_products:"Products",
@@ -1195,7 +1280,13 @@ var I18N = {
     nav_messages:"Messages",locked_messages:"Messages Unavailable",
     upgrade_messages:"Upgrade to Pro or Full",no_conversations:"No conversations",
     select_conversation:"Select a conversation",type_message:"Type a message...",
-    chart_status:"📊 Order status breakdown",chart_trend:"📈 Profit (last 7 days)",chart_topproducts:"🏆 Best-selling products"
+    chart_status:"📊 Order status breakdown",chart_trend:"📈 Profit (last 7 days)",chart_topproducts:"🏆 Best-selling products",
+    nav_team:"Team",add_member:"Add Member",member_username:"Username",member_name:"Name",
+    member_password:"Password",permissions:"Permissions",active:"Active",inactive:"Inactive",
+    locked_team:"Team feature unavailable",upgrade_team:"Upgrade to Starter or higher",
+    edit:"Edit",delete:"Delete",confirm_delete_member:"Delete this team member?",
+    team_count_of:"member(s) of",leave_blank_password:"Leave blank to keep unchanged",
+    owner_only_feature:"This feature is available to the account owner only"
   }
 };
 
@@ -1232,6 +1323,7 @@ function applyLang(lang){
   });
   var activeSec = document.querySelector(".section.active");
   if(activeSec && activeSec.id==="sec_dashboard" && currentUser) loadDashboard();
+  if(activeSec && activeSec.id==="sec_team" && currentUser) renderTeamTable(TEAM_MEMBERS);
 }
 
 function setLang(l){ applyLang(l); }
@@ -1263,6 +1355,7 @@ async function doLogin(){
     if(r.status==="ok"){
       currentUser = r.data;
       authToken   = r.data.token || null;
+      currentRole = r.data.role || "owner";
       if(authToken) localStorage.setItem("of_token", authToken);
       document.getElementById("loginPage").style.display="none";
       document.getElementById("sideUser").textContent = u;
@@ -1292,6 +1385,8 @@ document.getElementById("loginPass").addEventListener("keydown", function(e){
 function logout(){
   currentUser = null;
   authToken   = null;
+  currentRole = "owner";
+  TEAM_MEMBERS = [];
   localStorage.removeItem("of_token");
   stopOrdersPolling();
   stopConvListPolling();
@@ -1337,6 +1432,7 @@ function uname(){ return currentUser ? (currentUser.Username||currentUser.userna
 // =========================================================
 function showSection(s){
   if(s==="plans" && USER_SOURCE==="fiverr"){ s = "store"; }
+  if(s==="team" && currentRole!=="owner"){ toast("⛔ "+t("owner_only_feature"),"err"); return; }
   document.querySelectorAll(".section").forEach(function(el){ el.classList.remove("active"); });
   document.querySelectorAll(".nav-item").forEach(function(el){ el.classList.remove("active"); });
   var sec = document.getElementById("sec_"+s);
@@ -1349,7 +1445,8 @@ function showSection(s){
   var titles = {
     dashboard:t("nav_dashboard"),orders:t("nav_orders"),products:t("nav_products"),
     customers:t("nav_customers"),cities:t("nav_cities"),store:t("nav_store"),
-    bot:t("nav_bot"),messages:t("nav_messages"),integrations:t("nav_integrations"),plans:t("nav_plans"),settings:t("nav_settings")
+    bot:t("nav_bot"),messages:t("nav_messages"),integrations:t("nav_integrations"),
+    team:t("nav_team"),plans:t("nav_plans"),settings:t("nav_settings")
   };
   document.getElementById("pageTitle").textContent = titles[s]||s;
 
@@ -1362,6 +1459,7 @@ function showSection(s){
   else if(s==="bot") loadBot();
   else if(s==="messages") loadMessagesSection();
   else if(s==="integrations") loadIntegrations();
+  else if(s==="team") loadTeam();
   else if(s==="plans") highlightCurrentPlan();
   else if(s==="settings") loadSettings();
   if(s!=="messages"){ stopConvListPolling(); stopConvPolling(); }
@@ -1394,8 +1492,12 @@ async function loadUserPlan(){
       PLAN_USAGE = r.data.usage || {};
       USER_SOURCE = r.data.source || "local";
       LIFETIME_SLOTS_LEFT = r.data.lifetimeSlotsLeft;
+      if(r.data.role) currentRole = r.data.role;
+      TEAM_COUNT = r.data.teamCount || 0;
       var navPlansEl = document.getElementById("navPlans");
       if(navPlansEl) navPlansEl.style.display = (USER_SOURCE==="fiverr") ? "none" : "flex";
+      var navTeamEl = document.getElementById("navTeam");
+      if(navTeamEl) navTeamEl.style.display = (currentRole==="owner" && planHas("team")) ? "flex" : "none";
       renderCurrencyButtons();
       var pd = document.getElementById("planDisplay");
       if(pd) pd.innerHTML = 'Plan: <span class="plan-badge plan-'+currentPlan+'">'+currentPlan.toUpperCase()+'</span>';
@@ -1406,12 +1508,12 @@ async function loadUserPlan(){
 
 function planHas(feature){
   var features = {
-    free:       {bot:false,store:false,integrations:false},
-    starter:    {bot:false,store:true, integrations:false},
-    pro:        {bot:true, store:true, integrations:true},
-    enterprise: {bot:true, store:true, integrations:true},
-    full:       {bot:true, store:true, integrations:true},
-    lifetime:   {bot:true, store:true, integrations:true}
+    free:       {bot:false,store:false,integrations:false,team:false},
+    starter:    {bot:false,store:true, integrations:false,team:true},
+    pro:        {bot:true, store:true, integrations:true, team:true},
+    enterprise: {bot:true, store:true, integrations:true, team:true},
+    full:       {bot:true, store:true, integrations:true, team:true},
+    lifetime:   {bot:true, store:true, integrations:true, team:true}
   };
   return (features[currentPlan]||features.free)[feature]||false;
 }
@@ -2247,6 +2349,156 @@ async function disconnectWoo(){
     if(r.status==="ok"){ toast("✅ تم فك الربط","ok"); loadIntegrations(); }
     else toast("❌ "+r.message,"err");
   }catch(e){ toast("خطأ فالاتصال","err"); }
+}
+
+// =========================================================
+// TEAM — إدارة أعضاء الفريق (owner فقط)
+// =========================================================
+function _teamPermLabel(key){
+  var map = {
+    orders:"nav_orders", products:"nav_products", customers:"nav_customers",
+    cities:"nav_cities", store:"nav_store", bot:"nav_bot",
+    messages:"nav_messages", integrations:"nav_integrations"
+  };
+  return t(map[key]||key);
+}
+
+async function loadTeam(){
+  var hasTeam = planHas("team") && currentRole==="owner";
+  document.getElementById("teamLocked").style.display  = hasTeam ? "none"  : "block";
+  document.getElementById("teamContent").style.display = hasTeam ? "block" : "none";
+  if(!hasTeam) return;
+  var tbl = document.getElementById("teamTbl");
+  tbl.innerHTML = '<tr><td colspan="5" class="empty-state"><span class="spinner"></span></td></tr>';
+  try{
+    var r = await apiGet("/team/listMembers", {});
+    if(r.status==="ok"){
+      TEAM_MEMBERS = r.data||[];
+      renderTeamTable(TEAM_MEMBERS);
+      var lbl = document.getElementById("teamCountLabel");
+      if(lbl) lbl.textContent = TEAM_MEMBERS.length+" / "+TEAM_MAX+" "+t("team_count_of");
+      var addBtn = document.getElementById("addMemberBtn");
+      if(addBtn) addBtn.disabled = TEAM_MEMBERS.length >= TEAM_MAX;
+    } else {
+      tbl.innerHTML = '<tr><td colspan="5" class="empty-state">'+(r.message||"Erreur")+'</td></tr>';
+    }
+  }catch(e){ tbl.innerHTML = '<tr><td colspan="5" class="empty-state">Erreur</td></tr>'; }
+}
+
+function renderTeamTable(list){
+  var tbl = document.getElementById("teamTbl");
+  if(!tbl) return;
+  if(!list || !list.length){
+    tbl.innerHTML = '<tr><td colspan="5"><div class="empty-state"><i class="bi bi-person-badge"></i></div></td></tr>';
+    return;
+  }
+  tbl.innerHTML = list.map(function(m){
+    var perms = m.permissions||{};
+    var permsHtml = TEAM_PERM_KEYS.filter(function(k){ return perms[k]; }).map(function(k){
+      return '<span class="member-perm-badge">'+_teamPermLabel(k)+'</span>';
+    }).join("") || '<span style="color:var(--muted);font-size:11px">—</span>';
+    var statusBadge = m.active!==false
+      ? '<span class="badge bc">'+t("active")+'</span>'
+      : '<span class="badge br">'+t("inactive")+'</span>';
+    var safeUser = String(m.username).replace(/'/g,"\\'");
+    return '<tr>'+
+      '<td><strong>'+m.username+'</strong></td>'+
+      '<td>'+(m.name||m.username)+'</td>'+
+      '<td style="white-space:normal;max-width:280px">'+permsHtml+'</td>'+
+      '<td>'+statusBadge+'</td>'+
+      '<td style="display:flex;gap:6px">'+
+        '<button class="btn-outline btn-sm" onclick="openEditMemberModal(\''+safeUser+'\')"><i class="bi bi-pencil"></i></button>'+
+        '<button class="btn-danger" onclick="deleteTeamMember(\''+safeUser+'\')"><i class="bi bi-trash"></i></button>'+
+      '</td>'+
+    '</tr>';
+  }).join("");
+}
+
+function _renderPermCheckboxes(selected){
+  selected = selected || {};
+  var box = document.getElementById("tm_perms");
+  box.innerHTML = TEAM_PERM_KEYS.map(function(k){
+    var checked = selected[k] ? " checked" : "";
+    return '<label class="perm-chip"><input type="checkbox" class="tm-perm-cb" value="'+k+'"'+checked+'/> '+_teamPermLabel(k)+'</label>';
+  }).join("");
+}
+
+function _collectPermCheckboxes(){
+  var out = {};
+  document.querySelectorAll(".tm-perm-cb").forEach(function(cb){
+    out[cb.value] = cb.checked;
+  });
+  return out;
+}
+
+function openAddMemberModal(){
+  if(TEAM_MEMBERS.length >= TEAM_MAX){ toast("❌ "+t("team_count_of")+" "+TEAM_MAX,"err"); return; }
+  document.getElementById("teamModalTitle").textContent = t("add_member");
+  document.getElementById("tm_original_username").value = "";
+  document.getElementById("tm_username").value = "";
+  document.getElementById("tm_username").disabled = false;
+  document.getElementById("tm_name").value = "";
+  document.getElementById("tm_password").value = "";
+  document.getElementById("tm_password").placeholder = "";
+  document.getElementById("tm_password_hint").style.display = "none";
+  document.getElementById("tm_active_wrap").style.display = "none";
+  _renderPermCheckboxes({});
+  openModal("teamMemberModal");
+}
+
+function openEditMemberModal(username){
+  var m = TEAM_MEMBERS.find(function(x){ return x.username===username; });
+  if(!m) return;
+  document.getElementById("teamModalTitle").textContent = t("edit")+" — "+username;
+  document.getElementById("tm_original_username").value = username;
+  document.getElementById("tm_username").value = username;
+  document.getElementById("tm_username").disabled = true;
+  document.getElementById("tm_name").value = m.name||username;
+  document.getElementById("tm_password").value = "";
+  document.getElementById("tm_password_hint").style.display = "block";
+  document.getElementById("tm_password_hint").textContent = t("leave_blank_password");
+  document.getElementById("tm_active_wrap").style.display = "block";
+  document.getElementById("tm_active").checked = m.active!==false;
+  _renderPermCheckboxes(m.permissions||{});
+  openModal("teamMemberModal");
+}
+
+async function saveTeamMember(){
+  var originalUsername = document.getElementById("tm_original_username").value;
+  var username = document.getElementById("tm_username").value.trim();
+  var name     = document.getElementById("tm_name").value.trim();
+  var password = document.getElementById("tm_password").value.trim();
+  var perms    = _collectPermCheckboxes();
+  if(!username){ toast("❌ "+t("member_username"),"err"); return; }
+  var isEdit = !!originalUsername;
+  if(!isEdit && !password){ toast("❌ "+t("member_password"),"err"); return; }
+  try{
+    var r;
+    if(isEdit){
+      var payload = {username: originalUsername, name: name, permissions: perms,
+                      active: document.getElementById("tm_active").checked};
+      if(password) payload.password = password;
+      r = await apiPost("/team/updateMember", payload);
+    } else {
+      r = await apiPost("/team/addMember", {username:username, password:password, name:name, permissions:perms});
+    }
+    if(r.status==="ok"){
+      toast("✅ "+t("save"),"ok");
+      closeModal("teamMemberModal");
+      loadTeam();
+    } else {
+      toast("❌ "+r.message,"err");
+    }
+  }catch(e){ toast("Erreur réseau","err"); }
+}
+
+async function deleteTeamMember(username){
+  if(!confirm(t("confirm_delete_member"))) return;
+  try{
+    var r = await apiPost("/team/deleteMember", {username:username});
+    if(r.status==="ok"){ toast("✅ "+t("delete"),"ok"); loadTeam(); }
+    else toast("❌ "+r.message,"err");
+  }catch(e){ toast("Erreur réseau","err"); }
 }
 
 async function saveBotSettings(){
