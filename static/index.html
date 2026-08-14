@@ -6,6 +6,7 @@
 <title>OrderFlow</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <style>
 :root{
   --bg:#0d1b2e;--sidebar:#0a1628;--card:#111f35;--card2:#0f1c30;
@@ -234,6 +235,11 @@ select.status-sel{background:var(--card2);border:1px solid var(--border);color:v
   .conv-right-wrap.show-mobile{display:flex}
   .conv-back-btn{display:inline-block}
 }
+.chart-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;display:flex;flex-direction:column;height:100%}
+.chart-card h5{font-size:14px;font-weight:700;margin-bottom:14px}
+.chart-canvas-wrap{position:relative;height:220px;flex:1}
+.chart-caption{font-size:11px;color:var(--muted);text-align:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);line-height:1.6}
+.chart-caption strong{color:var(--text)}
 </style>
 </head>
 <body>
@@ -480,6 +486,31 @@ select.status-sel{background:var(--card2);border:1px solid var(--border);color:v
       <div class="col-6 col-md-3"><div class="stat-card"><div class="d-flex justify-content-between align-items-start"><div><div class="stat-lbl" data-i18n="refused">Refusées</div><div class="stat-num" id="d_ref">—</div></div><i class="bi bi-x-circle stat-icon" style="color:var(--red)"></i></div></div></div>
       <div class="col-6 col-md-3"><div class="stat-card"><div class="d-flex justify-content-between align-items-start"><div><div class="stat-lbl" data-i18n="total_profit">Bénéfice Total</div><div class="stat-num" id="d_profit">—</div></div><i class="bi bi-cash-coin stat-icon" style="color:var(--yellow)"></i></div></div></div>
     </div>
+
+    <div class="row g-3 mb-4">
+      <div class="col-md-4">
+        <div class="chart-card">
+          <h5 data-i18n="chart_status">📊 توزيع حالة الطلبات</h5>
+          <div class="chart-canvas-wrap"><canvas id="chartStatus"></canvas></div>
+          <div class="chart-caption" id="chartStatusCaption">—</div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="chart-card">
+          <h5 data-i18n="chart_trend">📈 الأرباح خلال 7 أيام</h5>
+          <div class="chart-canvas-wrap"><canvas id="chartTrend"></canvas></div>
+          <div class="chart-caption" id="chartTrendCaption">—</div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="chart-card">
+          <h5 data-i18n="chart_topproducts">🏆 أفضل المنتجات مبيعاً</h5>
+          <div class="chart-canvas-wrap"><canvas id="chartProducts"></canvas></div>
+          <div class="chart-caption" id="chartProductsCaption">—</div>
+        </div>
+      </div>
+    </div>
+
     <div class="row g-3">
       <div class="col-md-6">
         <div class="table-wrap">
@@ -1079,7 +1110,8 @@ var I18N = {
     desk_cost_th:"🏢 Bureau (coût)",desk_cust_th:"🏢 Bureau (client)",
     nav_messages:"Messages",locked_messages:"Messages non disponibles",
     upgrade_messages:"Passez au plan Pro ou Full",no_conversations:"Aucune conversation",
-    select_conversation:"Sélectionnez une conversation",type_message:"Écrire un message..."
+    select_conversation:"Sélectionnez une conversation",type_message:"Écrire un message...",
+    chart_status:"📊 Répartition des statuts",chart_trend:"📈 Bénéfice (7 derniers jours)",chart_topproducts:"🏆 Meilleurs produits"
   },
   AR:{
     nav_dashboard:"الرئيسية",nav_orders:"الطلبات",nav_products:"المنتجات",
@@ -1120,7 +1152,8 @@ var I18N = {
     desk_cost_th:"🏢 مكتب (تكلفة)",desk_cust_th:"🏢 مكتب (زبون)",
     nav_messages:"المحادثات",locked_messages:"المحادثات غير متاحة",
     upgrade_messages:"قم بالترقية إلى Pro أو Full",no_conversations:"لا توجد محادثات",
-    select_conversation:"اختر محادثة لعرضها",type_message:"اكتب رسالة..."
+    select_conversation:"اختر محادثة لعرضها",type_message:"اكتب رسالة...",
+    chart_status:"📊 توزيع حالة الطلبات",chart_trend:"📈 الأرباح خلال 7 أيام",chart_topproducts:"🏆 أفضل المنتجات مبيعاً"
   },
   EN:{
     nav_dashboard:"Dashboard",nav_orders:"Orders",nav_products:"Products",
@@ -1161,7 +1194,8 @@ var I18N = {
     desk_cost_th:"🏢 Office (cost)",desk_cust_th:"🏢 Office (customer)",
     nav_messages:"Messages",locked_messages:"Messages Unavailable",
     upgrade_messages:"Upgrade to Pro or Full",no_conversations:"No conversations",
-    select_conversation:"Select a conversation",type_message:"Type a message..."
+    select_conversation:"Select a conversation",type_message:"Type a message...",
+    chart_status:"📊 Order status breakdown",chart_trend:"📈 Profit (last 7 days)",chart_topproducts:"🏆 Best-selling products"
   }
 };
 
@@ -1196,6 +1230,8 @@ function applyLang(lang){
     var k = el.getAttribute("data-i18n-placeholder");
     el.setAttribute("placeholder", t(k));
   });
+  var activeSec = document.querySelector(".section.active");
+  if(activeSec && activeSec.id==="sec_dashboard" && currentUser) loadDashboard();
 }
 
 function setLang(l){ applyLang(l); }
@@ -1426,6 +1462,13 @@ function highlightCurrentPlan(){
 // =========================================================
 // DASHBOARD
 // =========================================================
+var chartStatusInstance   = null;
+var chartTrendInstance    = null;
+var chartProductsInstance = null;
+
+function chartTextColor(){ return DARK_MODE ? "#8899bb" : "#64748b"; }
+function chartGridColor(){ return DARK_MODE ? "rgba(255,255,255,.07)" : "rgba(0,0,0,.07)"; }
+
 async function loadDashboard(){
   try{
     var r = await apiGet("/getDashboard", {});
@@ -1447,6 +1490,147 @@ async function loadDashboard(){
       var cl = p.rem<=0?"br":"bn";
       return "<tr><td>"+p.name+"</td><td>"+p.rem+"</td><td><span class='badge "+cl+"'>"+p.stat+"</span></td></tr>";
     }).join("") || '<tr><td colspan="3" class="empty-state">✅</td></tr>';
+
+    renderStatusChart(d, cur);
+    renderProductsChart(d);
+    loadTrendChart(cur);
+  }catch(e){ console.error(e); }
+}
+
+function renderStatusChart(d, cur){
+  var canvas = document.getElementById("chartStatus");
+  if(!canvas || typeof Chart==="undefined") return;
+  var deliveredOnly = d.delivered||0;
+  var confirmedOnly = Math.max(0, (d.confirmed||0) - deliveredOnly);
+  var refusedOnly   = d.refused||0;
+  var pendingOnly   = Math.max(0, (d.totalOrders||0) - confirmedOnly - deliveredOnly - refusedOnly);
+  var labels = [t("confirmed"), t("delivered"), t("refused"), "Pending"];
+  var data   = [confirmedOnly, deliveredOnly, refusedOnly, pendingOnly];
+
+  if(chartStatusInstance) chartStatusInstance.destroy();
+  chartStatusInstance = new Chart(canvas, {
+    type: "doughnut",
+    data: {
+      labels: labels,
+      datasets: [{
+        data: data,
+        backgroundColor: ["#3b82f6","#10b981","#ef4444","#f59e0b"],
+        borderColor: "transparent",
+        borderWidth: 2,
+        hoverOffset: 6
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: "62%",
+      plugins: {
+        legend: { position: "bottom", labels: { color: chartTextColor(), font:{size:11}, padding:12, usePointStyle:true, boxWidth:8 } },
+        tooltip: { callbacks: { label: function(ctx){ return " "+ctx.label+": "+ctx.parsed; } } }
+      }
+    }
+  });
+
+  var cap = document.getElementById("chartStatusCaption");
+  if(cap){
+    cap.innerHTML = "<strong>"+(d.totalOrders||0)+"</strong> "+t("total_orders")+" — "+
+      "<strong style='color:var(--green)'>"+(d.confirmRate||0)+"%</strong> "+t("confirmed")+" · "+
+      "<strong style='color:var(--red)'>"+(d.refuseRate||0)+"%</strong> "+t("refused");
+  }
+}
+
+function renderProductsChart(d){
+  var canvas = document.getElementById("chartProducts");
+  if(!canvas || typeof Chart==="undefined") return;
+  var top = (d.topProducts||[]).slice(0,5);
+
+  if(chartProductsInstance) chartProductsInstance.destroy();
+  chartProductsInstance = new Chart(canvas, {
+    type: "bar",
+    data: {
+      labels: top.map(function(p){ return p.name.length>14 ? p.name.substring(0,14)+"…" : p.name; }),
+      datasets: [{
+        label: t("sold"),
+        data: top.map(function(p){ return p.qty; }),
+        backgroundColor: "#2563eb",
+        borderRadius: 6,
+        maxBarThickness: 26
+      }]
+    },
+    options: {
+      indexAxis: "y",
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display:false }, tooltip:{ callbacks:{ label:function(ctx){ return " "+ctx.parsed.x+" "+t("sold"); } } } },
+      scales: {
+        x: { beginAtZero:true, ticks:{ color: chartTextColor(), precision:0 }, grid:{ color: chartGridColor() } },
+        y: { ticks:{ color: chartTextColor(), font:{size:11} }, grid:{ display:false } }
+      }
+    }
+  });
+
+  var cap = document.getElementById("chartProductsCaption");
+  if(cap){
+    cap.textContent = top.length
+      ? ("🥇 "+top[0].name+" — "+top[0].qty+" "+(t("sold")||"").toLowerCase())
+      : "—";
+  }
+}
+
+async function loadTrendChart(cur){
+  var canvas = document.getElementById("chartTrend");
+  if(!canvas || typeof Chart==="undefined") return;
+  try{
+    var r = await apiGet("/getOrders", {});
+    var orders = (r.status==="ok") ? (r.data||[]) : [];
+    var days = [], map = {};
+    for(var i=6;i>=0;i--){
+      var dt = new Date(); dt.setDate(dt.getDate()-i);
+      var key = dt.toISOString().slice(0,10);
+      days.push(key); map[key] = 0;
+    }
+    orders.forEach(function(o){
+      if(!o.date) return;
+      var key = o.date.slice(0,10);
+      if(map.hasOwnProperty(key) && (o.status==="Confirmed"||o.status==="Delivered"||o.status==="Refused")){
+        map[key] += parseFloat(o.profit||0);
+      }
+    });
+    var localeMap = {AR:"ar-DZ", EN:"en-US", FR:"fr-FR"};
+    var labels = days.map(function(k){
+      var dt = new Date(k+"T00:00:00");
+      return dt.toLocaleDateString(localeMap[currentLang]||"fr-FR", {day:"2-digit", month:"2-digit"});
+    });
+    var values = days.map(function(k){ return Math.round(map[k]); });
+
+    if(chartTrendInstance) chartTrendInstance.destroy();
+    chartTrendInstance = new Chart(canvas, {
+      type: "line",
+      data: {
+        labels: labels,
+        datasets: [{
+          label: t("total_profit"),
+          data: values,
+          borderColor: "#10b981",
+          backgroundColor: "rgba(16,185,129,.15)",
+          fill: true, tension: .35, pointRadius: 3, pointBackgroundColor: "#10b981", borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display:false }, tooltip: { callbacks: { label:function(ctx){ return " "+ctx.parsed.y.toLocaleString()+" "+(cur||""); } } } },
+        scales: {
+          x: { ticks:{ color: chartTextColor(), font:{size:11} }, grid:{ display:false } },
+          y: { ticks:{ color: chartTextColor() }, grid:{ color: chartGridColor() } }
+        }
+      }
+    });
+
+    var total7 = values.reduce(function(s,v){ return s+v; },0);
+    var cap = document.getElementById("chartTrendCaption");
+    if(cap) cap.innerHTML = (currentLang==="AR"?"إجمالي 7 أيام: ":currentLang==="EN"?"7-day total: ":"Total 7 jours: ")+
+      "<strong style='color:"+(total7>=0?"var(--green)":"var(--red)")+"'>"+total7.toLocaleString()+" "+(cur||"")+"</strong>";
   }catch(e){ console.error(e); }
 }
 
@@ -2773,6 +2957,8 @@ function applyTheme(){
     if(dot){  dot.style.transform="translateX(15px)"; }
     if(lbl){  lbl.textContent="🌙 Mode Sombre"; }
   }
+  var activeSec = document.querySelector(".section.active");
+  if(activeSec && activeSec.id==="sec_dashboard" && currentUser) loadDashboard();
 }
 
 function toggleTheme(){
