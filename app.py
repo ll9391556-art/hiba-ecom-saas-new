@@ -81,11 +81,19 @@ def _decrypt_secret(token):
     except (InvalidToken, Exception):
         return None
 
-def issue_token(uid, username):
+def issue_token(uid, username, role="owner", perms=None, member_username="", member_name=""):
+    """يولّد JWT لصاحب الحساب (owner) أو لعضو فريق (member).
+    uid/username دائماً يشيران لصاحب المتجر (owner) حتى بالنسبة لعضو الفريق،
+    لأن كل بيانات المتجر مخزّنة تحت uid الخاص بصاحب الحساب — الصلاحيات (perms)
+    هي اللي تتحكم بما يقدر العضو يوصله فعلياً عبر require_perm."""
     payload = {
-        "uid": str(uid), "username": str(username),
+        "uid": str(uid), "username": str(username), "role": role,
         "iat": int(time.time()), "exp": int(time.time()) + JWT_EXPIRY_HOURS * 3600,
     }
+    if role == "member":
+        payload["perms"]           = perms or {}
+        payload["memberUsername"]  = member_username
+        payload["memberName"]      = member_name or member_username
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGO)
 
 def decode_token(token):
@@ -100,17 +108,38 @@ def _extract_bearer(req):
 
 def require_auth(f):
     """يفرض تسجيل الدخول، ويحقن request.auth_uid / request.auth_username من الـ JWT فقط
-    (لا يُعتمد أبداً على userId المرسل من العميل لتفادي انتحال حسابات أخرى)."""
+    (لا يُعتمد أبداً على userId المرسل من العميل لتفادي انتحال حسابات أخرى).
+    كما يحقن معلومات الدور (owner/member) وصلاحيات عضو الفريق إن وُجدت،
+    ليستعملها require_perm بعد ذلك فتحديد الوصول لكل مسار."""
     @wraps(f)
     def wrapper(*args, **kwargs):
         token = _extract_bearer(request)
         payload = decode_token(token) if token else None
         if not payload or not payload.get("uid"):
             return err_json("Unauthorized — يرجى تسجيل الدخول من جديد", 401)
-        request.auth_uid = payload["uid"]
-        request.auth_username = payload.get("username", "")
+        request.auth_uid            = payload["uid"]
+        request.auth_username       = payload.get("username", "")
+        request.auth_role           = payload.get("role", "owner")
+        request.auth_perms          = payload.get("perms", {}) or {}
+        request.auth_member_username = payload.get("memberUsername", "")
+        request.auth_member_name    = payload.get("memberName", "")
         return f(*args, **kwargs)
     return wrapper
+
+def require_perm(perm):
+    """يُستعمل بعد require_auth مباشرة لتقييد مسار مُعيّن بصلاحية محددة.
+    صاحب الحساب (owner) يمر دائماً بلا قيود؛ عضو الفريق (member) يمر فقط
+    إذا كانت الصلاحية المطلوبة مفعّلة له من طرف صاحب الحساب."""
+    def decorator(f):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            if getattr(request, "auth_role", "owner") != "member":
+                return f(*args, **kwargs)
+            if not (getattr(request, "auth_perms", {}) or {}).get(perm):
+                return err_json("ليس لديك صلاحية الوصول لهذا القسم", 403)
+            return f(*args, **kwargs)
+        return wrapper
+    return decorator
 
 def require_admin(f):
     """يحمي مسارات حساسة جداً (تغيير الخطط مثلاً) بمفتاح إدارة منفصل عن جلسات المستخدمين."""
@@ -119,6 +148,16 @@ def require_admin(f):
         key = request.headers.get("X-Admin-Key", "").strip()
         if not ADMIN_API_KEY or key != ADMIN_API_KEY:
             return err_json("Forbidden", 403)
+        return f(*args, **kwargs)
+    return wrapper
+
+def require_owner(f):
+    """يحمي مسارات خاصة بصاحب الحساب فقط (لا تُفتح لأعضاء الفريق مهما كانت صلاحياتهم) —
+    مثل إدارة الفريق نفسه، ربط فيسبوك/إنستغرام، وتفاصيل الحساب."""
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if getattr(request, "auth_role", "owner") != "owner":
+            return err_json("هذه الميزة متاحة فقط لصاحب الحساب", 403)
         return f(*args, **kwargs)
     return wrapper
 
@@ -278,14 +317,14 @@ def is_rate_limited(user_id, platform="fb"):
 
 # ── Plans ─────────────────────────────────────────────────
 PLANS = {
-    "free":       {"bot": False, "store": False, "dashboard": True, "orders": True, "integrations": False, "label": "Free"},
-    "starter":    {"bot": False, "store": True,  "dashboard": True, "orders": True, "integrations": False, "label": "Starter"},
-    "pro":        {"bot": True,  "store": True,  "dashboard": True, "orders": True, "integrations": True,  "label": "Pro"},
-    "enterprise": {"bot": True,  "store": True,  "dashboard": True, "orders": True, "integrations": True,  "label": "Enterprise"},
+    "free":       {"bot": False, "store": False, "dashboard": True, "orders": True, "integrations": False, "team": False, "label": "Free"},
+    "starter":    {"bot": False, "store": True,  "dashboard": True, "orders": True, "integrations": False, "team": True,  "label": "Starter"},
+    "pro":        {"bot": True,  "store": True,  "dashboard": True, "orders": True, "integrations": True,  "team": True,  "label": "Pro"},
+    "enterprise": {"bot": True,  "store": True,  "dashboard": True, "orders": True, "integrations": True,  "team": True,  "label": "Enterprise"},
     # full = الاسم القديم (متوافق رجعياً مع حسابات قديمة)، lifetime = نفس الصلاحيات بالاسم الجديد للبيع
-    "full":       {"bot": True,  "store": True,  "dashboard": True, "orders": True, "integrations": True,  "label": "Full",
+    "full":       {"bot": True,  "store": True,  "dashboard": True, "orders": True, "integrations": True,  "team": True,  "label": "Full",
                     "orderCap": 300, "botMsgCap": 3000},
-    "lifetime":   {"bot": True,  "store": True,  "dashboard": True, "orders": True, "integrations": True,  "label": "Lifetime",
+    "lifetime":   {"bot": True,  "store": True,  "dashboard": True, "orders": True, "integrations": True,  "team": True,  "label": "Lifetime",
                     "orderCap": 300, "botMsgCap": 3000},
 }
 
@@ -293,6 +332,24 @@ PLANS = {
 # وقت يكون True، البوت يبان "متاح" بالداشبورد لكل خطة عندها bot:True بـ PLANS فوق.
 # يمكن تعطيله مؤقتاً بضبط BOT_LAUNCHED=false كمتغير بيئة بلا حاجة لإعادة نشر الكود.
 BOT_LAUNCHED = os.environ.get("BOT_LAUNCHED", "true").strip().lower() == "true"
+
+# ── فريق العمل (Team Members) ──────────────────────────────
+# كل صاحب حساب (owner) يقدر يضيف حتى MAX_TEAM_MEMBERS من أعضاء الفريق، كل واحد
+# عندو اسم دخول وكلمة سر خاصة بيه، لكن يشتغل على نفس بيانات المتجر (data/{ownerUid}/...)
+# حسب الصلاحيات (permissions) اللي يحددها صاحب الحساب فقط.
+MAX_TEAM_MEMBERS = 6
+TEAM_PERM_KEYS = ["orders", "products", "customers", "cities", "store", "bot", "messages", "integrations"]
+
+def _clean_perms(raw):
+    raw = raw or {}
+    return {k: bool(raw.get(k)) for k in TEAM_PERM_KEYS}
+
+def _count_team_members(owner_uid):
+    try:
+        raw = _fb_get(f"data/{owner_uid}/teamMembers") or {}
+        return len([1 for v in raw.values() if isinstance(v, dict)])
+    except Exception:
+        return 0
 
 # ── تتبع الاستهلاك الشهري (لحماية سقوف Lifetime/Full) ─────
 def _usage_month_key():
@@ -726,28 +783,166 @@ def api_login():
     pwd  = str(body.get("password") or "").strip()
     if not user or not pwd:
         return err_json("Missing credentials")
-    users = _fb_get("users")
-    if not users or not isinstance(users, dict):
-        return err_json("Database empty", 500)
-    for key, udata in users.items():
-        if not isinstance(udata, dict): continue
-        if str(udata.get("Username") or "").lower() != user.lower():
-            continue
-        stored_pw = str(udata.get("Password") or "")
+
+    # 1) نحاول أولاً كصاحب حساب رئيسي (owner) — عقدة users/
+    users = _fb_get("users") or {}
+    if isinstance(users, dict):
+        for key, udata in users.items():
+            if not isinstance(udata, dict): continue
+            if str(udata.get("Username") or "").lower() != user.lower():
+                continue
+            stored_pw = str(udata.get("Password") or "")
+            if not _verify_password(pwd, stored_pw):
+                return err_json("Invalid credentials", 401)
+            # ترقية شفافة من كلمة سر نصية قديمة إلى bcrypt بعد أول دخول ناجح
+            if not _is_bcrypt_hash(stored_pw):
+                _fb_patch(f"users/{key}", {"Password": _hash_password(pwd)})
+            token = issue_token(udata.get("User_ID", ""), udata.get("Username", user), role="owner")
+            safe  = {k: v for k, v in udata.items() if k != "Password"}
+            safe["token"] = token
+            safe["role"]  = "owner"
+            return ok_json(safe)
+
+    # 2) لم يُوجد كصاحب حساب — نحاول كعضو فريق (team member) — عقدة team_users/
+    member = _fb_get(f"team_users/{user}")
+    member_key = user
+    if not member or not isinstance(member, dict):
+        all_members = _fb_get("team_users") or {}
+        member = None
+        if isinstance(all_members, dict):
+            for k, m in all_members.items():
+                if isinstance(m, dict) and str(m.get("Username") or "").lower() == user.lower():
+                    member = m; member_key = k; break
+    if member and isinstance(member, dict):
+        stored_pw = str(member.get("Password") or "")
         if not _verify_password(pwd, stored_pw):
             return err_json("Invalid credentials", 401)
-        # ترقية شفافة من كلمة سر نصية قديمة إلى bcrypt بعد أول دخول ناجح
+        if not member.get("active", True):
+            return err_json("هذا الحساب معطّل حالياً — تواصل مع صاحب المتجر", 403)
         if not _is_bcrypt_hash(stored_pw):
-            _fb_patch(f"users/{key}", {"Password": _hash_password(pwd)})
-        token = issue_token(udata.get("User_ID", ""), udata.get("Username", user))
-        safe  = {k: v for k, v in udata.items() if k != "Password"}
-        safe["token"] = token
+            _fb_patch(f"team_users/{member_key}", {"Password": _hash_password(pwd)})
+        perms = _clean_perms(member.get("permissions"))
+        token = issue_token(member.get("ownerUid", ""), member.get("ownerUsername", ""),
+                             role="member", perms=perms,
+                             member_username=member_key, member_name=member.get("name", member_key))
+        safe = {
+            "Username":        member.get("ownerUsername", ""),
+            "User_ID":         member.get("ownerUid", ""),
+            "role":            "member",
+            "memberUsername":  member_key,
+            "memberName":      member.get("name", member_key),
+            "permissions":     perms,
+            "token":           token,
+        }
         return ok_json(safe)
+
     return err_json("Invalid credentials", 401)
+
+# ── فريق العمل — Team Members (owner فقط) ──────────────────
+@app.route("/api/team/listMembers", methods=["GET"])
+@require_auth
+@require_owner
+def api_team_list_members():
+    uid = request.auth_uid
+    raw = _fb_get(f"data/{uid}/teamMembers") or {}
+    members = []
+    if isinstance(raw, dict):
+        for uname, m in raw.items():
+            if isinstance(m, dict):
+                members.append({
+                    "username": uname, "name": m.get("name", uname),
+                    "permissions": m.get("permissions", {}), "active": m.get("active", True),
+                    "created_at": m.get("created_at", ""),
+                })
+    members.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+    return ok_json(members)
+
+@app.route("/api/team/addMember", methods=["POST"])
+@require_auth
+@require_owner
+def api_team_add_member():
+    body = request.get_json(silent=True) or {}
+    uid            = request.auth_uid
+    owner_username = request.auth_username
+    username = str(body.get("username") or "").strip()
+    password = str(body.get("password") or "").strip()
+    name     = str(body.get("name") or "").strip() or username
+    perms    = _clean_perms(body.get("permissions"))
+    if not username or not password:
+        return err_json("اسم المستخدم وكلمة السر مطلوبين")
+    if len(password) < 4:
+        return err_json("كلمة السر قصيرة جداً (4 أحرف على الأقل)")
+    if not planHas_server(uid, "team"):
+        return err_json("ميزة الفريق غير متاحة لخطتك الحالية", 403)
+    if _count_team_members(uid) >= MAX_TEAM_MEMBERS:
+        return err_json(f"وصلت للحد الأقصى ({MAX_TEAM_MEMBERS}) من أعضاء الفريق", 409)
+    # منع تعارض اسم المستخدم مع حساب رئيسي أو عضو آخر بأي متجر
+    if _fb_get(f"users/{username}") or _fb_get(f"team_users/{username}"):
+        return err_json("اسم المستخدم مستعمل من قبل", 409)
+    now = time.strftime("%Y-%m-%d %H:%M")
+    record_public = {"name": name, "permissions": perms, "active": True, "created_at": now}
+    record_login  = {
+        "Username": username, "Password": _hash_password(password),
+        "ownerUid": uid, "ownerUsername": owner_username,
+        "name": name, "permissions": perms, "active": True, "created_at": now,
+    }
+    _fb_put(f"data/{uid}/teamMembers/{username}", record_public)
+    _fb_put(f"team_users/{username}", record_login)
+    return ok_json({"username": username})
+
+@app.route("/api/team/updateMember", methods=["POST"])
+@require_auth
+@require_owner
+def api_team_update_member():
+    body = request.get_json(silent=True) or {}
+    uid  = request.auth_uid
+    username = str(body.get("username") or "").strip()
+    if not username: return err_json("Missing username")
+    existing = _fb_get(f"team_users/{username}")
+    if not existing or str(existing.get("ownerUid", "")) != str(uid):
+        return err_json("العضو غير موجود", 404)
+    patch_public, patch_login = {}, {}
+    if "name" in body:
+        val = str(body.get("name") or "").strip() or username
+        patch_public["name"] = patch_login["name"] = val
+    if "permissions" in body:
+        perms = _clean_perms(body.get("permissions"))
+        patch_public["permissions"] = patch_login["permissions"] = perms
+    if "active" in body:
+        patch_public["active"] = patch_login["active"] = bool(body.get("active"))
+    if body.get("password"):
+        newpass = str(body.get("password")).strip()
+        if len(newpass) < 4: return err_json("كلمة السر قصيرة جداً (4 أحرف على الأقل)")
+        patch_login["Password"] = _hash_password(newpass)
+    if patch_public: _fb_patch(f"data/{uid}/teamMembers/{username}", patch_public)
+    if patch_login:  _fb_patch(f"team_users/{username}", patch_login)
+    return ok_json(True)
+
+@app.route("/api/team/deleteMember", methods=["POST"])
+@require_auth
+@require_owner
+def api_team_delete_member():
+    body = request.get_json(silent=True) or {}
+    uid  = request.auth_uid
+    username = str(body.get("username") or "").strip()
+    if not username: return err_json("Missing username")
+    existing = _fb_get(f"team_users/{username}")
+    if not existing or str(existing.get("ownerUid", "")) != str(uid):
+        return err_json("العضو غير موجود", 404)
+    _fb_delete(f"data/{uid}/teamMembers/{username}")
+    _fb_delete(f"team_users/{username}")
+    return ok_json(True)
+
+def planHas_server(uid, feature):
+    """يتحقق سيرفرياً أن خطة صاحب هذا الـ uid تدعم ميزة معينة — يُستعمل لمنع تحايل
+    عضو فريق أو طلب مباشر على قيود الخطة (مثلاً تفعيل ميزة الفريق بدون خطة تدعمها)."""
+    plan = get_user_plan(uid)
+    return bool(PLANS.get(plan, {}).get(feature, False))
 
 # ── Orders ────────────────────────────────────────────────
 @app.route("/api/getOrders", methods=["GET"])
 @require_auth
+@require_perm("orders")
 def api_get_orders():
     uid = request.auth_uid
     return ok_json(_fb_list(f"data/{uid}/orders"))
@@ -796,6 +991,7 @@ def api_add_order():
 
 @app.route("/api/updateStatus", methods=["POST"])
 @require_auth
+@require_perm("orders")
 def api_update_status():
     body   = request.get_json(silent=True) or {}
     uid    = request.auth_uid
@@ -825,6 +1021,7 @@ def api_update_status():
 
 @app.route("/api/updateOrderDelivery", methods=["POST"])
 @require_auth
+@require_perm("orders")
 def api_update_order_delivery():
     """تعديل نوع التوصيل لطلب موجود (مثلاً العميل تراجع عن الاستلام بالمنزل وفضّل مكتب الاستلام)،
     مع إعادة حساب الإجمالي والربح تلقائياً بنفس منطق الحساب الموحّد — بلا كسر أي رقم سابق."""
@@ -865,6 +1062,7 @@ def _update_product_stock(uid, product_name):
 # ── Products ──────────────────────────────────────────────
 @app.route("/api/getProducts", methods=["GET"])
 @require_auth
+@require_perm("products")
 def api_get_products():
     uid = request.auth_uid
     return ok_json(_fb_list(f"data/{uid}/products"))
@@ -908,6 +1106,7 @@ def api_get_store_products():
 
 @app.route("/api/addProduct", methods=["POST"])
 @require_auth
+@require_perm("products")
 def api_add_product():
     body = request.get_json(silent=True) or {}
     uid  = request.auth_uid
@@ -938,6 +1137,7 @@ def api_add_product():
 
 @app.route("/api/deleteProduct", methods=["POST"])
 @require_auth
+@require_perm("products")
 def api_delete_product():
     body = request.get_json(silent=True) or {}
     uid  = request.auth_uid
@@ -1013,6 +1213,7 @@ def api_get_product_ratings():
 # ── Cities ────────────────────────────────────────────────
 @app.route("/api/getCities", methods=["GET"])
 @require_auth
+@require_perm("cities")
 def api_get_cities():
     uid    = request.auth_uid
     raw    = _fb_get(f"data/{uid}/cities") or {}
@@ -1041,6 +1242,7 @@ def api_get_store_cities():
 
 @app.route("/api/addCity", methods=["POST"])
 @require_auth
+@require_perm("cities")
 def api_add_city():
     body = request.get_json(silent=True) or {}
     uid  = request.auth_uid
@@ -1058,6 +1260,7 @@ def api_add_city():
 # ── Customers ─────────────────────────────────────────────
 @app.route("/api/getCustomers", methods=["GET"])
 @require_auth
+@require_perm("customers")
 def api_get_customers():
     uid = request.auth_uid
     orders_raw = _fb_get(f"data/{uid}/orders") or {}
@@ -1129,6 +1332,7 @@ def api_get_store_settings():
 
 @app.route("/api/updateStoreSettings", methods=["POST"])
 @require_auth
+@require_perm("store")
 def api_update_store_settings():
     body = request.get_json(silent=True) or {}
     uid  = request.auth_uid
@@ -1152,6 +1356,7 @@ def api_update_store_settings():
 # ── WooCommerce Integration ───────────────────────────────
 @app.route("/api/woo/connect", methods=["POST"])
 @require_auth
+@require_perm("integrations")
 def api_woo_connect():
     """ربط متجر WooCommerce حقيقي — يتحقق من المفاتيح بطلب فعلي للمتجر قبل الحفظ، ويشفّرها قبل التخزين."""
     body = request.get_json(silent=True) or {}
@@ -1185,6 +1390,7 @@ def api_woo_connect():
 
 @app.route("/api/woo/status", methods=["GET"])
 @require_auth
+@require_perm("integrations")
 def api_woo_status():
     uid  = request.auth_uid
     data = _fb_get(f"data/{uid}/integrations/woocommerce") or {}
@@ -1196,6 +1402,7 @@ def api_woo_status():
 
 @app.route("/api/woo/disconnect", methods=["POST"])
 @require_auth
+@require_perm("integrations")
 def api_woo_disconnect():
     uid = request.auth_uid
     _fb_delete(f"data/{uid}/integrations/woocommerce")
@@ -1203,6 +1410,7 @@ def api_woo_disconnect():
 
 @app.route("/api/woo/sync", methods=["POST"])
 @require_auth
+@require_perm("integrations")
 def api_woo_sync():
     """يجلب آخر الطلبات من WooCommerce ويستوردها لـ OrderFlow (بلا تكرار، يتفادى أي طلب مستورد من قبل)."""
     uid   = request.auth_uid
@@ -1290,6 +1498,7 @@ def api_upload_image():
 # ── Bot Settings ──────────────────────────────────────────
 @app.route("/api/getBotSettings", methods=["GET"])
 @require_auth
+@require_perm("bot")
 def api_get_bot_settings():
     """يحل محل القراءة المباشرة لعقدة users كاملة من الفرونت إند (كانت تكشف بيانات كل التجار)."""
     username = request.auth_username
@@ -1299,6 +1508,7 @@ def api_get_bot_settings():
 
 @app.route("/api/updateBotSettings", methods=["POST"])
 @require_auth
+@require_perm("bot")
 def api_update_bot_settings():
     body     = request.get_json(silent=True) or {}
     uid      = request.auth_uid
@@ -1315,6 +1525,7 @@ def api_update_bot_settings():
 # ── Conversations / Messages — إرسال واستقبال رسائل العملاء ──────────
 @app.route("/api/getConversations", methods=["GET"])
 @require_auth
+@require_perm("messages")
 def api_get_conversations():
     """قائمة محادثات العملاء لهذا التاجر، مرتبة بآخر رسالة أولاً."""
     uid = request.auth_uid
@@ -1333,6 +1544,7 @@ def api_get_conversations():
 
 @app.route("/api/getConversationMessages", methods=["GET"])
 @require_auth
+@require_perm("messages")
 def api_get_conversation_messages():
     """سجل رسائل محادثة واحدة مرتب زمنياً (الأقدم أولاً) لعرضه في واجهة الدردشة."""
     uid = request.auth_uid
@@ -1350,6 +1562,7 @@ def api_get_conversation_messages():
 
 @app.route("/api/sendMessage", methods=["POST"])
 @require_auth
+@require_perm("messages")
 def api_send_message():
     """يرسل رسالة يدوية من لوحة التحكم للعميل عبر نفس القناة (فيسبوك/إنستغرام/واتساب)
     التي راسل بها آخر مرة، باستخدام Meta Graph API — ويسجّلها في سجل المحادثة."""
@@ -1409,7 +1622,9 @@ def api_get_user_plan():
     lifetime_left = max(0, LIFETIME_MAX_SLOTS - _count_lifetime_accounts()) if source == "local" else None
     return ok_json({"plan": plan, "features": plan_features, "currency": currency,
                      "source": source, "lifetimeSlotsLeft": lifetime_left,
-                     "botLaunched": BOT_LAUNCHED, "usage": usage})
+                     "botLaunched": BOT_LAUNCHED, "usage": usage,
+                     "role": getattr(request, "auth_role", "owner"),
+                     "teamCount": _count_team_members(uid)})
 
 @app.route("/api/updateUserPlan", methods=["POST"])
 @require_admin
@@ -1479,6 +1694,8 @@ def api_saas():
         return err_json("Unauthorized", 401)
     auth_uid      = auth["uid"]
     auth_username = auth.get("username", "")
+    auth_role     = auth.get("role", "owner")
+    auth_perms    = auth.get("perms", {}) or {}
 
     payload = request.get_json(silent=True) or {}
     action  = str(payload.get("action") or "").strip()
@@ -1488,6 +1705,13 @@ def api_saas():
         """يسمح فقط بمسارات بيانات المستخدم المصادَق عليه — يمنع الوصول لبيانات تجار آخرين أو عقدة users/ الحساسة."""
         path = str(path or "")
         return path.startswith(f"data/{auth_uid}/") or path.startswith(f"ai_logs/{auth_uid}")
+
+    # المسارات الخام (firebaseGet/Set/Update/Push) قوية جداً وتتجاوز نظام الصلاحيات المُجزّأة —
+    # نقصرها على صاحب الحساب فقط، وعضو الفريق يستعمل مسارات /api المخصصة (المقيّدة بـ require_perm).
+    if action in ("firebaseGet", "firebaseSet", "firebaseUpdate", "firebasePush") and auth_role == "member":
+        return err_json("غير مسموح لعضو الفريق باستعمال هذا المسار", 403)
+    if action in ("getBotLogs", "updateBotSettings") and auth_role == "member" and not auth_perms.get("bot"):
+        return err_json("ليس لديك صلاحية الوصول لهذا القسم", 403)
 
     try:
         if action == "firebaseGet":
@@ -1652,6 +1876,7 @@ setTimeout(()=>window.close(),4000);</script></body></html>"""
 
 @app.route("/api/getOAuthState", methods=["GET"])
 @require_auth
+@require_owner
 def api_get_oauth_state():
     """state موقّع بـ JWT (صلاحية 10 دقائق) بدل JSON عادي قابل للتزوير من أي زائر يعرف الـ uid."""
     state = jwt.encode({
@@ -1662,6 +1887,7 @@ def api_get_oauth_state():
 
 @app.route("/fb-status", methods=["GET"])
 @require_auth
+@require_owner
 def fb_status():
     uid  = request.auth_uid
     data = _fb_get(f"data/{uid}/fbTokens")
@@ -1671,6 +1897,7 @@ def fb_status():
 
 @app.route("/fb-disconnect", methods=["POST"])
 @require_auth
+@require_owner
 def fb_disconnect():
     uid = request.auth_uid
     _fb_patch(f"data/{uid}/fbTokens", {"connected":False,"fb_access_token":"",
