@@ -1190,7 +1190,17 @@ var I18N = {
     locked_team:"Fonctionnalité Équipe non disponible",upgrade_team:"Passez au plan Starter ou supérieur",
     edit:"Modifier",delete:"Supprimer",confirm_delete_member:"Supprimer ce membre de l'équipe ?",
     team_count_of:"membre(s) sur",leave_blank_password:"Laisser vide pour ne pas changer",
-    owner_only_feature:"Fonctionnalité réservée au propriétaire du compte"
+    owner_only_feature:"Fonctionnalité réservée au propriétaire du compte",
+    nav_landing:"Pages de destination",landing_title:"🎯 Pages de destination",create_landing:"Créer une page",
+    landing_name:"Nom du produit",landing_desc:"Description du produit",landing_images:"Images du produit (jusqu'à 4)",
+    landing_cta_type:"Le bouton redirige vers",landing_cta_store:"🛍️ Ma boutique en ligne",landing_cta_whatsapp:"💬 WhatsApp",
+    landing_whatsapp_number:"Numéro WhatsApp (format international)",landing_generate_btn:"Générer avec l'IA",
+    landing_generating:"Génération en cours...",landing_created:"Page créée avec succès",
+    landing_empty:"Aucune page de destination — créez la première",landing_published:"Publiée",landing_unpublished:"Suspendue",
+    landing_views:"vues",landing_preview:"Aperçu",landing_copy_link:"Copier le lien",
+    landing_delete_confirm:"Supprimer cette page ?",landing_post_ig:"Publier sur Instagram",
+    landing_post_ig_confirm:"Publier cette page sur votre compte Instagram connecté ?",
+    locked_landing:"Pages de destination non disponibles",upgrade_landing:"Passez au plan Starter ou supérieur"
   },
   AR:{
     nav_dashboard:"الرئيسية",nav_orders:"الطلبات",nav_products:"المنتجات",
@@ -1238,7 +1248,17 @@ var I18N = {
     locked_team:"ميزة الفريق غير متاحة",upgrade_team:"قم بالترقية إلى Starter أو أعلى",
     edit:"تعديل",delete:"حذف",confirm_delete_member:"حذف هذا العضو من الفريق؟",
     team_count_of:"عضو من أصل",leave_blank_password:"اتركها فارغة إذا ما بغيتيش تبدّلها",
-    owner_only_feature:"هذه الميزة متاحة فقط لصاحب الحساب"
+    owner_only_feature:"هذه الميزة متاحة فقط لصاحب الحساب",
+    nav_landing:"صفحات الهبوط",landing_title:"🎯 صفحات الهبوط",create_landing:"صمم صفحة جديدة",
+    landing_name:"اسم المنتج",landing_desc:"وصف المنتج",landing_images:"صور المنتج (حتى 4)",
+    landing_cta_type:"زر الطلب يوجّه إلى",landing_cta_store:"🛍️ متجري الإلكتروني",landing_cta_whatsapp:"💬 واتساب",
+    landing_whatsapp_number:"رقم واتساب (بصيغة دولية)",landing_generate_btn:"صمم بالذكاء الاصطناعي",
+    landing_generating:"جاري التصميم...",landing_created:"تم إنشاء الصفحة بنجاح",
+    landing_empty:"لا توجد صفحات هبوط بعد — صمم أول صفحة الآن",landing_published:"منشورة",landing_unpublished:"موقوفة",
+    landing_views:"مشاهدة",landing_preview:"معاينة",landing_copy_link:"نسخ الرابط",
+    landing_delete_confirm:"حذف هذه الصفحة؟",landing_post_ig:"نشر على إنستغرام",
+    landing_post_ig_confirm:"نشر هذه الصفحة على حساب إنستغرام المرتبط؟",
+    locked_landing:"صفحات الهبوط غير متاحة",upgrade_landing:"قم بالترقية إلى Starter أو أعلى"
   },
   EN:{
     nav_dashboard:"Dashboard",nav_orders:"Orders",nav_products:"Products",
@@ -1286,7 +1306,17 @@ var I18N = {
     locked_team:"Team feature unavailable",upgrade_team:"Upgrade to Starter or higher",
     edit:"Edit",delete:"Delete",confirm_delete_member:"Delete this team member?",
     team_count_of:"member(s) of",leave_blank_password:"Leave blank to keep unchanged",
-    owner_only_feature:"This feature is available to the account owner only"
+    owner_only_feature:"This feature is available to the account owner only",
+    nav_landing:"Landing Pages",landing_title:"🎯 Landing Pages",create_landing:"Create New Page",
+    landing_name:"Product Name",landing_desc:"Product Description",landing_images:"Product Images (up to 4)",
+    landing_cta_type:"Order button links to",landing_cta_store:"🛍️ My Online Store",landing_cta_whatsapp:"💬 WhatsApp",
+    landing_whatsapp_number:"WhatsApp number (international format)",landing_generate_btn:"Generate with AI",
+    landing_generating:"Generating...",landing_created:"Page created successfully",
+    landing_empty:"No landing pages yet — create your first one",landing_published:"Published",landing_unpublished:"Unpublished",
+    landing_views:"views",landing_preview:"Preview",landing_copy_link:"Copy Link",
+    landing_delete_confirm:"Delete this page?",landing_post_ig:"Post to Instagram",
+    landing_post_ig_confirm:"Post this page to your connected Instagram account?",
+    locked_landing:"Landing Pages Unavailable",upgrade_landing:"Upgrade to Starter or higher"
   }
 };
 
@@ -1446,7 +1476,7 @@ function showSection(s){
     dashboard:t("nav_dashboard"),orders:t("nav_orders"),products:t("nav_products"),
     customers:t("nav_customers"),cities:t("nav_cities"),store:t("nav_store"),
     bot:t("nav_bot"),messages:t("nav_messages"),integrations:t("nav_integrations"),
-    team:t("nav_team"),plans:t("nav_plans"),settings:t("nav_settings")
+    team:t("nav_team"),plans:t("nav_plans"),settings:t("nav_settings"),landing:t("nav_landing")
   };
   document.getElementById("pageTitle").textContent = titles[s]||s;
 
@@ -1456,6 +1486,7 @@ function showSection(s){
   else if(s==="customers") loadCustomers();
   else if(s==="cities") loadCities();
   else if(s==="store") loadStore();
+  else if(s==="landing") loadLanding();
   else if(s==="bot") loadBot();
   else if(s==="messages") loadMessagesSection();
   else if(s==="integrations") loadIntegrations();
@@ -1508,12 +1539,12 @@ async function loadUserPlan(){
 
 function planHas(feature){
   var features = {
-    free:       {bot:false,store:false,integrations:false,team:false},
-    starter:    {bot:false,store:true, integrations:false,team:true},
-    pro:        {bot:true, store:true, integrations:true, team:true},
-    enterprise: {bot:true, store:true, integrations:true, team:true},
-    full:       {bot:true, store:true, integrations:true, team:true},
-    lifetime:   {bot:true, store:true, integrations:true, team:true}
+    free:       {bot:false,store:false,landing:false,integrations:false,team:false},
+    starter:    {bot:false,store:true, landing:true, integrations:false,team:true},
+    pro:        {bot:true, store:true, landing:true, integrations:true, team:true},
+    enterprise: {bot:true, store:true, landing:true, integrations:true, team:true},
+    full:       {bot:true, store:true, landing:true, integrations:true, team:true},
+    lifetime:   {bot:true, store:true, landing:true, integrations:true, team:true}
   };
   return (features[currentPlan]||features.free)[feature]||false;
 }
@@ -2113,6 +2144,161 @@ async function saveStoreSettings(){
 }
 
 // =========================================================
+// LANDING PAGES — صفحات هبوط مصممة بالذكاء الاصطناعي
+// =========================================================
+var currentLandingImages = [];
+var LANDING_PAGES = [];
+
+function renderLandingImageThumbs(){
+  var wrap = document.getElementById("lp_img_thumbs");
+  if(!wrap) return;
+  wrap.innerHTML = currentLandingImages.map(function(url, i){
+    return '<div class="thumb-item"><img src="'+url+'"/><button class="rm" onclick="removeLandingImage('+i+')">✕</button></div>';
+  }).join("");
+}
+
+function removeLandingImage(i){
+  currentLandingImages.splice(i,1);
+  renderLandingImageThumbs();
+}
+
+async function addLandingImages(input){
+  var files = Array.prototype.slice.call(input.files||[]).slice(0, 4 - currentLandingImages.length);
+  if(!files.length) return;
+  var statusEl = document.getElementById("lp_img_upload_status");
+  statusEl.textContent = "⏳ جاري الرفع..."; statusEl.style.color = "var(--yellow)";
+  try{
+    for(var i=0;i<files.length;i++){
+      var url = await _uploadImageFile(files[i]);
+      currentLandingImages.push(url);
+    }
+    renderLandingImageThumbs();
+    statusEl.textContent = "✅ تم الرفع بنجاح"; statusEl.style.color = "var(--green)";
+  }catch(e){
+    statusEl.textContent = "❌ فشل الرفع"; statusEl.style.color = "var(--red)";
+    console.error("Upload error:", e);
+  }
+}
+
+function toggleLandingCtaFields(){
+  var sel = document.getElementById("lp_cta_type");
+  var wrap = document.getElementById("lp_wa_wrap");
+  if(!sel || !wrap) return;
+  wrap.style.display = sel.value==="whatsapp" ? "block" : "none";
+}
+
+async function generateLandingPage(){
+  var name  = document.getElementById("lp_name").value.trim();
+  var desc  = document.getElementById("lp_desc").value.trim();
+  var ctaType = document.getElementById("lp_cta_type").value;
+  var waNumber = document.getElementById("lp_wa_number").value.trim();
+  if(!name || !desc){ toast("أدخل اسم المنتج ووصفه","err"); return; }
+  if(!currentLandingImages.length){ toast("أضف صورة واحدة على الأقل","err"); return; }
+  if(ctaType==="whatsapp" && !waNumber){ toast("أدخل رقم واتساب","err"); return; }
+  var btn = document.getElementById("lp_generate_btn");
+  var origHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> '+t("landing_generating");
+  try{
+    var r = await apiPost("/landing/generate", {
+      name:name, description:desc, images:currentLandingImages,
+      ctaType:ctaType, whatsappNumber:waNumber
+    });
+    if(r.status==="ok"){
+      toast("✅ "+t("landing_created"),"ok");
+      closeModal("createLandingModal");
+      document.getElementById("lp_name").value = "";
+      document.getElementById("lp_desc").value = "";
+      document.getElementById("lp_wa_number").value = "";
+      currentLandingImages = [];
+      renderLandingImageThumbs();
+      loadLanding();
+    } else {
+      toast("❌ "+r.message,"err");
+    }
+  }catch(e){ toast("Erreur réseau","err"); }
+  finally{ btn.disabled=false; btn.innerHTML=origHtml; }
+}
+
+async function loadLanding(){
+  var hasLanding = planHas("landing");
+  document.getElementById("landingLocked").style.display  = hasLanding ? "none"  : "block";
+  document.getElementById("landingContent").style.display = hasLanding ? "block" : "none";
+  if(!hasLanding) return;
+  var grid = document.getElementById("landingGrid");
+  grid.innerHTML = '<div style="text-align:center;padding:40px;grid-column:1/-1"><span class="spinner" style="width:28px;height:28px;border-width:3px"></span></div>';
+  try{
+    var r = await apiGet("/landing/list", {});
+    if(r.status==="ok"){
+      LANDING_PAGES = r.data||[];
+      renderLandingList(LANDING_PAGES);
+    } else {
+      grid.innerHTML = '';
+      toast("❌ "+r.message,"err");
+    }
+  }catch(e){ grid.innerHTML=''; }
+}
+
+function renderLandingList(list){
+  var grid  = document.getElementById("landingGrid");
+  var empty = document.getElementById("landingEmpty");
+  if(!list || !list.length){ grid.innerHTML=""; empty.style.display="block"; return; }
+  empty.style.display = "none";
+  grid.innerHTML = list.map(function(p){
+    var img = (p.images&&p.images[0]) ? '<img src="'+p.images[0]+'" style="width:100%;height:160px;object-fit:cover" onerror="this.style.display=\'none\'"/>'
+                                       : '<div style="height:160px;display:flex;align-items:center;justify-content:center;background:var(--card2);font-size:40px">🎯</div>';
+    var pubBadge = p.published ? '<span class="badge bc">'+t("landing_published")+'</span>' : '<span class="badge bp">'+t("landing_unpublished")+'</span>';
+    var igBadge  = p.instagramPostId ? '<span class="badge bi" style="margin-right:4px">📷 IG</span>' : '';
+    var safeId   = String(p.id).replace(/'/g,"\\'");
+    return '<div class="store-card">'+
+      img+
+      '<div class="store-card-body">'+
+        '<div class="store-card-title">'+p.name+'</div>'+
+        '<div style="font-size:11px;color:var(--muted);margin:4px 0">'+(p.created_at||"")+' · 👁️ '+(p.views||0)+' '+t("landing_views")+'</div>'+
+        '<div style="margin-bottom:8px">'+pubBadge+' '+igBadge+'</div>'+
+        '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
+          '<button class="btn-outline btn-sm" onclick="window.open(\''+p.publicUrl+'\',\'_blank\')"><i class="bi bi-eye"></i> '+t("landing_preview")+'</button>'+
+          '<button class="btn-outline btn-sm" onclick="copyLandingLink(\''+p.publicUrl+'\')"><i class="bi bi-clipboard"></i> '+t("landing_copy_link")+'</button>'+
+          '<button class="btn-success" onclick="toggleLandingPublish(\''+safeId+'\')">'+(p.published?'⏸️':'▶️')+'</button>'+
+          '<button class="btn-primary btn-sm" onclick="postLandingToInstagram(\''+safeId+'\')"><i class="bi bi-instagram"></i> '+t("landing_post_ig")+'</button>'+
+          '<button class="btn-danger" onclick="deleteLandingPage(\''+safeId+'\')"><i class="bi bi-trash"></i></button>'+
+        '</div>'+
+      '</div></div>';
+  }).join("");
+}
+
+function copyLandingLink(url){
+  navigator.clipboard?.writeText(url);
+  toast("✅ تم نسخ الرابط","ok");
+}
+
+async function toggleLandingPublish(pageId){
+  try{
+    var r = await apiPost("/landing/togglePublish", {pageId:pageId});
+    if(r.status==="ok"){ toast("✅","ok"); loadLanding(); }
+    else toast("❌ "+r.message,"err");
+  }catch(e){ toast("Erreur réseau","err"); }
+}
+
+async function deleteLandingPage(pageId){
+  if(!confirm(t("landing_delete_confirm"))) return;
+  try{
+    var r = await apiPost("/landing/delete", {pageId:pageId});
+    if(r.status==="ok"){ toast("✅ "+t("delete"),"ok"); loadLanding(); }
+    else toast("❌ "+r.message,"err");
+  }catch(e){ toast("Erreur réseau","err"); }
+}
+
+async function postLandingToInstagram(pageId){
+  if(!confirm(t("landing_post_ig_confirm"))) return;
+  try{
+    var r = await apiPost("/landing/postToInstagram", {pageId:pageId});
+    if(r.status==="ok"){ toast("✅ تم النشر على إنستغرام","ok"); loadLanding(); }
+    else toast("❌ "+r.message,"err");
+  }catch(e){ toast("Erreur réseau","err"); }
+}
+
+// =========================================================
 // BOT
 // =========================================================
 async function loadBot(){
@@ -2358,7 +2544,7 @@ function _teamPermLabel(key){
   var map = {
     orders:"nav_orders", products:"nav_products", customers:"nav_customers",
     cities:"nav_cities", store:"nav_store", bot:"nav_bot",
-    messages:"nav_messages", integrations:"nav_integrations"
+    messages:"nav_messages", integrations:"nav_integrations", landing:"nav_landing"
   };
   return t(map[key]||key);
 }
@@ -2638,6 +2824,13 @@ function openModal(id){
   document.getElementById(id).classList.add("show");
   if(id==="addOrderModal"){ prefillOrderSelects(); document.getElementById("o_delivery").value=""; }
   if(id==="addProductModal"){ currentProductImages = []; renderProductImageThumbs(); }
+  if(id==="createLandingModal"){
+    currentLandingImages = [];
+    renderLandingImageThumbs();
+    var ctaSel = document.getElementById("lp_cta_type");
+    if(ctaSel) ctaSel.value = "store";
+    toggleLandingCtaFields();
+  }
 }
 function closeModal(id){
   document.getElementById(id).classList.remove("show");
