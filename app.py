@@ -11,7 +11,7 @@ import bcrypt
 import jwt
 from cryptography.fernet import Fernet, InvalidToken
 from functools import wraps
-from urllib.parse import unquote
+from urllib.parse import unquote, quote
 from concurrent.futures import ThreadPoolExecutor
 from flask import Flask, request, abort, jsonify, send_from_directory
 from flask_cors import CORS
@@ -317,16 +317,19 @@ def is_rate_limited(user_id, platform="fb"):
 
 # ── Plans ─────────────────────────────────────────────────
 PLANS = {
-    "free":       {"bot": False, "store": False, "dashboard": True, "orders": True, "integrations": False, "team": False, "label": "Free"},
-    "starter":    {"bot": False, "store": True,  "dashboard": True, "orders": True, "integrations": False, "team": True,  "label": "Starter"},
-    "pro":        {"bot": True,  "store": True,  "dashboard": True, "orders": True, "integrations": True,  "team": True,  "label": "Pro"},
-    "enterprise": {"bot": True,  "store": True,  "dashboard": True, "orders": True, "integrations": True,  "team": True,  "label": "Enterprise"},
+    "free":       {"bot": False, "store": False, "landing": False, "dashboard": True, "orders": True, "integrations": False, "team": False, "label": "Free"},
+    "starter":    {"bot": False, "store": True,  "landing": True,  "dashboard": True, "orders": True, "integrations": False, "team": True,  "label": "Starter"},
+    "pro":        {"bot": True,  "store": True,  "landing": True,  "dashboard": True, "orders": True, "integrations": True,  "team": True,  "label": "Pro"},
+    "enterprise": {"bot": True,  "store": True,  "landing": True,  "dashboard": True, "orders": True, "integrations": True,  "team": True,  "label": "Enterprise"},
     # full = الاسم القديم (متوافق رجعياً مع حسابات قديمة)، lifetime = نفس الصلاحيات بالاسم الجديد للبيع
-    "full":       {"bot": True,  "store": True,  "dashboard": True, "orders": True, "integrations": True,  "team": True,  "label": "Full",
+    "full":       {"bot": True,  "store": True,  "landing": True,  "dashboard": True, "orders": True, "integrations": True,  "team": True,  "label": "Full",
                     "orderCap": 300, "botMsgCap": 3000},
-    "lifetime":   {"bot": True,  "store": True,  "dashboard": True, "orders": True, "integrations": True,  "team": True,  "label": "Lifetime",
+    "lifetime":   {"bot": True,  "store": True,  "landing": True,  "dashboard": True, "orders": True, "integrations": True,  "team": True,  "label": "Lifetime",
                     "orderCap": 300, "botMsgCap": 3000},
 }
+
+# رموز العملات المستعملة عند بناء صفحات الهبوط سيرفرياً (نفس القيم المستعملة بالفرونت إند)
+CURRENCY_SYMBOLS_PY = {"DZD": "دج", "EUR": "€", "USD": "$"}
 
 # مفتاح تفعيل البوت العام — True الآن بما أن ميتا وافقت وأصبح البوت جاهزاً فعلياً على إنستغرام.
 # وقت يكون True، البوت يبان "متاح" بالداشبورد لكل خطة عندها bot:True بـ PLANS فوق.
@@ -338,7 +341,7 @@ BOT_LAUNCHED = os.environ.get("BOT_LAUNCHED", "true").strip().lower() == "true"
 # عندو اسم دخول وكلمة سر خاصة بيه، لكن يشتغل على نفس بيانات المتجر (data/{ownerUid}/...)
 # حسب الصلاحيات (permissions) اللي يحددها صاحب الحساب فقط.
 MAX_TEAM_MEMBERS = 6
-TEAM_PERM_KEYS = ["orders", "products", "customers", "cities", "store", "bot", "messages", "integrations"]
+TEAM_PERM_KEYS = ["orders", "products", "customers", "cities", "store", "bot", "messages", "integrations", "landing"]
 
 def _clean_perms(raw):
     raw = raw or {}
@@ -1352,6 +1355,271 @@ def api_update_store_settings():
                 patch.setdefault(field, default)
             _fb_put(f"data/{uid}/storeSettings", patch)
     return ok_json(True)
+
+# ── Landing Pages (صفحات هبوط) ─────────────────────────────
+# فكرة التخزين: كل صفحة تُخزَّن تحت data/{uid}/landingPages/{pageId}، ومعرّف الصفحة
+# نفسه (pageId) يحمل uid صاحبها مُدمجاً بداخله (LP{uid}T{timestamp})، حتى يقدر المسار
+# العام /lp/<page_id> يجيب صاحب الصفحة بلا حاجة لفهرس إضافي أو معرفة uid مسبقاً.
+LANDING_ID_PREFIX = "LP"
+
+def _new_landing_id(uid):
+    return f"{LANDING_ID_PREFIX}{uid}T{int(time.time()*1000)}"
+
+def _landing_uid_from_id(page_id):
+    try:
+        page_id = str(page_id or "")
+        if not page_id.startswith(LANDING_ID_PREFIX):
+            return None
+        rest = page_id[len(LANDING_ID_PREFIX):]
+        uid_part, sep, _ = rest.partition("T")
+        return uid_part if (uid_part and sep) else None
+    except Exception:
+        return None
+
+def _build_landing_html(uid, page):
+    """يبني صفحة هبوط HTML كاملة (بلا أي مكتبات خارجية) من بيانات المنتج المُخزّنة."""
+    store    = _fb_get(f"data/{uid}/storeSettings") or {}
+    store_name = store.get("name", "Boutique")
+    images   = page.get("images") or []
+    imgs_html = "".join(
+        f'<div class="lp-slide{" active" if i == 0 else ""}"><img src="{img}" loading="lazy" alt=""/></div>'
+        for i, img in enumerate(images)
+    ) or '<div class="lp-slide active lp-noimg">📦</div>'
+    dots_html = "".join(
+        f'<span class="lp-dot{" active" if i == 0 else ""}" data-i="{i}"></span>' for i in range(len(images))
+    )
+
+    cta_type = page.get("ctaType", "store")
+    if cta_type == "whatsapp":
+        wa_number  = re.sub(r"\D", "", page.get("whatsappNumber", ""))
+        wa_text    = quote(f"مرحباً، أريد أطلب: {page.get('name','')}")
+        cta_href   = f"https://wa.me/{wa_number}?text={wa_text}"
+        cta_label  = "💬 اطلب عبر واتساب"
+        cta_target = ' target="_blank" rel="noopener"'
+    else:
+        cta_href   = f"/?store={uid}"
+        cta_label  = "🛍️ اطلب الآن من المتجر"
+        cta_target = ""
+
+    name = page.get("name", "")
+    desc_raw = page.get("description", "") or ""
+    desc_html = desc_raw.replace("\n", "<br/>")
+    desc_meta = desc_raw.replace("\n", " ")[:150]
+
+    return f"""<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>{name} — {store_name}</title>
+<meta name="description" content="{desc_meta}"/>
+<meta property="og:title" content="{name}"/>
+<meta property="og:description" content="{desc_meta}"/>
+{f'<meta property="og:image" content="{images[0]}"/>' if images else ''}
+<style>
+:root{{--accent:#2563eb;--bg:#0d1b2e;--card:#111f35;--text:#e8edf5;--muted:#8899bb}}
+*{{box-sizing:border-box;margin:0;padding:0}}
+body{{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}}
+.lp-wrap{{max-width:520px;margin:0 auto;padding-bottom:100px}}
+.lp-slider{{position:relative;width:100%;height:380px;overflow:hidden;background:var(--card)}}
+.lp-slide{{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .4s}}
+.lp-slide.active{{opacity:1}}
+.lp-slide img{{width:100%;height:100%;object-fit:cover}}
+.lp-noimg{{font-size:80px;opacity:.3}}
+.lp-dots{{display:flex;gap:6px;justify-content:center;padding:10px 0}}
+.lp-dot{{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.2);cursor:pointer}}
+.lp-dot.active{{background:var(--accent)}}
+.lp-body{{padding:20px}}
+.lp-body h1{{font-size:22px;margin-bottom:10px}}
+.lp-body p{{font-size:14px;color:var(--muted);line-height:1.8}}
+.lp-cta-fixed{{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid rgba(255,255,255,.08);padding:14px 20px}}
+.lp-cta-inner{{max-width:520px;margin:0 auto}}
+.lp-cta-btn{{display:block;width:100%;background:var(--accent);color:#fff;text-align:center;padding:14px;border-radius:10px;font-weight:700;font-size:15px;text-decoration:none}}
+.lp-brand{{text-align:center;padding:10px;font-size:11px;color:var(--muted)}}
+</style>
+</head>
+<body>
+<div class="lp-wrap">
+  <div class="lp-slider" id="lpSlider">{imgs_html}</div>
+  <div class="lp-dots">{dots_html}</div>
+  <div class="lp-body">
+    <h1>{name}</h1>
+    <p>{desc_html}</p>
+  </div>
+  <div class="lp-brand">{store_name}</div>
+</div>
+<div class="lp-cta-fixed"><div class="lp-cta-inner">
+  <a class="lp-cta-btn" href="{cta_href}"{cta_target}>{cta_label}</a>
+</div></div>
+<script>
+(function(){{
+  var slides = document.querySelectorAll('.lp-slide');
+  var dots   = document.querySelectorAll('.lp-dot');
+  var idx = 0;
+  function show(i){{
+    slides.forEach(function(s,j){{ s.classList.toggle('active', j===i); }});
+    dots.forEach(function(d,j){{ d.classList.toggle('active', j===i); }});
+    idx = i;
+  }}
+  dots.forEach(function(d){{ d.addEventListener('click', function(){{ show(parseInt(d.dataset.i)); }}); }});
+  if(slides.length>1){{ setInterval(function(){{ show((idx+1)%slides.length); }}, 4000); }}
+}})();
+</script>
+</body>
+</html>"""
+
+@app.route("/api/landing/generate", methods=["POST"])
+@require_auth
+@require_perm("landing")
+def api_landing_generate():
+    body      = request.get_json(silent=True) or {}
+    uid       = request.auth_uid
+    name      = str(body.get("name") or "").strip()
+    desc      = str(body.get("description") or "").strip()
+    images    = body.get("images") or []
+    cta_type  = str(body.get("ctaType") or "store").strip()
+    wa_number = re.sub(r"\D", "", str(body.get("whatsappNumber") or ""))
+
+    if not name or not desc:
+        return err_json("اسم المنتج والوصف مطلوبين")
+    if not images or not isinstance(images, list):
+        return err_json("أضف صورة واحدة على الأقل")
+    if cta_type not in ("store", "whatsapp"):
+        cta_type = "store"
+    if cta_type == "whatsapp" and not wa_number:
+        return err_json("رقم واتساب مطلوب")
+    if not planHas_server(uid, "landing"):
+        return err_json("صفحات الهبوط غير متاحة لخطتك الحالية", 403)
+
+    # تحسين اختياري لصياغة الوصف عبر Gemini إن كان مفتاح API متوفراً بإعدادات البوت،
+    # وإلا نكتفي بالوصف كما أدخله التاجر (بلا فشل الطلب كاملاً بسبب غياب المفتاح).
+    final_desc = desc
+    bot_settings = _fb_get(f"users/{request.auth_username}") or {}
+    api_key = str(bot_settings.get("Gemini_api_key") or "").strip()
+    if api_key:
+        try:
+            contents = [types.Part.from_text(
+                text=f"أعد صياغة وصف المنتج التالي بأسلوب تسويقي جذاب ومختصر (3 إلى 5 أسطر كحد أقصى)، "
+                     f"بنفس لغة النص الأصلي، وبلا أي مقدمات أو علامات تنسيق أو عناوين:\n\n{desc}"
+            )]
+            cfg = types.GenerateContentConfig(temperature=0.6, max_output_tokens=300)
+            improved, _ = _gemini_generate_with_fallback(api_key, contents, cfg, "landing_copy")
+            if improved and improved.strip():
+                final_desc = improved.strip()
+        except Exception as e:
+            logging.warning(f"landing/generate: تعذّر تحسين الوصف عبر Gemini، استُعمل الوصف الأصلي: {e}")
+
+    page_id = _new_landing_id(uid)
+    record = {
+        "id": page_id, "name": name, "description": final_desc,
+        "images": images[:4], "ctaType": cta_type, "whatsappNumber": wa_number,
+        "published": True, "views": 0, "created_at": time.strftime("%Y-%m-%d %H:%M"),
+        "instagramPostId": "",
+    }
+    _fb_put(f"data/{uid}/landingPages/{page_id}", record)
+    public_url = f"{request.url_root.rstrip('/')}/lp/{page_id}"
+    return ok_json({"pageId": page_id, "publicUrl": public_url})
+
+@app.route("/api/landing/list", methods=["GET"])
+@require_auth
+@require_perm("landing")
+def api_landing_list():
+    uid = request.auth_uid
+    raw = _fb_get(f"data/{uid}/landingPages") or {}
+    items = []
+    if isinstance(raw, dict):
+        for pid, p in raw.items():
+            if not isinstance(p, dict): continue
+            items.append({**p, "id": pid, "publicUrl": f"{request.url_root.rstrip('/')}/lp/{pid}"})
+    items.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+    return ok_json(items)
+
+@app.route("/api/landing/togglePublish", methods=["POST"])
+@require_auth
+@require_perm("landing")
+def api_landing_toggle_publish():
+    body    = request.get_json(silent=True) or {}
+    uid     = request.auth_uid
+    page_id = str(body.get("pageId") or "").strip()
+    if not page_id: return err_json("Missing pageId")
+    page = _fb_get(f"data/{uid}/landingPages/{page_id}")
+    if not page: return err_json("الصفحة غير موجودة", 404)
+    _fb_patch(f"data/{uid}/landingPages/{page_id}", {"published": not page.get("published", True)})
+    return ok_json(True)
+
+@app.route("/api/landing/delete", methods=["POST"])
+@require_auth
+@require_perm("landing")
+def api_landing_delete():
+    body    = request.get_json(silent=True) or {}
+    uid     = request.auth_uid
+    page_id = str(body.get("pageId") or "").strip()
+    if not page_id: return err_json("Missing pageId")
+    _fb_delete(f"data/{uid}/landingPages/{page_id}")
+    return ok_json(True)
+
+@app.route("/api/landing/postToInstagram", methods=["POST"])
+@require_auth
+@require_perm("landing")
+def api_landing_post_instagram():
+    """ينشر صورة صفحة الهبوط الأولى كمنشور على حساب إنستغرام المرتبط، عبر Content Publishing API.
+    يتطلب: (1) حساب Instagram Business مربوط مسبقاً من الإعدادات، و(2) صلاحية
+    instagram_content_publish مفعّلة على تطبيق Meta (راجع القسم التقني بالأسفل)."""
+    body    = request.get_json(silent=True) or {}
+    uid     = request.auth_uid
+    page_id = str(body.get("pageId") or "").strip()
+    if not page_id: return err_json("Missing pageId")
+    page = _fb_get(f"data/{uid}/landingPages/{page_id}")
+    if not page: return err_json("الصفحة غير موجودة", 404)
+    images = page.get("images") or []
+    if not images: return err_json("لا توجد صورة لنشرها")
+
+    fb_tokens  = _fb_get(f"data/{uid}/fbTokens") or {}
+    ig_token   = str(fb_tokens.get("instgram_access_token") or "").strip()
+    ig_page_id = str(fb_tokens.get("Page_ID_instgram") or "").strip()
+    if not ig_token or not ig_page_id:
+        return err_json("حساب إنستغرام غير مربوط — اربطه أولاً من الإعدادات", 400)
+
+    caption = f"{page.get('name','')}\n\n{page.get('description','')}\n\n🔗 {request.url_root.rstrip('/')}/lp/{page_id}"
+    try:
+        r1 = requests.post(f"https://graph.facebook.com/v21.0/{ig_page_id}/media",
+                            data={"image_url": images[0], "caption": caption[:2200], "access_token": ig_token},
+                            timeout=20)
+        r1_data = r1.json()
+        if not r1.ok or "id" not in r1_data:
+            logging.error(f"IG media create failed: {r1_data}")
+            return err_json("فشل تجهيز المنشور: " + str((r1_data.get("error") or {}).get("message", "خطأ غير معروف")))
+        creation_id = r1_data["id"]
+        r2 = requests.post(f"https://graph.facebook.com/v21.0/{ig_page_id}/media_publish",
+                            data={"creation_id": creation_id, "access_token": ig_token},
+                            timeout=20)
+        r2_data = r2.json()
+        if not r2.ok or "id" not in r2_data:
+            logging.error(f"IG publish failed: {r2_data}")
+            return err_json("فشل نشر المنشور: " + str((r2_data.get("error") or {}).get("message", "خطأ غير معروف")))
+        _fb_patch(f"data/{uid}/landingPages/{page_id}", {"instagramPostId": r2_data["id"]})
+        return ok_json({"instagramPostId": r2_data["id"]})
+    except Exception as e:
+        logging.error(f"landing/postToInstagram: {e}")
+        return err_json("خطأ فالاتصال بإنستغرام")
+
+@app.route("/lp/<page_id>", methods=["GET"])
+def landing_page_public_view(page_id):
+    """صفحة الهبوط العامة — بلا مصادقة، تُبنى وتُقدَّم سيرفرياً، وتزيد عداد المشاهدات في كل زيارة."""
+    uid = _landing_uid_from_id(page_id)
+    if not uid:
+        return "رابط غير صالح", 404
+    page = _fb_get(f"data/{uid}/landingPages/{page_id}")
+    if not page or not isinstance(page, dict):
+        return "الصفحة غير موجودة", 404
+    if not page.get("published", True):
+        return "هذه الصفحة غير منشورة حالياً", 404
+    try:
+        _fb_patch(f"data/{uid}/landingPages/{page_id}", {"views": int(page.get("views", 0)) + 1})
+    except Exception:
+        pass
+    html = _build_landing_html(uid, page)
+    return html, 200, {"Content-Type": "text/html; charset=utf-8"}
 
 # ── WooCommerce Integration ───────────────────────────────
 @app.route("/api/woo/connect", methods=["POST"])
