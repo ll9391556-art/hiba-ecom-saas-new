@@ -434,6 +434,9 @@ select.status-sel{background:var(--card2);border:1px solid var(--border);color:v
     <div class="nav-item" onclick="showSection('store')">
       <i class="bi bi-shop"></i><span data-i18n="nav_store">Boutique</span>
     </div>
+    <div class="nav-item" onclick="showSection('landing')">
+      <i class="bi bi-easel2"></i><span data-i18n="nav_landing">Pages de destination</span>
+    </div>
     <div class="nav-item" onclick="showSection('bot')">
       <i class="bi bi-robot"></i><span data-i18n="nav_bot">Bot AI</span>
     </div>
@@ -650,6 +653,30 @@ select.status-sel{background:var(--card2);border:1px solid var(--border);color:v
         </button>
       </div>
       <div class="store-grid" id="storeGrid"></div>
+    </div>
+  </div>
+
+  <div id="sec_landing" class="section">
+    <div id="landingLocked" class="plan-gate" style="display:none">
+      <i class="bi bi-easel2"></i>
+      <h5 data-i18n="locked_landing">Pages de destination non disponibles</h5>
+      <p data-i18n="upgrade_landing">Passez au plan Starter ou supérieur</p>
+      <button class="btn-primary" style="margin-top:16px" onclick="showSection('plans')">
+        <span data-i18n="see_plans">Voir les abonnements</span>
+      </button>
+    </div>
+    <div id="landingContent">
+      <div class="topbar" style="margin-bottom:16px">
+        <h4 data-i18n="landing_title">🎯 Pages de destination</h4>
+        <button class="btn-primary btn-sm" onclick="openModal('createLandingModal')">
+          <i class="bi bi-plus-lg"></i> <span data-i18n="create_landing">Créer une page</span>
+        </button>
+      </div>
+      <div class="store-grid" id="landingGrid"></div>
+      <div id="landingEmpty" class="empty-state" style="display:none">
+        <i class="bi bi-easel2"></i>
+        <div data-i18n="landing_empty">Aucune page de destination — créez la première</div>
+      </div>
     </div>
   </div>
 
@@ -1055,6 +1082,37 @@ select.status-sel{background:var(--card2);border:1px solid var(--border);color:v
   </div>
 </div>
 
+<div id="createLandingModal" class="modal-overlay">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeModal('createLandingModal')">✕</button>
+    <h4 data-i18n="create_landing">Créer une page</h4>
+    <div class="form-group"><label data-i18n="landing_name">Nom du produit</label>
+      <input id="lp_name" class="form-control"/></div>
+    <div class="form-group"><label data-i18n="landing_desc">Description du produit</label>
+      <textarea id="lp_desc" class="form-control" rows="3"></textarea></div>
+    <div class="form-group"><label data-i18n="landing_images">Images du produit (jusqu'à 4)</label>
+      <input type="file" accept="image/*" multiple class="form-control" onchange="addLandingImages(this)"/>
+      <div id="lp_img_upload_status" style="font-size:12px;margin-top:6px"></div>
+      <div id="lp_img_thumbs" class="thumb-row"></div>
+    </div>
+    <div class="form-group">
+      <label data-i18n="landing_cta_type">Le bouton redirige vers</label>
+      <select id="lp_cta_type" class="form-select" onchange="toggleLandingCtaFields()">
+        <option value="store" data-i18n="landing_cta_store">🛍️ Ma boutique en ligne</option>
+        <option value="whatsapp" data-i18n="landing_cta_whatsapp">💬 WhatsApp</option>
+      </select>
+    </div>
+    <div class="form-group" id="lp_wa_wrap" style="display:none">
+      <label data-i18n="landing_whatsapp_number">Numéro WhatsApp (format international)</label>
+      <input id="lp_wa_number" class="form-control" placeholder="+213..." type="tel"/>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+      <button class="btn-outline" onclick="closeModal('createLandingModal')"><span data-i18n="cancel">Annuler</span></button>
+      <button class="btn-primary" id="lp_generate_btn" onclick="generateLandingPage()"><span data-i18n="landing_generate_btn">Générer avec l'IA</span></button>
+    </div>
+  </div>
+</div>
+
 <div id="teamMemberModal" class="modal-overlay">
   <div class="modal-box">
     <button class="modal-close" onclick="closeModal('teamMemberModal')">✕</button>
@@ -1106,7 +1164,7 @@ var LIFETIME_SLOTS_LEFT = null;
 var TEAM_MEMBERS = [];
 var TEAM_COUNT = 0;
 var TEAM_MAX = 6;
-var TEAM_PERM_KEYS = ["orders","products","customers","cities","store","bot","messages","integrations"];
+var TEAM_PERM_KEYS = ["orders","products","customers","cities","store","bot","messages","integrations","landing"];
 var CURRENCY_SYMBOLS = {DZD:"دج", EUR:"€", USD:"$"};
 function curSym(){ return CURRENCY_SYMBOLS[merchantCurrency] || merchantCurrency; }
 
