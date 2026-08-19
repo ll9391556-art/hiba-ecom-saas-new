@@ -1487,7 +1487,9 @@ def _generate_landing_copy(api_key, name, description, answers):
     return fallback
 
 def _build_landing_html(uid, page):
-    """يبني صفحة هبوط HTML كاملة (بلا أي مكتبات خارجية) من بيانات المنتج المُخزّنة."""
+    """يبني صفحة هبوط HTML كاملة (بلا أي مكتبات خارجية) من بيانات المنتج المُخزّنة —
+    تصميم زجاجي (Glassmorphism) بعمق 3D: بطاقة منتج عائمة بميلان خفيف وظل ملوّن،
+    كرات إضاءة متدرجة بالخلفية، بطاقات فوائد/ضمان/أسئلة زجاجية، وزر طلب لامع بتوهّج نابض."""
     store    = _fb_get(f"data/{uid}/storeSettings") or {}
     store_name = store.get("name", "Boutique")
     images   = page.get("images") or []
@@ -1497,6 +1499,11 @@ def _build_landing_html(uid, page):
     ) or '<div class="lp-slide active lp-noimg">📦</div>'
     dots_html = "".join(
         f'<span class="lp-dot{" active" if i == 0 else ""}" data-i="{i}"></span>' for i in range(len(images))
+    )
+    gallery_pill = (
+        f'<div class="lp-gallery-pill"><span class="lp-gallery-dots">{dots_html}</span>'
+        f'<span class="lp-gallery-count">1/{len(images)}</span></div>'
+        if len(images) > 1 else ""
     )
 
     cta_type = page.get("ctaType", "store")
@@ -1522,31 +1529,37 @@ def _build_landing_html(uid, page):
     guarantee    = str(page.get("guaranteeText") or "").strip()
     faq          = [f for f in (page.get("faq") or []) if isinstance(f, dict) and f.get("q") and f.get("a")]
 
-    # ── إحساس بالإلحاح — بانر ثابت فوق السلايدر إذا زوّد التاجر معلومات كافية ──
+    # ── إحساس بالإلحاح — شريط علوي بنقطة نابضة، يظهر فقط إذا زوّد التاجر معلومات كافية ──
     urgency_html = (
-        f'<div class="lp-urgency">⏳ {_esc(urgency_text)}</div>' if urgency_text else ""
+        f'<div class="lp-urgency"><span class="lp-pulse-dot"></span>{_esc(urgency_text)}</div>'
+        if urgency_text else ""
     )
 
-    # ── الفوائد — نقاط قصيرة (أسلوب صفحات الهبوط عالية التحويل) ──
+    # ── الفوائد — بطاقات زجاجية بأيقونة دائرية متدرجة (أسلوب صفحات الهبوط عالية التحويل) ──
     benefits_html = ""
     if benefits:
-        items = "".join(f'<li>{_esc(b)}</li>' for b in benefits)
-        benefits_html = f'<div class="lp-benefits"><ul>{items}</ul></div>'
+        items = "".join(
+            f'<div class="lp-benefit"><span class="lp-benefit-ico">✓</span><span>{_esc(b)}</span></div>'
+            for b in benefits
+        )
+        benefits_html = f'<div class="lp-section"><div class="lp-benefits">{items}</div></div>'
 
-    # ── الضمان — شارة ثقة (دفع عند الاستلام / استرجاع...) ──
+    # ── الضمان — شارة ثقة زجاجية متوهّجة (دفع عند الاستلام / استرجاع...) ──
     guarantee_html = (
-        f'<div class="lp-guarantee">🛡️ {_esc(guarantee)}</div>' if guarantee else ""
+        f'<div class="lp-guarantee"><span class="lp-guarantee-ico">🛡️</span>{_esc(guarantee)}</div>'
+        if guarantee else ""
     )
 
-    # ── الأسئلة الشائعة — أكورديون بسيط بلا مكتبات خارجية ──
+    # ── الأسئلة الشائعة — أكورديون زجاجي بسيط بلا مكتبات خارجية ──
     faq_html = ""
     if faq:
         rows = "".join(
-            f'<details class="lp-faq-item"><summary>{_esc(f["q"])}</summary>'
+            f'<details class="lp-faq-item"><summary><span>{_esc(f["q"])}</span>'
+            f'<span class="lp-faq-plus"></span></summary>'
             f'<p>{_esc(f["a"])}</p></details>'
             for f in faq
         )
-        faq_html = f'<div class="lp-faq"><h2>أسئلة شائعة</h2>{rows}</div>'
+        faq_html = f'<div class="lp-section"><h2 class="lp-h2">أسئلة شائعة</h2>{rows}</div>'
 
     subheadline_html = f'<p class="lp-sub">{subheadline}</p>' if subheadline else ""
 
@@ -1560,58 +1573,145 @@ def _build_landing_html(uid, page):
 <meta property="og:title" content="{name}"/>
 <meta property="og:description" content="{_esc(desc_meta)}"/>
 {f'<meta property="og:image" content="{images[0]}"/>' if images else ''}
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@700;800;900&family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet"/>
 <style>
-:root{{--accent:#2563eb;--bg:#0d1b2e;--card:#111f35;--text:#e8edf5;--muted:#8899bb;--good:#10b981}}
+:root{{
+  --accent:#3b82f6; --accent2:#7dd3fc; --amber:#fbbf24; --good:#22c55e;
+  --bg:#070c18; --bg2:#0d1b2e; --text:#eef2fb; --muted:#94a3c4;
+  --glass:rgba(255,255,255,.05); --glass-bd:rgba(255,255,255,.10);
+}}
 *{{box-sizing:border-box;margin:0;padding:0}}
-body{{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}}
-.lp-wrap{{max-width:520px;margin:0 auto;padding-bottom:100px}}
-.lp-urgency{{background:linear-gradient(90deg,#b91c1c,#dc2626);color:#fff;text-align:center;font-size:12.5px;font-weight:700;padding:9px 14px;letter-spacing:.2px}}
-.lp-slider{{position:relative;width:100%;height:380px;overflow:hidden;background:var(--card)}}
-.lp-slide{{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .4s}}
+html{{background:var(--bg)}}
+body{{
+  font-family:'Tajawal',Arial,sans-serif;background:var(--bg);color:var(--text);
+  min-height:100vh;overflow-x:hidden;position:relative;
+}}
+.lp-glow{{position:fixed;border-radius:50%;filter:blur(70px);opacity:.35;z-index:0;pointer-events:none}}
+.lp-glow-a{{width:340px;height:340px;background:var(--accent);top:-120px;right:-90px}}
+.lp-glow-b{{width:300px;height:300px;background:var(--amber);bottom:10%;left:-110px;opacity:.18}}
+.lp-page{{position:relative;z-index:1;max-width:520px;margin:0 auto;padding-bottom:112px}}
+
+.lp-urgency{{display:flex;align-items:center;justify-content:center;gap:8px;
+  background:linear-gradient(90deg,#7f1d1d,#b91c1c 55%,#dc2626);color:#fff;text-align:center;
+  font-size:12.5px;font-weight:700;padding:10px 14px;letter-spacing:.2px}}
+.lp-pulse-dot{{width:7px;height:7px;border-radius:50%;background:#fff;flex:none;
+  animation:lpPulse 1.4s ease-in-out infinite}}
+@keyframes lpPulse{{0%,100%{{opacity:1;transform:scale(1)}}50%{{opacity:.35;transform:scale(1.6)}}}}
+
+.lp-eyebrow{{display:flex;justify-content:center;padding:18px 20px 0}}
+.lp-eyebrow span{{background:var(--glass);border:1px solid var(--glass-bd);backdrop-filter:blur(8px);
+  color:var(--accent2);font-size:11.5px;font-weight:700;padding:6px 14px;border-radius:999px;letter-spacing:.2px}}
+
+.lp-stage{{padding:22px 26px 46px;perspective:1400px}}
+.lp-card-3d{{
+  position:relative;border-radius:26px;overflow:hidden;
+  border:1px solid rgba(255,255,255,.12);
+  box-shadow:0 40px 70px -24px rgba(59,130,246,.55), 0 16px 30px -12px rgba(0,0,0,.65),
+    inset 0 1px 0 rgba(255,255,255,.08);
+  transform:rotateX(6deg) rotateY(-7deg);
+  animation:lpFloat 5.5s ease-in-out infinite;
+  background:var(--bg2);
+}}
+@keyframes lpFloat{{
+  0%,100%{{transform:rotateX(6deg) rotateY(-7deg) translateY(0)}}
+  50%{{transform:rotateX(3deg) rotateY(-3deg) translateY(-10px)}}
+}}
+.lp-slider{{position:relative;width:100%;height:360px;overflow:hidden;background:var(--bg2)}}
+.lp-slide{{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .5s ease}}
 .lp-slide.active{{opacity:1}}
 .lp-slide img{{width:100%;height:100%;object-fit:cover}}
 .lp-noimg{{font-size:80px;opacity:.3}}
-.lp-dots{{display:flex;gap:6px;justify-content:center;padding:10px 0}}
-.lp-dot{{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.2);cursor:pointer}}
-.lp-dot.active{{background:var(--accent)}}
-.lp-body{{padding:20px}}
-.lp-body h1{{font-size:23px;line-height:1.4;margin-bottom:8px}}
-.lp-sub{{font-size:14.5px;color:#93c5fd;font-weight:600;margin-bottom:14px}}
-.lp-body p{{font-size:14px;color:var(--muted);line-height:1.8}}
-.lp-guarantee{{margin-top:16px;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);color:var(--good);
-  border-radius:10px;padding:11px 14px;font-size:13px;font-weight:700}}
-.lp-benefits{{margin-top:18px;background:var(--card);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:16px 18px}}
-.lp-benefits ul{{list-style:none}}
-.lp-benefits li{{font-size:14px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06)}}
-.lp-benefits li:last-child{{border-bottom:none}}
-.lp-faq{{margin-top:22px;padding:0 20px}}
-.lp-faq h2{{font-size:16px;margin-bottom:10px}}
-.lp-faq-item{{background:var(--card);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:12px 14px;margin-bottom:8px}}
-.lp-faq-item summary{{cursor:pointer;font-size:13.5px;font-weight:700;list-style:none}}
+
+.lp-gallery-pill{{position:absolute;left:50%;bottom:-19px;transform:translateX(-50%);
+  display:flex;align-items:center;gap:10px;background:rgba(13,27,46,.85);border:1px solid var(--glass-bd);
+  backdrop-filter:blur(10px);border-radius:999px;padding:7px 14px;
+  box-shadow:0 10px 24px -8px rgba(0,0,0,.6);z-index:2}}
+.lp-gallery-dots{{display:flex;gap:5px}}
+.lp-dot{{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.25)}}
+.lp-dot.active{{background:var(--accent2)}}
+.lp-gallery-count{{font-size:10.5px;color:var(--muted);font-weight:700}}
+
+.lp-body{{padding:14px 22px 0}}
+.lp-headline{{font-family:'Cairo',sans-serif;font-weight:900;font-size:25px;line-height:1.42;
+  letter-spacing:-.01em;margin-bottom:8px;
+  background:linear-gradient(90deg,#ffffff,var(--accent2));-webkit-background-clip:text;
+  background-clip:text;-webkit-text-fill-color:transparent}}
+.lp-sub{{font-size:14.5px;color:var(--accent2);font-weight:700;margin-bottom:14px}}
+.lp-body p{{font-size:14px;color:var(--muted);line-height:1.85}}
+
+.lp-guarantee{{margin-top:18px;display:flex;align-items:center;gap:9px;
+  background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.3);color:var(--good);
+  border-radius:14px;padding:12px 15px;font-size:13px;font-weight:700;
+  box-shadow:0 10px 22px -14px rgba(34,197,94,.6)}}
+.lp-guarantee-ico{{font-size:16px;flex:none}}
+
+.lp-section{{padding:26px 22px 0}}
+.lp-h2{{font-family:'Cairo',sans-serif;font-size:16.5px;font-weight:800;margin-bottom:12px}}
+
+.lp-benefits{{display:grid;grid-template-columns:1fr 1fr;gap:10px}}
+.lp-benefit{{display:flex;align-items:flex-start;gap:8px;background:var(--glass);border:1px solid var(--glass-bd);
+  backdrop-filter:blur(10px);border-radius:14px;padding:12px 12px;font-size:12.8px;line-height:1.5;
+  box-shadow:0 12px 24px -18px rgba(0,0,0,.7)}}
+.lp-benefit-ico{{flex:none;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:900;color:#04101f;
+  background:linear-gradient(135deg,var(--accent2),var(--accent))}}
+
+.lp-faq-item{{background:var(--glass);border:1px solid var(--glass-bd);backdrop-filter:blur(10px);
+  border-radius:14px;padding:14px 16px;margin-bottom:9px;box-shadow:0 12px 24px -18px rgba(0,0,0,.7)}}
+.lp-faq-item summary{{cursor:pointer;font-size:13.5px;font-weight:700;list-style:none;
+  display:flex;align-items:center;justify-content:space-between;gap:10px}}
 .lp-faq-item summary::-webkit-details-marker{{display:none}}
-.lp-faq-item summary::after{{content:"+";float:left;color:var(--accent);font-weight:900}}
-.lp-faq-item[open] summary::after{{content:"–"}}
-.lp-faq-item p{{margin-top:8px;font-size:13px;color:var(--muted);line-height:1.7}}
-.lp-cta-fixed{{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid rgba(255,255,255,.08);padding:14px 20px}}
+.lp-faq-plus{{flex:none;width:20px;height:20px;border-radius:50%;background:rgba(59,130,246,.18);
+  color:var(--accent2);position:relative}}
+.lp-faq-plus::before,.lp-faq-plus::after{{content:"";position:absolute;background:var(--accent2);
+  top:50%;left:50%;transform:translate(-50%,-50%)}}
+.lp-faq-plus::before{{width:9px;height:2px}}
+.lp-faq-plus::after{{width:2px;height:9px;transition:transform .2s ease}}
+.lp-faq-item[open] .lp-faq-plus::after{{transform:translate(-50%,-50%) rotate(90deg) scaleY(0)}}
+.lp-faq-item p{{margin-top:9px;font-size:12.8px;color:var(--muted);line-height:1.75}}
+
+.lp-brand{{text-align:center;padding:30px 10px 6px;font-size:11px;color:var(--muted);letter-spacing:.3px}}
+
+.lp-cta-fixed{{position:fixed;bottom:0;left:0;right:0;z-index:5;padding:14px 20px 18px;
+  background:linear-gradient(180deg,rgba(7,12,24,0),rgba(7,12,24,.92) 35%,var(--bg))}}
 .lp-cta-inner{{max-width:520px;margin:0 auto}}
-.lp-cta-btn{{display:block;width:100%;background:var(--accent);color:#fff;text-align:center;padding:14px;border-radius:10px;font-weight:700;font-size:15px;text-decoration:none}}
-.lp-brand{{text-align:center;padding:16px 10px 4px;font-size:11px;color:var(--muted)}}
+.lp-cta-btn{{display:block;width:100%;text-align:center;padding:15px;border-radius:14px;
+  font-weight:800;font-size:15.5px;text-decoration:none;color:#04101f;
+  background:linear-gradient(135deg,var(--accent2),var(--accent));
+  box-shadow:0 16px 34px -12px rgba(59,130,246,.75), inset 0 1px 0 rgba(255,255,255,.5);
+  animation:lpGlow 2.6s ease-in-out infinite}}
+@keyframes lpGlow{{
+  0%,100%{{box-shadow:0 16px 34px -12px rgba(59,130,246,.75), inset 0 1px 0 rgba(255,255,255,.5)}}
+  50%{{box-shadow:0 16px 44px -8px rgba(59,130,246,1), inset 0 1px 0 rgba(255,255,255,.6)}}
+}}
+@media (prefers-reduced-motion: reduce){{
+  .lp-card-3d,.lp-cta-btn,.lp-pulse-dot{{animation:none}}
+}}
 </style>
 </head>
 <body>
-<div class="lp-wrap">
+<div class="lp-glow lp-glow-a"></div>
+<div class="lp-glow lp-glow-b"></div>
+<div class="lp-page">
   {urgency_html}
-  <div class="lp-slider" id="lpSlider">{imgs_html}</div>
-  <div class="lp-dots">{dots_html}</div>
+  <div class="lp-eyebrow"><span>🛍️ {_esc(store_name)}</span></div>
+  <div class="lp-stage">
+    <div class="lp-card-3d">
+      <div class="lp-slider" id="lpSlider">{imgs_html}</div>
+      {gallery_pill}
+    </div>
+  </div>
   <div class="lp-body">
-    <h1>{headline}</h1>
+    <h1 class="lp-headline">{headline}</h1>
     {subheadline_html}
     <p>{desc_html}</p>
     {guarantee_html}
   </div>
   {benefits_html}
   {faq_html}
-  <div class="lp-brand">{_esc(store_name)}</div>
+  <div class="lp-brand">{_esc(store_name)} — {name}</div>
 </div>
 <div class="lp-cta-fixed"><div class="lp-cta-inner">
   <a class="lp-cta-btn" href="{cta_href}"{cta_target}>{cta_label}</a>
@@ -1620,10 +1720,12 @@ body{{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--t
 (function(){{
   var slides = document.querySelectorAll('.lp-slide');
   var dots   = document.querySelectorAll('.lp-dot');
+  var countEl = document.querySelector('.lp-gallery-count');
   var idx = 0;
   function show(i){{
     slides.forEach(function(s,j){{ s.classList.toggle('active', j===i); }});
     dots.forEach(function(d,j){{ d.classList.toggle('active', j===i); }});
+    if(countEl) countEl.textContent = (i+1) + '/' + slides.length;
     idx = i;
   }}
   dots.forEach(function(d){{ d.addEventListener('click', function(){{ show(parseInt(d.dataset.i)); }}); }});
