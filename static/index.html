@@ -1086,29 +1086,41 @@ select.status-sel{background:var(--card2);border:1px solid var(--border);color:v
   <div class="modal-box">
     <button class="modal-close" onclick="closeModal('createLandingModal')">✕</button>
     <h4 data-i18n="create_landing">Créer une page</h4>
-    <div class="form-group"><label data-i18n="landing_name">Nom du produit</label>
-      <input id="lp_name" class="form-control"/></div>
-    <div class="form-group"><label data-i18n="landing_desc">Description du produit</label>
-      <textarea id="lp_desc" class="form-control" rows="3"></textarea></div>
-    <div class="form-group"><label data-i18n="landing_images">Images du produit (jusqu'à 4)</label>
-      <input type="file" accept="image/*" multiple class="form-control" onchange="addLandingImages(this)"/>
-      <div id="lp_img_upload_status" style="font-size:12px;margin-top:6px"></div>
-      <div id="lp_img_thumbs" class="thumb-row"></div>
+
+    <div id="lp_step1">
+      <div class="form-group"><label data-i18n="landing_name">Nom du produit</label>
+        <input id="lp_name" class="form-control"/></div>
+      <div class="form-group"><label data-i18n="landing_desc">Description du produit</label>
+        <textarea id="lp_desc" class="form-control" rows="3"></textarea></div>
+      <div class="form-group"><label data-i18n="landing_images">Images du produit (jusqu'à 4)</label>
+        <input type="file" accept="image/*" multiple class="form-control" onchange="addLandingImages(this)"/>
+        <div id="lp_img_upload_status" style="font-size:12px;margin-top:6px"></div>
+        <div id="lp_img_thumbs" class="thumb-row"></div>
+      </div>
+      <div class="form-group">
+        <label data-i18n="landing_cta_type">Le bouton redirige vers</label>
+        <select id="lp_cta_type" class="form-select" onchange="toggleLandingCtaFields()">
+          <option value="store" data-i18n="landing_cta_store">🛍️ Ma boutique en ligne</option>
+          <option value="whatsapp" data-i18n="landing_cta_whatsapp">💬 WhatsApp</option>
+        </select>
+      </div>
+      <div class="form-group" id="lp_wa_wrap" style="display:none">
+        <label data-i18n="landing_whatsapp_number">Numéro WhatsApp (format international)</label>
+        <input id="lp_wa_number" class="form-control" placeholder="+213..." type="tel"/>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+        <button class="btn-outline" onclick="closeModal('createLandingModal')"><span data-i18n="cancel">Annuler</span></button>
+        <button class="btn-primary" id="lp_next_btn" onclick="lp_goToQuestions()"><span data-i18n="landing_next_btn">التالي: أسئلة احترافية</span></button>
+      </div>
     </div>
-    <div class="form-group">
-      <label data-i18n="landing_cta_type">Le bouton redirige vers</label>
-      <select id="lp_cta_type" class="form-select" onchange="toggleLandingCtaFields()">
-        <option value="store" data-i18n="landing_cta_store">🛍️ Ma boutique en ligne</option>
-        <option value="whatsapp" data-i18n="landing_cta_whatsapp">💬 WhatsApp</option>
-      </select>
-    </div>
-    <div class="form-group" id="lp_wa_wrap" style="display:none">
-      <label data-i18n="landing_whatsapp_number">Numéro WhatsApp (format international)</label>
-      <input id="lp_wa_number" class="form-control" placeholder="+213..." type="tel"/>
-    </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
-      <button class="btn-outline" onclick="closeModal('createLandingModal')"><span data-i18n="cancel">Annuler</span></button>
-      <button class="btn-primary" id="lp_generate_btn" onclick="generateLandingPage()"><span data-i18n="landing_generate_btn">Générer avec l'IA</span></button>
+
+    <div id="lp_step2" style="display:none">
+      <p style="font-size:12px;color:var(--muted);margin-bottom:14px" data-i18n="landing_questions_intro">جاوب على هاذ الأسئلة باش الذكاء الاصطناعي يصمملك صفحة احترافية أكثر (اختياري، كل ما جاوبت أكثر كانت الصفحة أقوى)</p>
+      <div id="lp_questions"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+        <button class="btn-outline" onclick="lp_backToStep1()"><span data-i18n="back">رجوع</span></button>
+        <button class="btn-primary" id="lp_generate_btn" onclick="generateLandingPage()"><span data-i18n="landing_generate_btn">صمم بالذكاء الاصطناعي</span></button>
+      </div>
     </div>
   </div>
 </div>
@@ -1253,6 +1265,7 @@ var I18N = {
     landing_name:"Nom du produit",landing_desc:"Description du produit",landing_images:"Images du produit (jusqu'à 4)",
     landing_cta_type:"Le bouton redirige vers",landing_cta_store:"🛍️ Ma boutique en ligne",landing_cta_whatsapp:"💬 WhatsApp",
     landing_whatsapp_number:"Numéro WhatsApp (format international)",landing_generate_btn:"Générer avec l'IA",
+    landing_next_btn:"Suivant : questions",landing_questions_intro:"Répondez à ces questions pour une page plus professionnelle (facultatif)",back:"Retour",
     landing_generating:"Génération en cours...",landing_created:"Page créée avec succès",
     landing_empty:"Aucune page de destination — créez la première",landing_published:"Publiée",landing_unpublished:"Suspendue",
     landing_views:"vues",landing_preview:"Aperçu",landing_copy_link:"Copier le lien",
@@ -1311,6 +1324,7 @@ var I18N = {
     landing_name:"اسم المنتج",landing_desc:"وصف المنتج",landing_images:"صور المنتج (حتى 4)",
     landing_cta_type:"زر الطلب يوجّه إلى",landing_cta_store:"🛍️ متجري الإلكتروني",landing_cta_whatsapp:"💬 واتساب",
     landing_whatsapp_number:"رقم واتساب (بصيغة دولية)",landing_generate_btn:"صمم بالذكاء الاصطناعي",
+    landing_next_btn:"التالي: أسئلة احترافية",landing_questions_intro:"جاوب على هاذ الأسئلة باش الذكاء الاصطناعي يصمملك صفحة احترافية أكثر (اختياري)",back:"رجوع",
     landing_generating:"جاري التصميم...",landing_created:"تم إنشاء الصفحة بنجاح",
     landing_empty:"لا توجد صفحات هبوط بعد — صمم أول صفحة الآن",landing_published:"منشورة",landing_unpublished:"موقوفة",
     landing_views:"مشاهدة",landing_preview:"معاينة",landing_copy_link:"نسخ الرابط",
@@ -1369,6 +1383,7 @@ var I18N = {
     landing_name:"Product Name",landing_desc:"Product Description",landing_images:"Product Images (up to 4)",
     landing_cta_type:"Order button links to",landing_cta_store:"🛍️ My Online Store",landing_cta_whatsapp:"💬 WhatsApp",
     landing_whatsapp_number:"WhatsApp number (international format)",landing_generate_btn:"Generate with AI",
+    landing_next_btn:"Next: questions",landing_questions_intro:"Answer these questions for a more professional page (optional)",back:"Back",
     landing_generating:"Generating...",landing_created:"Page created successfully",
     landing_empty:"No landing pages yet — create your first one",landing_published:"Published",landing_unpublished:"Unpublished",
     landing_views:"views",landing_preview:"Preview",landing_copy_link:"Copy Link",
@@ -2206,6 +2221,7 @@ async function saveStoreSettings(){
 // =========================================================
 var currentLandingImages = [];
 var LANDING_PAGES = [];
+var currentLandingQuestions = [];
 
 function renderLandingImageThumbs(){
   var wrap = document.getElementById("lp_img_thumbs");
@@ -2245,11 +2261,63 @@ function toggleLandingCtaFields(){
   wrap.style.display = sel.value==="whatsapp" ? "block" : "none";
 }
 
+// ── خطوة 1→2: نجمع الأسئلة الذكية من السيرفر قبل التصميم النهائي ──
+function lp_backToStep1(){
+  document.getElementById("lp_step1").style.display = "block";
+  document.getElementById("lp_step2").style.display = "none";
+}
+
+async function lp_goToQuestions(){
+  var name  = document.getElementById("lp_name").value.trim();
+  var desc  = document.getElementById("lp_desc").value.trim();
+  var ctaType = document.getElementById("lp_cta_type").value;
+  var waNumber = document.getElementById("lp_wa_number").value.trim();
+  if(!name || !desc){ toast("أدخل اسم المنتج ووصفه","err"); return; }
+  if(!currentLandingImages.length){ toast("أضف صورة واحدة على الأقل","err"); return; }
+  if(ctaType==="whatsapp" && !waNumber){ toast("أدخل رقم واتساب","err"); return; }
+
+  var btn = document.getElementById("lp_next_btn");
+  var orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>';
+  try{
+    var r = await apiPost("/landing/questions", {name:name, description:desc});
+    if(r.status==="ok"){
+      currentLandingQuestions = r.data.questions || [];
+      renderLandingQuestions();
+      document.getElementById("lp_step1").style.display = "none";
+      document.getElementById("lp_step2").style.display = "block";
+    } else {
+      toast("❌ "+r.message,"err");
+    }
+  }catch(e){ toast("Erreur réseau","err"); }
+  finally{ btn.disabled=false; btn.innerHTML=orig; }
+}
+
+function renderLandingQuestions(){
+  var box = document.getElementById("lp_questions");
+  box.innerHTML = currentLandingQuestions.map(function(q){
+    var safeId = String(q.id).replace(/"/g,"");
+    return '<div class="form-group"><label>'+q.question+'</label>'+
+      '<textarea class="form-control lp-answer" data-qid="'+safeId+'" rows="2"></textarea></div>';
+  }).join("");
+}
+
+function _collectLandingAnswers(){
+  var out = {};
+  document.querySelectorAll(".lp-answer").forEach(function(el){
+    var v = el.value.trim();
+    if(v) out[el.dataset.qid] = v;
+  });
+  return out;
+}
+
 async function generateLandingPage(){
   var name  = document.getElementById("lp_name").value.trim();
   var desc  = document.getElementById("lp_desc").value.trim();
   var ctaType = document.getElementById("lp_cta_type").value;
   var waNumber = document.getElementById("lp_wa_number").value.trim();
+  var answers = _collectLandingAnswers();
   if(!name || !desc){ toast("أدخل اسم المنتج ووصفه","err"); return; }
   if(!currentLandingImages.length){ toast("أضف صورة واحدة على الأقل","err"); return; }
   if(ctaType==="whatsapp" && !waNumber){ toast("أدخل رقم واتساب","err"); return; }
@@ -2260,7 +2328,7 @@ async function generateLandingPage(){
   try{
     var r = await apiPost("/landing/generate", {
       name:name, description:desc, images:currentLandingImages,
-      ctaType:ctaType, whatsappNumber:waNumber
+      ctaType:ctaType, whatsappNumber:waNumber, answers:answers
     });
     if(r.status==="ok"){
       toast("✅ "+t("landing_created"),"ok");
@@ -2269,7 +2337,9 @@ async function generateLandingPage(){
       document.getElementById("lp_desc").value = "";
       document.getElementById("lp_wa_number").value = "";
       currentLandingImages = [];
+      currentLandingQuestions = [];
       renderLandingImageThumbs();
+      lp_backToStep1();
       loadLanding();
     } else {
       toast("❌ "+r.message,"err");
@@ -2884,7 +2954,9 @@ function openModal(id){
   if(id==="addProductModal"){ currentProductImages = []; renderProductImageThumbs(); }
   if(id==="createLandingModal"){
     currentLandingImages = [];
+    currentLandingQuestions = [];
     renderLandingImageThumbs();
+    lp_backToStep1();
     var ctaSel = document.getElementById("lp_cta_type");
     if(ctaSel) ctaSel.value = "store";
     toggleLandingCtaFields();
