@@ -20,6 +20,7 @@ from firebase_admin import credentials, db, storage as fb_storage
 from google import genai
 from google.genai import types
 from time import sleep
+from markupsafe import escape as _esc
 
 app = Flask(__name__, static_folder="static")
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=False)
@@ -1376,6 +1377,115 @@ def _landing_uid_from_id(page_id):
     except Exception:
         return None
 
+# أسئلة افتراضية (احتياطية) تُستعمل إذا ما كانش مفتاح Gemini متوفراً أو فشل التوليد —
+# مبنية على أهم عناصر صفحات الهبوط عالية التحويل بسوق الدروبشيبينغ (جمهور مستهدف، مشكل/فائدة،
+# تميّز عن المنافسين، عرض/سعر، ضمانات وخصوصاً الدفع عند الاستلام، ثقة اجتماعية، وإحساس بالإلحاح).
+DEFAULT_LANDING_QUESTIONS = [
+    {"id": "audience",       "question": "شكون الزبون المستهدف بالضبط؟ (مثلاً: نساء 25-40 سنة، رياضيين، عائلات...)"},
+    {"id": "painPoint",      "question": "شنو أكبر مشكل أو حاجة يحلّها المنتج للزبون؟"},
+    {"id": "mainBenefit",    "question": "شنو أهم فائدة أو ميزة تحب تبرزها فالصفحة؟"},
+    {"id": "differentiator", "question": "شنو يميزك عن المنتجات المشابهة الموجودة فالسوق؟"},
+    {"id": "offer",          "question": "كاين عرض أو تخفيض حالياً؟ (اذكر السعر الأصلي والسعر الحالي إذا كاين)"},
+    {"id": "guarantee",      "question": "شنو الضمانات اللي تقدمها؟ (دفع عند الاستلام، استرجاع، ضمان جودة...)"},
+    {"id": "socialProof",    "question": "عندك عدد مبيعات أو تقييمات تحب تبرزها كثقة اجتماعية؟"},
+    {"id": "urgency",        "question": "تحب تضيف إحساس بالإلحاح؟ (كمية محدودة، عرض لمدة محدودة...)"},
+]
+
+def _generate_landing_questions(bot_settings, name, description, category=""):
+    """يولّد أسئلة ذكية مخصصة للمنتج عبر Gemini قبل بناء صفحة الهبوط، حتى يجمع التاجر
+    المعلومات الضرورية لصفحة احترافية عالية التحويل. يرجع الأسئلة الافتراضية عند غياب/فشل الذكاء الاصطناعي."""
+    api_key = str(bot_settings.get("Gemini_api_key") or "").strip()
+    if not api_key:
+        return DEFAULT_LANDING_QUESTIONS
+    try:
+        prompt = f"""أنت خبير تسويق متخصص فصفحات الهبوط (Landing Pages) عالية التحويل لمتاجر التجارة الإلكترونية بالجزائر والعالم العربي.
+منتج التاجر: {name}
+الوصف: {description or 'غير محدد'}
+الفئة: {category or 'غير محددة'}
+
+اطرح 6 أسئلة قصيرة ومباشرة بالدارجة الجزائرية/العربية على التاجر، الهدف منها جمع المعلومات الضرورية لبناء صفحة هبوط احترافية عالية التحويل (تشمل: الجمهور المستهدف، المشكل اللي يحله المنتج، الميزة التنافسية، العرض/السعر، الضمانات، والثقة الاجتماعية/الإلحاح).
+رد فقط بمصفوفة JSON بهذا الشكل بالضبط، بلا أي نص إضافي قبلها أو بعدها:
+[{{"id":"معرف_قصير_بالإنجليزية","question":"نص السؤال"}}, ...]"""
+        contents = [types.Part.from_text(text=prompt)]
+        cfg = types.GenerateContentConfig(temperature=0.5, max_output_tokens=500)
+        text, _ = _gemini_generate_with_fallback(api_key, contents, cfg, "landing_questions")
+        cleaned = text.strip().strip("`")
+        if cleaned.lower().startswith("json"):
+            cleaned = cleaned[4:].strip()
+        parsed = json.loads(cleaned)
+        if isinstance(parsed, list) and len(parsed) >= 3:
+            out = []
+            for i, q in enumerate(parsed[:8]):
+                if isinstance(q, dict) and q.get("question"):
+                    out.append({"id": str(q.get("id") or f"q{i+1}"), "question": str(q["question"])[:200]})
+            if out:
+                return out
+    except Exception as e:
+        logging.warning(f"landing/questions: تعذّر توليد أسئلة عبر Gemini، استُعملت الأسئلة الافتراضية: {e}")
+    return DEFAULT_LANDING_QUESTIONS
+
+def _generate_landing_copy(api_key, name, description, answers):
+    """يبني محتوى صفحة هبوط احترافي (عنوان، فوائد، إلحاح، ضمان، أسئلة شائعة) عبر Gemini
+    مستنداً على إجابات التاجر — بأسلوب صفحات الهبوط الأكثر نجاحاً بسوق الدروبشيبينغ الحالي.
+    عند غياب المفتاح أو فشل التوليد، يرجع نسخة بسيطة مبنية مباشرة من المُدخلات بلا كسر الطلب."""
+    answers = answers if isinstance(answers, dict) else {}
+    fallback = {
+        "headline": name,
+        "subheadline": answers.get("mainBenefit", "") or "",
+        "description": description,
+        "benefits": [],
+        "urgencyText": answers.get("urgency", "") or "",
+        "guaranteeText": answers.get("guarantee", "") or "",
+        "faq": [],
+    }
+    if not api_key:
+        return fallback
+    try:
+        answers_text = "\n".join(f"- {k}: {v}" for k, v in answers.items() if str(v or "").strip())
+        prompt = f"""أنت كاتب إعلانات (Copywriter) خبير فصفحات الهبوط عالية التحويل لمتاجر التجارة الإلكترونية بالجزائر
+(أسلوب صفحات الهبوط الأكثر انتشاراً ونجاحاً حالياً بسوق الدروبشيبينغ: عنوان قوي يلمس المشكل مباشرة، فوائد قصيرة
+بشكل نقاط مع إيموجي مناسب، ثقة اجتماعية، إحساس بالإلحاح عند الاقتضاء، ضمانات واضحة (خصوصاً الدفع عند الاستلام)،
+وأسئلة شائعة تبدد شكوك الزبون قبل الطلب).
+
+منتج: {name}
+وصف التاجر: {description or 'غير محدد'}
+معلومات إضافية زوّدها التاجر:
+{answers_text or 'لا توجد'}
+
+ابنيلي محتوى صفحة الهبوط بصيغة JSON فقط (بلا أي نص إضافي قبلها أو بعدها)، بهذا الشكل بالضبط:
+{{
+  "headline": "عنوان قوي وجذاب (سطر واحد قصير)",
+  "subheadline": "جملة ثانية توضح الفائدة الرئيسية (قصيرة)",
+  "description": "وصف تسويقي مُعاد صياغته (3-5 أسطر)",
+  "benefits": ["فائدة 1 مع إيموجي مناسب", "فائدة 2", "فائدة 3", "فائدة 4"],
+  "urgencyText": "جملة قصيرة تخلق إحساس بالإلحاح إذا سمحت المعلومات المزوّدة بذلك، وإلا اتركها فارغة",
+  "guaranteeText": "جملة ضمان (دفع عند الاستلام / استرجاع...) إذا زوّد التاجر معلومات، وإلا اتركها فارغة",
+  "faq": [{{"q":"سؤال شائع 1","a":"جواب قصير"}}, {{"q":"سؤال شائع 2","a":"جواب قصير"}}, {{"q":"سؤال شائع 3","a":"جواب قصير"}}]
+}}
+استعمل نفس لغة الوصف الأصلي (عربي أو فرنسي أو دارجة)، ولا تخترع معلومات غير موجودة (مثلاً لا تذكر مدة استرجاع محددة إذا التاجر ما زوّدهاش)."""
+        contents = [types.Part.from_text(text=prompt)]
+        cfg = types.GenerateContentConfig(temperature=0.6, max_output_tokens=900)
+        text, _ = _gemini_generate_with_fallback(api_key, contents, cfg, "landing_copy_full")
+        cleaned = text.strip().strip("`")
+        if cleaned.lower().startswith("json"):
+            cleaned = cleaned[4:].strip()
+        parsed = json.loads(cleaned)
+        if isinstance(parsed, dict):
+            for key in ("headline", "subheadline", "description", "urgencyText", "guaranteeText"):
+                if parsed.get(key):
+                    fallback[key] = str(parsed[key])[:400]
+            if isinstance(parsed.get("benefits"), list):
+                fallback["benefits"] = [str(b)[:120] for b in parsed["benefits"] if str(b or "").strip()][:6]
+            if isinstance(parsed.get("faq"), list):
+                faq = []
+                for item in parsed["faq"][:5]:
+                    if isinstance(item, dict) and item.get("q") and item.get("a"):
+                        faq.append({"q": str(item["q"])[:150], "a": str(item["a"])[:300]})
+                fallback["faq"] = faq
+    except Exception as e:
+        logging.warning(f"landing/generate: تعذّر توليد محتوى كامل عبر Gemini، استُعمل fallback بسيط: {e}")
+    return fallback
+
 def _build_landing_html(uid, page):
     """يبني صفحة هبوط HTML كاملة (بلا أي مكتبات خارجية) من بيانات المنتج المُخزّنة."""
     store    = _fb_get(f"data/{uid}/storeSettings") or {}
@@ -1401,10 +1511,44 @@ def _build_landing_html(uid, page):
         cta_label  = "🛍️ اطلب الآن من المتجر"
         cta_target = ""
 
-    name = page.get("name", "")
-    desc_raw = page.get("description", "") or ""
-    desc_html = desc_raw.replace("\n", "<br/>")
-    desc_meta = desc_raw.replace("\n", " ")[:150]
+    name         = _esc(page.get("name", ""))
+    headline     = _esc(page.get("headline") or page.get("name", ""))
+    subheadline  = _esc(page.get("subheadline", ""))
+    desc_raw     = page.get("description", "") or ""
+    desc_html    = _esc(desc_raw).replace("\n", "<br/>")
+    desc_meta    = re.sub(r"\s+", " ", desc_raw)[:150]
+    benefits     = [b for b in (page.get("benefits") or []) if str(b or "").strip()]
+    urgency_text = str(page.get("urgencyText") or "").strip()
+    guarantee    = str(page.get("guaranteeText") or "").strip()
+    faq          = [f for f in (page.get("faq") or []) if isinstance(f, dict) and f.get("q") and f.get("a")]
+
+    # ── إحساس بالإلحاح — بانر ثابت فوق السلايدر إذا زوّد التاجر معلومات كافية ──
+    urgency_html = (
+        f'<div class="lp-urgency">⏳ {_esc(urgency_text)}</div>' if urgency_text else ""
+    )
+
+    # ── الفوائد — نقاط قصيرة (أسلوب صفحات الهبوط عالية التحويل) ──
+    benefits_html = ""
+    if benefits:
+        items = "".join(f'<li>{_esc(b)}</li>' for b in benefits)
+        benefits_html = f'<div class="lp-benefits"><ul>{items}</ul></div>'
+
+    # ── الضمان — شارة ثقة (دفع عند الاستلام / استرجاع...) ──
+    guarantee_html = (
+        f'<div class="lp-guarantee">🛡️ {_esc(guarantee)}</div>' if guarantee else ""
+    )
+
+    # ── الأسئلة الشائعة — أكورديون بسيط بلا مكتبات خارجية ──
+    faq_html = ""
+    if faq:
+        rows = "".join(
+            f'<details class="lp-faq-item"><summary>{_esc(f["q"])}</summary>'
+            f'<p>{_esc(f["a"])}</p></details>'
+            for f in faq
+        )
+        faq_html = f'<div class="lp-faq"><h2>أسئلة شائعة</h2>{rows}</div>'
+
+    subheadline_html = f'<p class="lp-sub">{subheadline}</p>' if subheadline else ""
 
     return f"""<!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -1412,15 +1556,16 @@ def _build_landing_html(uid, page):
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>{name} — {store_name}</title>
-<meta name="description" content="{desc_meta}"/>
+<meta name="description" content="{_esc(desc_meta)}"/>
 <meta property="og:title" content="{name}"/>
-<meta property="og:description" content="{desc_meta}"/>
+<meta property="og:description" content="{_esc(desc_meta)}"/>
 {f'<meta property="og:image" content="{images[0]}"/>' if images else ''}
 <style>
-:root{{--accent:#2563eb;--bg:#0d1b2e;--card:#111f35;--text:#e8edf5;--muted:#8899bb}}
+:root{{--accent:#2563eb;--bg:#0d1b2e;--card:#111f35;--text:#e8edf5;--muted:#8899bb;--good:#10b981}}
 *{{box-sizing:border-box;margin:0;padding:0}}
 body{{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}}
 .lp-wrap{{max-width:520px;margin:0 auto;padding-bottom:100px}}
+.lp-urgency{{background:linear-gradient(90deg,#b91c1c,#dc2626);color:#fff;text-align:center;font-size:12.5px;font-weight:700;padding:9px 14px;letter-spacing:.2px}}
 .lp-slider{{position:relative;width:100%;height:380px;overflow:hidden;background:var(--card)}}
 .lp-slide{{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .4s}}
 .lp-slide.active{{opacity:1}}
@@ -1430,23 +1575,43 @@ body{{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--t
 .lp-dot{{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.2);cursor:pointer}}
 .lp-dot.active{{background:var(--accent)}}
 .lp-body{{padding:20px}}
-.lp-body h1{{font-size:22px;margin-bottom:10px}}
+.lp-body h1{{font-size:23px;line-height:1.4;margin-bottom:8px}}
+.lp-sub{{font-size:14.5px;color:#93c5fd;font-weight:600;margin-bottom:14px}}
 .lp-body p{{font-size:14px;color:var(--muted);line-height:1.8}}
+.lp-guarantee{{margin-top:16px;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);color:var(--good);
+  border-radius:10px;padding:11px 14px;font-size:13px;font-weight:700}}
+.lp-benefits{{margin-top:18px;background:var(--card);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:16px 18px}}
+.lp-benefits ul{{list-style:none}}
+.lp-benefits li{{font-size:14px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06)}}
+.lp-benefits li:last-child{{border-bottom:none}}
+.lp-faq{{margin-top:22px;padding:0 20px}}
+.lp-faq h2{{font-size:16px;margin-bottom:10px}}
+.lp-faq-item{{background:var(--card);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:12px 14px;margin-bottom:8px}}
+.lp-faq-item summary{{cursor:pointer;font-size:13.5px;font-weight:700;list-style:none}}
+.lp-faq-item summary::-webkit-details-marker{{display:none}}
+.lp-faq-item summary::after{{content:"+";float:left;color:var(--accent);font-weight:900}}
+.lp-faq-item[open] summary::after{{content:"–"}}
+.lp-faq-item p{{margin-top:8px;font-size:13px;color:var(--muted);line-height:1.7}}
 .lp-cta-fixed{{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid rgba(255,255,255,.08);padding:14px 20px}}
 .lp-cta-inner{{max-width:520px;margin:0 auto}}
 .lp-cta-btn{{display:block;width:100%;background:var(--accent);color:#fff;text-align:center;padding:14px;border-radius:10px;font-weight:700;font-size:15px;text-decoration:none}}
-.lp-brand{{text-align:center;padding:10px;font-size:11px;color:var(--muted)}}
+.lp-brand{{text-align:center;padding:16px 10px 4px;font-size:11px;color:var(--muted)}}
 </style>
 </head>
 <body>
 <div class="lp-wrap">
+  {urgency_html}
   <div class="lp-slider" id="lpSlider">{imgs_html}</div>
   <div class="lp-dots">{dots_html}</div>
   <div class="lp-body">
-    <h1>{name}</h1>
+    <h1>{headline}</h1>
+    {subheadline_html}
     <p>{desc_html}</p>
+    {guarantee_html}
   </div>
-  <div class="lp-brand">{store_name}</div>
+  {benefits_html}
+  {faq_html}
+  <div class="lp-brand">{_esc(store_name)}</div>
 </div>
 <div class="lp-cta-fixed"><div class="lp-cta-inner">
   <a class="lp-cta-btn" href="{cta_href}"{cta_target}>{cta_label}</a>
@@ -1468,6 +1633,22 @@ body{{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--t
 </body>
 </html>"""
 
+@app.route("/api/landing/questions", methods=["POST"])
+@require_auth
+@require_perm("landing")
+def api_landing_questions():
+    """الخطوة الأولى قبل بناء صفحة الهبوط: يرجع أسئلة (مولّدة بالذكاء الاصطناعي حسب المنتج،
+    أو أسئلة افتراضية احتياطية) يجاوب عليها التاجر حتى تُبنى الصفحة باحترافية أعلى."""
+    body = request.get_json(silent=True) or {}
+    name = str(body.get("name") or "").strip()
+    description = str(body.get("description") or "").strip()
+    category = str(body.get("category") or "").strip()
+    if not name:
+        return err_json("اسم المنتج مطلوب")
+    bot_settings = _fb_get(f"users/{request.auth_username}") or {}
+    questions = _generate_landing_questions(bot_settings, name, description, category)
+    return ok_json({"questions": questions})
+
 @app.route("/api/landing/generate", methods=["POST"])
 @require_auth
 @require_perm("landing")
@@ -1479,6 +1660,7 @@ def api_landing_generate():
     images    = body.get("images") or []
     cta_type  = str(body.get("ctaType") or "store").strip()
     wa_number = re.sub(r"\D", "", str(body.get("whatsappNumber") or ""))
+    answers   = body.get("answers") or {}  # إجابات التاجر عن أسئلة /api/landing/questions
 
     if not name or not desc:
         return err_json("اسم المنتج والوصف مطلوبين")
@@ -1491,27 +1673,23 @@ def api_landing_generate():
     if not planHas_server(uid, "landing"):
         return err_json("صفحات الهبوط غير متاحة لخطتك الحالية", 403)
 
-    # تحسين اختياري لصياغة الوصف عبر Gemini إن كان مفتاح API متوفراً بإعدادات البوت،
-    # وإلا نكتفي بالوصف كما أدخله التاجر (بلا فشل الطلب كاملاً بسبب غياب المفتاح).
-    final_desc = desc
+    # بناء محتوى احترافي كامل (عنوان، فوائد، إلحاح، ضمان، أسئلة شائعة) عبر Gemini
+    # مستنداً على إجابات التاجر — بأسلوب صفحات الهبوط الأكثر نجاحاً بسوق الدروبشيبينغ الحالي.
+    # عند غياب مفتاح Gemini أو فشل التوليد، نكمل بمحتوى بسيط بلا فشل الطلب كاملاً.
     bot_settings = _fb_get(f"users/{request.auth_username}") or {}
     api_key = str(bot_settings.get("Gemini_api_key") or "").strip()
-    if api_key:
-        try:
-            contents = [types.Part.from_text(
-                text=f"أعد صياغة وصف المنتج التالي بأسلوب تسويقي جذاب ومختصر (3 إلى 5 أسطر كحد أقصى)، "
-                     f"بنفس لغة النص الأصلي، وبلا أي مقدمات أو علامات تنسيق أو عناوين:\n\n{desc}"
-            )]
-            cfg = types.GenerateContentConfig(temperature=0.6, max_output_tokens=300)
-            improved, _ = _gemini_generate_with_fallback(api_key, contents, cfg, "landing_copy")
-            if improved and improved.strip():
-                final_desc = improved.strip()
-        except Exception as e:
-            logging.warning(f"landing/generate: تعذّر تحسين الوصف عبر Gemini، استُعمل الوصف الأصلي: {e}")
+    copy = _generate_landing_copy(api_key, name, desc, answers)
 
     page_id = _new_landing_id(uid)
     record = {
-        "id": page_id, "name": name, "description": final_desc,
+        "id": page_id, "name": name,
+        "description":   copy.get("description") or desc,
+        "headline":       copy.get("headline") or name,
+        "subheadline":    copy.get("subheadline", ""),
+        "benefits":       copy.get("benefits", []),
+        "urgencyText":    copy.get("urgencyText", ""),
+        "guaranteeText":  copy.get("guaranteeText", ""),
+        "faq":            copy.get("faq", []),
         "images": images[:4], "ctaType": cta_type, "whatsappNumber": wa_number,
         "published": True, "views": 0, "created_at": time.strftime("%Y-%m-%d %H:%M"),
         "instagramPostId": "",
