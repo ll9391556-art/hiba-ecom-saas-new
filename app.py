@@ -11,12 +11,16 @@ import imghdr
 import threading
 import bcrypt
 import jwt
+import ipaddress
+import socket
+from urllib3.util import connection as _urllib3_connection
 from cryptography.fernet import Fernet, InvalidToken
 from functools import wraps
-from urllib.parse import unquote, quote
+from urllib.parse import unquote, quote, urlparse
 from concurrent.futures import ThreadPoolExecutor
 from flask import Flask, request, abort, jsonify, send_from_directory
 from flask_cors import CORS
+from werkzeug.middleware.proxy_fix import ProxyFix
 import firebase_admin
 from firebase_admin import credentials, db, storage as fb_storage
 from google import genai
@@ -25,6 +29,17 @@ from time import sleep
 from markupsafe import escape as _esc
 
 app = Flask(__name__, static_folder="static")
+
+# ── ثقة بروكسي عكسي (X-Forwarded-For) ──────────────────────
+# قبل: كل مسار كان يقرأ X-Forwarded-For يدوياً مباشرة من الهيدر القادم من العميل
+# (request.headers.get("X-Forwarded-For", ...).split(",")[0]) بلا أي تحقق من عدد
+# البروكسيات الفعلي بينه وبين الطلب. أي مهاجم يقدر يبعث قيمة X-Forwarded-For عشوائية
+# مختلفة بكل طلب ليتحايل بالكامل على: rate limiting لتسجيل الدخول، rate limiting على
+# ADMIN_API_KEY brute-force، وrate limiting على /api/addOrder. الآن: نستعمل ProxyFix
+# لجعل Flask يثق فقط بأول قيمة قادمة من بروكسي واحد موثوق (منصة الاستضافة نفسها)
+# ونعتمد على request.remote_addr المُصحَّح فكل مكان بدل الهيدر الخام.
+_TRUSTED_PROXY_HOPS = int(os.environ.get("TRUSTED_PROXY_HOPS", "1"))
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=_TRUSTED_PROXY_HOPS, x_proto=1, x_host=0, x_port=0, x_prefix=0)
 
 # ── CORS ──────────────────────────────────────────────────
 # قبل: origins="*" على كل المسارات (بما فيها /admin و/api/admin/*).
@@ -157,7 +172,9 @@ def require_admin(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
         key = request.headers.get("X-Admin-Key", "").strip()
-        client_ip = request.headers.get("X-Forwarded-For", request.remote_addr or "").split(",")[0].strip()
+        # request.remote_addr مُصحَّح الآن عبر ProxyFix (بروكسي موثوق واحد) بدل الوثوق
+        # بهيدر X-Forwarded-For الخام القادم من العميل مباشرة.
+        client_ip = request.remote_addr or ""
         if _login_rate_limited(f"admin:{client_ip}", max_attempts=10, window=300):
             return err_json("محاولات كثيرة جداً — حاول لاحقاً", 429)
         # مقارنة زمن-ثابت (constant-time) بدل != العادية، لمنع هجوم قياس التوقيت (timing attack)
@@ -431,6 +448,107 @@ def _count_lifetime_accounts():
         return sum(1 for u in users.values() if isinstance(u, dict) and u.get("plan") in ("lifetime", "full"))
     except Exception:
         return 0
+
+# ── حماية حقول حساب المستخدم من التعديل الذاتي (Mass Assignment) ─────
+# قبل: /api/updateBotSettings و /api/saas (action=updateBotSettings) كانا يدمجان
+# كائن "data"/"payload" القادم كاملاً من جسم الطلب مباشرة داخل عقدة users/{username} —
+# وهي نفس العقدة التي تخزّن plan/source/Password/User_ID. أي مستخدم مسجّل (حتى بخطة
+# Free) كان يقدر يبعث {"data":{"plan":"lifetime"}} ويرقّي نفسه مجاناً، أو يبدّل
+# Username/User_ID/Password عبره. الآن: whitelist صارم يستثني كل الحقول الحساسة قبل
+# أي دمج مع سجل المستخدم — هذه المسارات مخصصة فقط لإعدادات البوت (Gemini key,
+# AI instructions, tokens الخ) وليس لبيانات الحساب/الخطة.
+_PROTECTED_USER_FIELDS = {
+    "plan", "source", "Password", "User_ID", "Username",
+    "plan_updated",
+}
+
+def _sanitize_bot_settings_patch(d):
+    if not isinstance(d, dict):
+        return {}
+    return {k: v for k, v in d.items() if k not in _PROTECTED_USER_FIELDS}
+
+# ── حماية من SSRF فربط متاجر WooCommerce الخارجية ───────────
+# قبل: كان يُقبل أي storeUrl يبدأ بـ https:// بلا أي فحص للـ host الفعلي الذي يُحلّ
+# إليه، مما يسمح لمستخدم مسجّل بتوجيه سيرفرنا لعمل طلبات HTTP لعناوين داخلية
+# (127.0.0.1, 169.254.169.254 metadata endpoint, شبكات خاصة 10.x/172.16.x/192.168.x...)
+# عبر DNS يشير لعنوان خاص.
+#
+# تحديث إضافي (DNS rebinding / TOCTOU): كان الفحص السابق يحلّ الدومين للتحقق منه فقط،
+# ثم يترك requests يحلّ نفس الدومين من جديد بشكل منفصل وقت الاتصال الفعلي. مهاجم
+# يتحكم بخادم DNS خاص به (TTL منخفض جداً) يقدر يرجّع IP عام وقت الفحص، وIP داخلي
+# وقت الاتصال الفعلي مباشرة بعده (نافذة سباق). الآن: نحلّ الاسم مرة واحدة، نتحقق أنه
+# عام وآمن، ثم "نُثبّت" (pin) نفس الـ IP المتحقَّق منه إجبارياً وقت الاتصال الفعلي عبر
+# _request_with_pinned_dns، بدل ترك urllib3 يعيد الحل من جديد.
+def _resolve_safe_public_ip(hostname):
+    """يتحقق من hostname ويرجّع أول IP عام آمن (ليس داخلي/خاص/loopback/link-local/
+    reserved/multicast) تم التحقق منه فعلياً، أو None إذا لم يوجد أي IP آمن."""
+    if not hostname:
+        return None
+    try:
+        infos = socket.getaddrinfo(hostname, None)
+    except Exception:
+        return None
+    for info in infos:
+        ip_str = info[4][0]
+        try:
+            ip = ipaddress.ip_address(ip_str)
+        except Exception:
+            continue
+        if (ip.is_private or ip.is_loopback or ip.is_link_local or
+                ip.is_reserved or ip.is_multicast or ip.is_unspecified):
+            continue
+        return ip_str
+    return None
+
+def _validate_external_store_url(store_url):
+    """يتحقق أن store_url رابط https سليم يشير لدومين عام (ليس داخلي/خاص). (فحص عام
+    بلا تثبيت IP — يُستعمل فقط للتحقق السريع؛ الاتصال الفعلي يجب أن يمر عبر
+    _validate_and_pin_store_url + _request_with_pinned_dns)."""
+    try:
+        parsed = urlparse(store_url)
+    except Exception:
+        return False
+    if parsed.scheme != "https" or not parsed.hostname:
+        return False
+    return _resolve_safe_public_ip(parsed.hostname) is not None
+
+def _validate_and_pin_store_url(store_url):
+    """يتحقق من صلاحية رابط المتجر ويرجّع (hostname, safe_ip) للاستعمال المباشر مع
+    _request_with_pinned_dns، بدل السماح لـ requests بإعادة حلّ DNS من جديد وقت
+    الاتصال (يمنع DNS rebinding). يرجّع (None, None) لو الرابط غير صالح/غير آمن."""
+    try:
+        parsed = urlparse(store_url)
+    except Exception:
+        return None, None
+    if parsed.scheme != "https" or not parsed.hostname:
+        return None, None
+    ip = _resolve_safe_public_ip(parsed.hostname)
+    if not ip:
+        return None, None
+    return parsed.hostname, ip
+
+_dns_pin_lock = threading.Lock()
+
+def _request_with_pinned_dns(method, url, resolved_ip, **kwargs):
+    """يرسل طلب HTTP عبر requests لكن يُلزم الاتصال الفعلي بنفس الـ IP الذي تم التحقق
+    منه مسبقاً (resolved_ip) بدل السماح لـ urllib3 بإعادة حلّ الدومين من جديد وقت
+    الاتصال — يمنع هجوم DNS rebinding (الفحص يمر على IP عام آمن، والاتصال الفعلي يذهب
+    لعنوان داخلي/خاص لأن TTL أو الاستجابة تغيّرت بين اللحظتين).
+    التحقق من الشهادة (TLS/SNI) يبقى يعتمد على اسم النطاق الأصلي بالرابط، وليس الـ IP،
+    لأن التعديل يطال فقط دالة فتح اتصال TCP الأدنى مستوى.
+    محمي بقفل لأن التعديل مؤقت وعلى مستوى العملية كاملة (urllib3.util.connection)."""
+    orig_create_connection = _urllib3_connection.create_connection
+
+    def _pinned_create_connection(address, *args, **kw):
+        host, port = address
+        return orig_create_connection((resolved_ip, port), *args, **kw)
+
+    with _dns_pin_lock:
+        _urllib3_connection.create_connection = _pinned_create_connection
+        try:
+            return requests.request(method, url, **kwargs)
+        finally:
+            _urllib3_connection.create_connection = orig_create_connection
 
 # ── Frontend ──────────────────────────────────────────────
 @app.route("/", methods=["GET"])
@@ -835,7 +953,8 @@ def api_login():
     pwd  = str(body.get("password") or "").strip()
 
     # Rate limiting ضد brute-force على كلمات السر — حسب IP + اسم المستخدم معاً.
-    client_ip = request.headers.get("X-Forwarded-For", request.remote_addr or "").split(",")[0].strip()
+    # request.remote_addr مُصحَّح الآن عبر ProxyFix بدل الوثوق بهيدر X-Forwarded-For الخام.
+    client_ip = request.remote_addr or ""
     if _login_rate_limited(f"login:{client_ip}:{user.lower()}"):
         return err_json("محاولات دخول كثيرة جداً — حاول بعد 5 دقائق", 429)
 
@@ -1019,36 +1138,55 @@ def _calc_order_profit(p_data, c_data, qty, delivery_type, status, existing_prof
 def api_add_order():
     """مسار عام (الزبون يطلب من صفحة المتجر بلا حساب) — لذلك مقيّد بـ:
     1) التحقق أن userId ينتمي فعلاً لتاجر مسجّل (يمنع تعبئة uid عشوائي غير موجود).
-    2) Rate limit حسب IP+هاتف لمنع الإغراق الآلي بطلبات وهمية يستهلك سقف التاجر الشهري."""
+    2) Rate limit حسب IP+هاتف لمنع الإغراق الآلي بطلبات وهمية يستهلك سقف التاجر الشهري.
+    3) whitelist صارم لحقول الزبون + فرض status="Pending" + حساب total سيرفرياً فقط
+       (قبل التعديل: كان كامل كائن "data" القادم من زبون غير موثوق يُدمج كما هو — أي
+       زبون خبيث يقدر يبعث status="Delivered" و/أو total مزوّر ويُدرج طلب "مؤكد" جاهز
+       مباشرة فلوحة التاجر، متجاوزاً سير العمل الطبيعي (تأكيد ← إرسال ← تسليم) بالكامل)."""
     body = request.get_json(silent=True) or {}
     uid  = str(body.get("userId") or "").strip()
-    d    = body.get("data") or {}
-    if not uid or not d: return err_json("Missing fields")
+    raw  = body.get("data") or {}
+    if not uid or not raw: return err_json("Missing fields")
 
     if not _get_user_record(uid):
         return err_json("Invalid store", 404)
 
-    client_ip = request.headers.get("X-Forwarded-For", request.remote_addr or "").split(",")[0].strip()
-    phone_key = re.sub(r"\D", "", str(d.get("phone", "")))
+    # request.remote_addr مُصحَّح عبر ProxyFix (بروكسي موثوق واحد) بدل هيدر خام قابل للتزوير.
+    client_ip = request.remote_addr or ""
+    phone_key = re.sub(r"\D", "", str(raw.get("phone", "")))
     if is_rate_limited(f"{client_ip}:{phone_key}", "addorder", window=15):
         return err_json("محاولات كثيرة جداً — انتظر قليلاً وحاول من جديد", 429)
 
     if not _under_cap(uid, "orderCount", "orderCap"):
         return err_json("تم الوصول للحد الشهري من الطلبات لهذه الخطة — يرجى التواصل لترقية الخطة", 429)
+
+    # whitelist صارم — لا نقبل من الزبون غير الموثوق أي حقل غير هذه القائمة (خصوصاً
+    # status/profit/id/total التي يجب أن تُحسب أو تُفرض من السيرفر فقط).
+    ALLOWED_CUSTOMER_FIELDS = {"name", "phone", "city", "product", "qty", "address", "deliveryType", "source"}
+    d = {k: v for k, v in raw.items() if k in ALLOWED_CUSTOMER_FIELDS}
+
     order_id       = f"ORD-{int(time.time() * 1000)}"
     d["id"]        = order_id
     d["date"]      = time.strftime("%Y-%m-%d %H:%M")
-    d["status"]    = d.get("status") or "Pending"
+    d["status"]    = "Pending"  # ثابت دائماً — غير قابل للتعديل من الزبون بتاتاً
     d["profit"]    = 0
     d["source"]    = d.get("source") or "manual"
-    d["deliveryType"] = d.get("deliveryType") if d.get("deliveryType") in ("home","desk") else "home"
+    d["deliveryType"] = d.get("deliveryType") if d.get("deliveryType") in ("home", "desk") else "home"
     d["date_sent"] = ""
     d["date_delivered"] = ""
+    try:
+        d["qty"] = max(1, int(d.get("qty", 1)))
+    except Exception:
+        d["qty"] = 1
     p_data = _fb_get(f"data/{uid}/products/{d.get('product')}")
     c_data = _fb_get(f"data/{uid}/cities/{d.get('city')}")
-    if p_data and c_data and not d.get("total"):
+    # "total" يُحسب سيرفرياً دائماً — لا يُقبل من الزبون بتاتاً (سابقاً كان يُقبل من
+    # الزبون طالما لم يبعث "total"، وغياب الفحص يعني قبوله لو أرسله فعلاً).
+    if p_data and c_data:
         ship_cust, _ = _ship_values(c_data, d["deliveryType"])
-        d["total"] = (float(p_data.get("sell", 0)) * int(d.get("qty", 1))) + ship_cust
+        d["total"] = (float(p_data.get("sell", 0)) * d["qty"]) + ship_cust
+    else:
+        d["total"] = 0
     _fb_put(f"data/{uid}/orders/{order_id}", d)
     _increment_usage(uid, "orderCount")
     return ok_json({"orderId": order_id})
@@ -1953,9 +2091,17 @@ def api_woo_connect():
         return err_json("جميع الحقول مطلوبة")
     if not store_url.startswith("https://"):
         return err_json("رابط المتجر يجب أن يبدأ بـ https:// لحماية بيانات متجرك")
+    # حماية من SSRF (بما فيها DNS rebinding): نحلّ الدومين مرة واحدة، نتحقق أنه عام
+    # وآمن، ثم نُثبّت نفس الـ IP وقت الاتصال الفعلي عبر _request_with_pinned_dns —
+    # بدل السماح لـ requests بإعادة حلّ نفس الدومين من جديد (نافذة سباق DNS rebinding).
+    hostname, safe_ip = _validate_and_pin_store_url(store_url)
+    if not safe_ip:
+        return err_json("رابط المتجر غير صالح أو يشير لعنوان غير مسموح به")
     try:
-        test = requests.get(f"{store_url}/wp-json/wc/v3/orders", params={"per_page": 1},
-                             auth=(consumer_key, consumer_secret), timeout=15)
+        test = _request_with_pinned_dns("GET", f"{store_url}/wp-json/wc/v3/orders", safe_ip,
+                                         params={"per_page": 1},
+                                         auth=(consumer_key, consumer_secret),
+                                         timeout=15, allow_redirects=False)
     except Exception as e:
         logging.error(f"woo/connect test request failed: {e}")
         return err_json("تعذر الوصول للمتجر — تأكد من صحة الرابط")
@@ -2002,14 +2148,19 @@ def api_woo_sync():
     if not integ or not integ.get("connected"):
         return err_json("المتجر غير مربوط — اربطه أولاً")
     store_url = integ.get("storeUrl", "")
+    # نفس فحص SSRF + تثبيت DNS عند كل مزامنة — الرابط المخزّن سابقاً قد يكون DNS تغيّر
+    # لاحقاً (DNS rebinding) لذلك نعيد الحل والتثبيت فكل استعمال فعلي وليس فقط عند الربط.
+    hostname, safe_ip = _validate_and_pin_store_url(store_url)
+    if not safe_ip:
+        return err_json("رابط المتجر المحفوظ غير صالح — أعد ربط المتجر من جديد")
     ck = _decrypt_secret(integ.get("consumerKeyEnc", ""))
     cs = _decrypt_secret(integ.get("consumerSecretEnc", ""))
     if not ck or not cs:
         return err_json("فشل قراءة بيانات الربط — أعد ربط المتجر من جديد")
     try:
-        r = requests.get(f"{store_url}/wp-json/wc/v3/orders",
+        r = _request_with_pinned_dns("GET", f"{store_url}/wp-json/wc/v3/orders", safe_ip,
                           params={"per_page": 50, "orderby": "date", "order": "desc"},
-                          auth=(ck, cs), timeout=20)
+                          auth=(ck, cs), timeout=20, allow_redirects=False)
     except Exception as e:
         logging.error(f"woo/sync request failed: {e}")
         return err_json("تعذر الاتصال بالمتجر")
@@ -2106,6 +2257,9 @@ def api_update_bot_settings():
     username = request.auth_username
     d        = body.get("data") or {}
     if not username: return err_json("Missing fields")
+    # حماية Mass Assignment: نستثني الحقول الحساسة (plan/source/Password/User_ID/Username)
+    # قبل الدمج — هذا المسار مخصص فقط لإعدادات البوت وليس لبيانات الحساب/الخطة.
+    d = _sanitize_bot_settings_patch(d)
     existing = _fb_get(f"users/{username}") or {}
     updated  = {**existing, **d, "Username": username, "User_ID": uid}
     _fb_put(f"users/{username}", updated)
@@ -2272,6 +2426,17 @@ def api_admin_list_clients():
     return ok_json(result)
 
 # ── /api/saas ─────────────────────────────────────────────
+# مسارات محمية تحت data/{uid}/ لا يُسمح بلمسها عبر أفعال firebaseGet/Set/Update/Push
+# العامة أدناه — لأن لها منطق تحقق خاص (صلاحيات الخطة، الحدود الشهرية، فحوصات SSRF...)
+# ضمن endpoints مخصصة (landing/generate, woo/connect, إلخ). قبل هذا التعديل، كان أي
+# owner مصادَق عليه (حتى بخطة Free) يقدر يبعث firebaseSet بمسار مثل
+# data/{uid}/usage/2026-08/orderCount = 0 ليصفّر استهلاكه الشهري ويتجاوز سقف الطلبات/
+# رسائل البوت، أو data/{uid}/landingPages/{id} ليُدرج صفحة هبوط مباشرة بلا التحقق من
+# planHas_server("landing")، أو data/{uid}/integrations/woocommerce ليُفعّل ربط
+# WooCommerce بلا المرور بفحوصات SSRF فـ /api/woo/connect. الآن هذه المسارات الفرعية
+# محجوبة كلياً من الوصول العام، ويجب المرور عبر الـ endpoints المخصصة لها فقط.
+_SAAS_BLOCKED_DATA_SUBPATHS = ("usage/", "integrations/", "landingPages/", "teamMembers/")
+
 @app.route("/api/saas", methods=["POST","OPTIONS"])
 def api_saas():
     if request.method == "OPTIONS": return jsonify({}), 200
@@ -2290,7 +2455,16 @@ def api_saas():
 
     def _path_allowed(path):
         path = str(path or "")
-        return path.startswith(f"data/{auth_uid}/") or path.startswith(f"ai_logs/{auth_uid}")
+        data_prefix = f"data/{auth_uid}/"
+        if path.startswith(data_prefix):
+            rest = path[len(data_prefix):]
+            if any(rest.startswith(p) for p in _SAAS_BLOCKED_DATA_SUBPATHS):
+                return False
+            return True
+        # تصحيح حد المسار: نتأكد أن الجزء بعد ai_logs/{uid} إما فارغ أو يبدأ بـ "/"،
+        # بدل startswith الخام الذي كان يقبل نظرياً أي uid آخر يبدأ بنفس السلسلة.
+        ai_logs_prefix = f"ai_logs/{auth_uid}"
+        return path == ai_logs_prefix or path.startswith(ai_logs_prefix + "/")
 
     if action in ("firebaseGet", "firebaseSet", "firebaseUpdate", "firebasePush") and auth_role == "member":
         return err_json("غير مسموح لعضو الفريق باستعمال هذا المسار", 403)
@@ -2335,6 +2509,12 @@ def api_saas():
         if action == "updateBotSettings":
             if not auth_username: return err_json("missing_username")
             data = payload.get("payload", payload.get("data")) or {}
+            # حماية Mass Assignment (نفس المنطق مثل /api/updateBotSettings): نستثني
+            # plan/source/Password/User_ID/Username قبل أي patch على سجل المستخدم —
+            # وإلا يقدر أي owner يرقّي خطته لنفسه عبر هذا المسار العام.
+            data = _sanitize_bot_settings_patch(data)
+            if not data:
+                return ok_json(True)
             _fb_patch(f"users/{auth_username}", data)
             with _settings_cache_lock: _settings_cache.clear()
             return ok_json(True)
@@ -2880,7 +3060,9 @@ def sticker_reply():
 @app.route("/webhook", methods=["GET","POST"])
 def webhook():
     if request.method == "GET":
-        if VERIFY_TOKEN and request.args.get("hub.verify_token") == VERIFY_TOKEN:
+        # مقارنة زمن-ثابت (compare_digest) بدل == العادية لتفادي كشف verify_token
+        # عبر فروقات التوقيت الدقيقة (timing side-channel)، بنفس أسلوب باقي الملف.
+        if VERIFY_TOKEN and hmac.compare_digest(request.args.get("hub.verify_token") or "", VERIFY_TOKEN):
             return request.args.get("hub.challenge",""), 200
         return "Forbidden", 403
     raw_body = request.get_data()
