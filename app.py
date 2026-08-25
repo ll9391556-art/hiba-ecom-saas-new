@@ -13,7 +13,10 @@ import bcrypt
 import jwt
 import ipaddress
 import socket
-from urllib3.util import connection as _urllib3_connection
+import urllib3
+from urllib3.connection import HTTPSConnection
+from urllib3.connectionpool import HTTPSConnectionPool
+from urllib3.poolmanager import PoolManager
 from cryptography.fernet import Fernet, InvalidToken
 from functools import wraps
 from urllib.parse import unquote, quote, urlparse
@@ -472,13 +475,6 @@ def _sanitize_bot_settings_patch(d):
 # إليه، مما يسمح لمستخدم مسجّل بتوجيه سيرفرنا لعمل طلبات HTTP لعناوين داخلية
 # (127.0.0.1, 169.254.169.254 metadata endpoint, شبكات خاصة 10.x/172.16.x/192.168.x...)
 # عبر DNS يشير لعنوان خاص.
-#
-# تحديث إضافي (DNS rebinding / TOCTOU): كان الفحص السابق يحلّ الدومين للتحقق منه فقط،
-# ثم يترك requests يحلّ نفس الدومين من جديد بشكل منفصل وقت الاتصال الفعلي. مهاجم
-# يتحكم بخادم DNS خاص به (TTL منخفض جداً) يقدر يرجّع IP عام وقت الفحص، وIP داخلي
-# وقت الاتصال الفعلي مباشرة بعده (نافذة سباق). الآن: نحلّ الاسم مرة واحدة، نتحقق أنه
-# عام وآمن، ثم "نُثبّت" (pin) نفس الـ IP المتحقَّق منه إجبارياً وقت الاتصال الفعلي عبر
-# _request_with_pinned_dns، بدل ترك urllib3 يعيد الحل من جديد.
 def _resolve_safe_public_ip(hostname):
     """يتحقق من hostname ويرجّع أول IP عام آمن (ليس داخلي/خاص/loopback/link-local/
     reserved/multicast) تم التحقق منه فعلياً، أو None إذا لم يوجد أي IP آمن."""
@@ -500,18 +496,6 @@ def _resolve_safe_public_ip(hostname):
         return ip_str
     return None
 
-def _validate_external_store_url(store_url):
-    """يتحقق أن store_url رابط https سليم يشير لدومين عام (ليس داخلي/خاص). (فحص عام
-    بلا تثبيت IP — يُستعمل فقط للتحقق السريع؛ الاتصال الفعلي يجب أن يمر عبر
-    _validate_and_pin_store_url + _request_with_pinned_dns)."""
-    try:
-        parsed = urlparse(store_url)
-    except Exception:
-        return False
-    if parsed.scheme != "https" or not parsed.hostname:
-        return False
-    return _resolve_safe_public_ip(parsed.hostname) is not None
-
 def _validate_and_pin_store_url(store_url):
     """يتحقق من صلاحية رابط المتجر ويرجّع (hostname, safe_ip) للاستعمال المباشر مع
     _request_with_pinned_dns، بدل السماح لـ requests بإعادة حلّ DNS من جديد وقت
@@ -527,28 +511,65 @@ def _validate_and_pin_store_url(store_url):
         return None, None
     return parsed.hostname, ip
 
-_dns_pin_lock = threading.Lock()
+# ── تثبيت DNS (Pinning) بطريقة آمنة على مستوى الـ Thread ────────────
+# تحديث مهم (كان الإصدار السابق غير آمن تحت التزامن): النسخة السابقة كانت تُبدّل
+# urllib3.util.connection.create_connection على مستوى العملية بأكملها (module-level
+# global)، محمية بقفل _dns_pin_lock واحد. المشكلة: هذا القفل يحمي فقط الاستدعاءات
+# التي تمر عبر هذه الدالة نفسها (woo/connect وwoo/sync)، بينما بقية الكود يبعث طلبات
+# requests أخرى في threads مختلفة بالتوازي (meta_post للفيسبوك/واتساب، تحميل الوسائط،
+# Gemini API، keepalive، Facebook OAuth) بلا أي علاقة بهذا القفل. مع ThreadPoolExecutor
+# بعدة workers، thread يزامن WooCommerce في نفس اللحظة التي يبعث فيها thread آخر رسالة
+# لفيسبوك يقدر يخلي طلب فيسبوك يتوجّه بالخطأ لعنوان WooCommerce المثبَّت (أو العكس) —
+# على الأقل فشل اتصال متقطع (TLS handshake سيفشل لعدم مطابقة الشهادة)، وأسوأ الأحوال
+# سلوك غير متوقع تحت الحمل. الحل الآن: تثبيت الـ IP يتم فقط على مستوى PoolManager خاص
+# بـ HTTPAdapter مُنشأ محلياً لكل طلب (session معزولة)، بلا أي تعديل على أي حالة عالمية
+# مشتركة بين threads — كل thread يستعمل adapter خاص به فقط.
+class _PinnedHTTPSConnection(HTTPSConnection):
+    """اتصال HTTPS يفتح الـ TCP socket فعلياً على IP مثبَّت مسبقاً (self._pinned_ip)
+    بدل إعادة حلّ self.host من جديد، مع الحفاظ على SNI/التحقق من الشهادة باسم النطاق
+    الأصلي (self.host) — التعديل يطال فقط عنوان الاتصال الأدنى مستوى، ماشي التحقق من TLS."""
+    _pinned_ip = None
+
+    def _new_conn(self):
+        extra_kw = {}
+        if self.source_address:
+            extra_kw["source_address"] = self.source_address
+        if getattr(self, "socket_options", None):
+            extra_kw["socket_options"] = self.socket_options
+        target = (self._pinned_ip or self.host, self.port)
+        try:
+            conn = urllib3.util.connection.create_connection(target, self.timeout, **extra_kw)
+        except TypeError:
+            conn = urllib3.util.connection.create_connection(target, self.timeout)
+        return conn
+
+
+def _make_pinned_https_adapter(pinned_ip):
+    """يبني HTTPAdapter جديد بالكامل (poolmanager خاص به) يفرض الاتصال الفعلي على
+    pinned_ip، بلا لمس أي حالة عالمية مشتركة — آمن للاستعمال المتزامن من عدة threads
+    فالآن نفسه، كل واحد بـ pinned_ip مختلف."""
+    conn_cls = type("_PinnedConn", (_PinnedHTTPSConnection,), {"_pinned_ip": pinned_ip})
+    pool_cls = type("_PinnedHTTPSPool", (HTTPSConnectionPool,), {"ConnectionCls": conn_cls})
+
+    class _PinnedAdapter(requests.adapters.HTTPAdapter):
+        def init_poolmanager(self, *args, **kwargs):
+            self.poolmanager = PoolManager(*args, **kwargs)
+            self.poolmanager.pool_classes_by_scheme = {"https": pool_cls, "http": urllib3.HTTPConnectionPool}
+
+    return _PinnedAdapter()
+
 
 def _request_with_pinned_dns(method, url, resolved_ip, **kwargs):
-    """يرسل طلب HTTP عبر requests لكن يُلزم الاتصال الفعلي بنفس الـ IP الذي تم التحقق
-    منه مسبقاً (resolved_ip) بدل السماح لـ urllib3 بإعادة حلّ الدومين من جديد وقت
-    الاتصال — يمنع هجوم DNS rebinding (الفحص يمر على IP عام آمن، والاتصال الفعلي يذهب
-    لعنوان داخلي/خاص لأن TTL أو الاستجابة تغيّرت بين اللحظتين).
-    التحقق من الشهادة (TLS/SNI) يبقى يعتمد على اسم النطاق الأصلي بالرابط، وليس الـ IP،
-    لأن التعديل يطال فقط دالة فتح اتصال TCP الأدنى مستوى.
-    محمي بقفل لأن التعديل مؤقت وعلى مستوى العملية كاملة (urllib3.util.connection)."""
-    orig_create_connection = _urllib3_connection.create_connection
-
-    def _pinned_create_connection(address, *args, **kw):
-        host, port = address
-        return orig_create_connection((resolved_ip, port), *args, **kw)
-
-    with _dns_pin_lock:
-        _urllib3_connection.create_connection = _pinned_create_connection
-        try:
-            return requests.request(method, url, **kwargs)
-        finally:
-            _urllib3_connection.create_connection = orig_create_connection
+    """يرسل طلب HTTP عبر requests.Session معزولة (محلية لهذا الاستدعاء فقط)، مُلزَمة
+    بالاتصال الفعلي بـ resolved_ip الذي تم التحقق منه مسبقاً — يمنع DNS rebinding بلا
+    أي تعديل على حالة عالمية مشتركة بين threads."""
+    session = requests.Session()
+    adapter = _make_pinned_https_adapter(resolved_ip)
+    session.mount("https://", adapter)
+    try:
+        return session.request(method, url, **kwargs)
+    finally:
+        session.close()
 
 # ── Frontend ──────────────────────────────────────────────
 @app.route("/", methods=["GET"])
@@ -1139,10 +1160,7 @@ def api_add_order():
     """مسار عام (الزبون يطلب من صفحة المتجر بلا حساب) — لذلك مقيّد بـ:
     1) التحقق أن userId ينتمي فعلاً لتاجر مسجّل (يمنع تعبئة uid عشوائي غير موجود).
     2) Rate limit حسب IP+هاتف لمنع الإغراق الآلي بطلبات وهمية يستهلك سقف التاجر الشهري.
-    3) whitelist صارم لحقول الزبون + فرض status="Pending" + حساب total سيرفرياً فقط
-       (قبل التعديل: كان كامل كائن "data" القادم من زبون غير موثوق يُدمج كما هو — أي
-       زبون خبيث يقدر يبعث status="Delivered" و/أو total مزوّر ويُدرج طلب "مؤكد" جاهز
-       مباشرة فلوحة التاجر، متجاوزاً سير العمل الطبيعي (تأكيد ← إرسال ← تسليم) بالكامل)."""
+    3) whitelist صارم لحقول الزبون + فرض status="Pending" + حساب total سيرفرياً فقط."""
     body = request.get_json(silent=True) or {}
     uid  = str(body.get("userId") or "").strip()
     raw  = body.get("data") or {}
@@ -1180,8 +1198,7 @@ def api_add_order():
         d["qty"] = 1
     p_data = _fb_get(f"data/{uid}/products/{d.get('product')}")
     c_data = _fb_get(f"data/{uid}/cities/{d.get('city')}")
-    # "total" يُحسب سيرفرياً دائماً — لا يُقبل من الزبون بتاتاً (سابقاً كان يُقبل من
-    # الزبون طالما لم يبعث "total"، وغياب الفحص يعني قبوله لو أرسله فعلاً).
+    # "total" يُحسب سيرفرياً دائماً — لا يُقبل من الزبون بتاتاً.
     if p_data and c_data:
         ship_cust, _ = _ship_values(c_data, d["deliveryType"])
         d["total"] = (float(p_data.get("sell", 0)) * d["qty"]) + ship_cust
@@ -2093,7 +2110,8 @@ def api_woo_connect():
         return err_json("رابط المتجر يجب أن يبدأ بـ https:// لحماية بيانات متجرك")
     # حماية من SSRF (بما فيها DNS rebinding): نحلّ الدومين مرة واحدة، نتحقق أنه عام
     # وآمن، ثم نُثبّت نفس الـ IP وقت الاتصال الفعلي عبر _request_with_pinned_dns —
-    # بدل السماح لـ requests بإعادة حلّ نفس الدومين من جديد (نافذة سباق DNS rebinding).
+    # بواسطة session/adapter معزولين محلياً (بدون أي حالة عالمية) لتجنب أي تداخل بين
+    # threads متزامنة أخرى فالسيرفر (انظر تعليق _PinnedHTTPSConnection فوق).
     hostname, safe_ip = _validate_and_pin_store_url(store_url)
     if not safe_ip:
         return err_json("رابط المتجر غير صالح أو يشير لعنوان غير مسموح به")
@@ -2428,13 +2446,7 @@ def api_admin_list_clients():
 # ── /api/saas ─────────────────────────────────────────────
 # مسارات محمية تحت data/{uid}/ لا يُسمح بلمسها عبر أفعال firebaseGet/Set/Update/Push
 # العامة أدناه — لأن لها منطق تحقق خاص (صلاحيات الخطة، الحدود الشهرية، فحوصات SSRF...)
-# ضمن endpoints مخصصة (landing/generate, woo/connect, إلخ). قبل هذا التعديل، كان أي
-# owner مصادَق عليه (حتى بخطة Free) يقدر يبعث firebaseSet بمسار مثل
-# data/{uid}/usage/2026-08/orderCount = 0 ليصفّر استهلاكه الشهري ويتجاوز سقف الطلبات/
-# رسائل البوت، أو data/{uid}/landingPages/{id} ليُدرج صفحة هبوط مباشرة بلا التحقق من
-# planHas_server("landing")، أو data/{uid}/integrations/woocommerce ليُفعّل ربط
-# WooCommerce بلا المرور بفحوصات SSRF فـ /api/woo/connect. الآن هذه المسارات الفرعية
-# محجوبة كلياً من الوصول العام، ويجب المرور عبر الـ endpoints المخصصة لها فقط.
+# ضمن endpoints مخصصة (landing/generate, woo/connect, إلخ).
 _SAAS_BLOCKED_DATA_SUBPATHS = ("usage/", "integrations/", "landingPages/", "teamMembers/")
 
 @app.route("/api/saas", methods=["POST","OPTIONS"])
@@ -2509,9 +2521,6 @@ def api_saas():
         if action == "updateBotSettings":
             if not auth_username: return err_json("missing_username")
             data = payload.get("payload", payload.get("data")) or {}
-            # حماية Mass Assignment (نفس المنطق مثل /api/updateBotSettings): نستثني
-            # plan/source/Password/User_ID/Username قبل أي patch على سجل المستخدم —
-            # وإلا يقدر أي owner يرقّي خطته لنفسه عبر هذا المسار العام.
             data = _sanitize_bot_settings_patch(data)
             if not data:
                 return ok_json(True)
@@ -3033,14 +3042,29 @@ def process_bg(sender_id, user_text, bot, send_fn,
 def verify_sig(raw_body, headers):
     """قبل: لو META_APP_SECRET غير مضبوط كان يُرجع True (يقبل أي طلب بلا توقيع) —
     fail-open خطير يسمح لأي شخص بانتحال ويبهوك ميتا. الآن: fail-closed، يرفض كل شيء
-    حتى يُضبط السر بشكل صريح."""
+    حتى يُضبط السر بشكل صريح.
+
+    ملاحظة تشخيصية مؤقتة: نسجل سبب أي رفض (بلا كشف أي سر) لتشخيص حالات فشل webhook
+    الحقيقية القادمة من ميتا — يمكن حذف أسطر logging.warning هذه بعد التأكد أن كل شيء
+    يعمل بشكل طبيعي."""
     if not META_APP_SECRET:
         logging.critical("🚨 رفض /webhook لأن META_APP_SECRET غير مضبوط")
         return False
     sig = headers.get("X-Hub-Signature-256","")
-    if not sig.startswith("sha256="): return False
+    if not sig.startswith("sha256="):
+        logging.warning(f"⚠️ /webhook رُفض: لا يوجد هيدر X-Hub-Signature-256 صالح "
+                         f"(القيمة المستلمة: {'فارغة' if not sig else 'موجودة لكن بصيغة خاطئة'})")
+        return False
     expected = hmac.new(META_APP_SECRET.encode(), raw_body, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(expected, sig[7:])
+    matched = hmac.compare_digest(expected, sig[7:])
+    if not matched:
+        logging.warning(
+            f"⚠️ /webhook رُفض: التوقيع لا يطابق. طول META_APP_SECRET المستعمل = "
+            f"{len(META_APP_SECRET)} حرف، طول جسم الطلب = {len(raw_body)} بايت. "
+            f"تأكد أن نفس القيمة بالضبط (بلا مسافات/أسطر زائدة) مضبوطة فـ App Secret "
+            f"بلوحة تحكم Meta وفـ متغير البيئة META_APP_SECRET."
+        )
+    return matched
 
 @app.before_request
 def limit_size():
