@@ -3047,6 +3047,7 @@ def verify_sig(raw_body, headers):
     ملاحظة تشخيصية مؤقتة: نسجل سبب أي رفض (بلا كشف أي سر) لتشخيص حالات فشل webhook
     الحقيقية القادمة من ميتا — يمكن حذف أسطر logging.warning هذه بعد التأكد أن كل شيء
     يعمل بشكل طبيعي."""
+    logging.warning(f"🔍 DEBUG BODY -> raw_body type: {type(raw_body)} | Length of raw_body: {len(raw_body) if raw_body else 0}")
     if not META_APP_SECRET:
         logging.critical("🚨 رفض /webhook لأن META_APP_SECRET غير مضبوط")
         return False
