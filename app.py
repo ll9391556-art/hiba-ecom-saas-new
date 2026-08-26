@@ -3052,6 +3052,7 @@ def verify_sig(raw_body, headers):
         logging.critical("🚨 رفض /webhook لأن META_APP_SECRET غير مضبوط")
         return False
     sig = headers.get("X-Hub-Signature-256","")
+    logging.warning(f"🔍 DEBUG SIG -> Received Header Sig: {sig} | Calculated My Sig: 'sha256=' + hmac.new(META_APP_SECRET.encode('utf-8'), raw_body, hashlib.sha256).hexdigest()")
     if not sig.startswith("sha256="):
         logging.warning(f"⚠️ /webhook رُفض: لا يوجد هيدر X-Hub-Signature-256 صالح "
                          f"(القيمة المستلمة: {'فارغة' if not sig else 'موجودة لكن بصيغة خاطئة'})")
