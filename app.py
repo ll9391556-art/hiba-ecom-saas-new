@@ -76,7 +76,7 @@ if not VERIFY_TOKEN:
 META_APP_SECRET = os.environ.get("META_APP_SECRET", "").strip()
 if not META_APP_SECRET:
     logging.critical("🚨 META_APP_SECRET غير مضبوط — /webhook سيرفض كل الطلبات POST حتى يُضبط (fail-closed).")
-
+logging.critical(f"🔍 DEBUG -> META_APP_SECRET Value check: Starts with '{META_APP_SECRET[:5]}' ... Ends with '{META_APP_SECRET[-5:]}' | Length: {len(META_APP_SECRET)}")
 FB_DB_URL           = os.environ.get("FB_DB_URL",    "https://saas-order-default-rtdb.europe-west1.firebasedatabase.app").strip()
 FB_APP_ID           = os.environ.get("FB_APP_ID",    "1484940433173462").strip()
 FB_APP_SECRET_OAUTH = os.environ.get("FB_APP_SECRET","").strip()
