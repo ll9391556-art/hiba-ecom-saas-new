@@ -6,15 +6,24 @@ import logging
 import requests
 import time
 import re
+import secrets
+import imghdr
 import threading
 import bcrypt
 import jwt
+import ipaddress
+import socket
+import urllib3
+from urllib3.connection import HTTPSConnection
+from urllib3.connectionpool import HTTPSConnectionPool
+from urllib3.poolmanager import PoolManager
 from cryptography.fernet import Fernet, InvalidToken
 from functools import wraps
-from urllib.parse import unquote, quote
+from urllib.parse import unquote, quote, urlparse
 from concurrent.futures import ThreadPoolExecutor
 from flask import Flask, request, abort, jsonify, send_from_directory
 from flask_cors import CORS
+from werkzeug.middleware.proxy_fix import ProxyFix
 import firebase_admin
 from firebase_admin import credentials, db, storage as fb_storage
 from google import genai
@@ -23,14 +32,32 @@ from time import sleep
 from markupsafe import escape as _esc
 
 app = Flask(__name__, static_folder="static")
-CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=False)
+
+# ── ثقة بروكسي عكسي (X-Forwarded-For) ──────────────────────
+# قبل: كل مسار كان يقرأ X-Forwarded-For يدوياً مباشرة من الهيدر القادم من العميل
+# (request.headers.get("X-Forwarded-For", ...).split(",")[0]) بلا أي تحقق من عدد
+# البروكسيات الفعلي بينه وبين الطلب. أي مهاجم يقدر يبعث قيمة X-Forwarded-For عشوائية
+# مختلفة بكل طلب ليتحايل بالكامل على: rate limiting لتسجيل الدخول، rate limiting على
+# ADMIN_API_KEY brute-force، وrate limiting على /api/addOrder. الآن: نستعمل ProxyFix
+# لجعل Flask يثق فقط بأول قيمة قادمة من بروكسي واحد موثوق (منصة الاستضافة نفسها)
+# ونعتمد على request.remote_addr المُصحَّح فكل مكان بدل الهيدر الخام.
+_TRUSTED_PROXY_HOPS = int(os.environ.get("TRUSTED_PROXY_HOPS", "1"))
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=_TRUSTED_PROXY_HOPS, x_proto=1, x_host=0, x_port=0, x_prefix=0)
+
+# ── CORS ──────────────────────────────────────────────────
+# قبل: origins="*" على كل المسارات (بما فيها /admin و/api/admin/*).
+# الآن: مقيّد بقائمة من متغير بيئة ALLOWED_ORIGINS (مفصولة بفواصل)، بقيمة افتراضية
+# تقتصر على دومين المنتج فقط بدل فتحه للعالم كله.
+_ALLOWED_ORIGINS = [o.strip() for o in os.environ.get(
+    "ALLOWED_ORIGINS", "https://orderconfidence.com"
+).split(",") if o.strip()]
+CORS(app, resources={r"/*": {"origins": _ALLOWED_ORIGINS}}, supports_credentials=False)
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s", force=True)
 
 _executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="bot_worker")
 
 MAX_PAYLOAD_SIZE       = 2 * 1024 * 1024
-VERIFY_TOKEN           = os.environ.get("VERIFY_TOKEN",    "HEBA_SAAS_2026").strip()
-META_APP_SECRET        = os.environ.get("META_APP_SECRET", "").strip()
 MAX_HISTORY_TURNS      = 10
 LOW_STOCK_THRESHOLD    = 5
 BAD_CUSTOMER_THRESHOLD = 3
@@ -39,19 +66,33 @@ _JSON_END              = "###JSON_END###"
 
 _GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite"]
 
+# ── Meta webhook verify token ──────────────────────────────
+# قبل: قيمة افتراضية ثابتة بالكود ("HEBA_SAAS_2026") معروفة لأي شخص يقرأ المصدر.
+# الآن: إجباري من البيئة، بلا قيمة افتراضية.
+VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN", "").strip()
+if not VERIFY_TOKEN:
+    logging.critical("🚨 VERIFY_TOKEN غير مضبوط بالبيئة — أي محاولة تحقق GET من ميتا على /webhook سترفض حتى تضبطه.")
+
+META_APP_SECRET = os.environ.get("META_APP_SECRET", "").strip()
+if not META_APP_SECRET:
+    logging.critical("🚨 META_APP_SECRET غير مضبوط — /webhook سيرفض كل الطلبات POST حتى يُضبط (fail-closed).")
+logging.critical(f"🔍 DEBUG -> META_APP_SECRET Value check: Starts with '{META_APP_SECRET[:5]}' ... Ends with '{META_APP_SECRET[-5:]}' | Length: {len(META_APP_SECRET)}")
 FB_DB_URL           = os.environ.get("FB_DB_URL",    "https://saas-order-default-rtdb.europe-west1.firebasedatabase.app").strip()
-# ملاحظة: لم نعد نستعمل FB_DB_SECRET — كل عمليات القاعدة تمر الآن عبر Firebase Admin SDK
-# (FIREBASE_CREDENTIALS) كما توصي به Firebase نفسها بدل الأسرار القديمة (Legacy Secrets).
 FB_APP_ID           = os.environ.get("FB_APP_ID",    "1484940433173462").strip()
 FB_APP_SECRET_OAUTH = os.environ.get("FB_APP_SECRET","").strip()
 REDIRECT_URI        = os.environ.get("REDIRECT_URI", "https://orderconfidence.com/callback").strip()
 FB_STORAGE_BUCKET   = os.environ.get("FB_STORAGE_BUCKET", "saas-order.firebasestorage.app").strip()
 
 # ── Auth (JWT) ────────────────────────────────────────────
+# قبل: عند غياب JWT_SECRET كان يُستعمل نص ثابت مكتوب بالكود
+# ("INSECURE_DEV_SECRET_CHANGE_ME_NOW") — أي شخص يقرأ هذا الملف يقدر يزوّر
+# جلسة owner كاملة لأي حساب. الآن: سر عشوائي قوي يُولَّد وقت التشغيل بدل قيمة معروفة.
 JWT_SECRET = os.environ.get("JWT_SECRET", "").strip()
 if not JWT_SECRET:
-    JWT_SECRET = "INSECURE_DEV_SECRET_CHANGE_ME_NOW"
-    logging.warning("⚠️ JWT_SECRET غير مضبوط بالبيئة — يتم استخدام قيمة افتراضية غير آمنة. اضبط JWT_SECRET في الإنتاج فوراً!")
+    JWT_SECRET = secrets.token_hex(32)
+    logging.critical("🚨 JWT_SECRET غير مضبوط بالبيئة — تم توليد سر عشوائي مؤقت لهذه الجلسة فقط "
+                      "(كل التوكنات الحالية ستُبطَل عند إعادة التشغيل القادمة). "
+                      "اضبط JWT_SECRET بقيمة ثابتة بالإنتاج فوراً!")
 JWT_ALGO         = "HS256"
 JWT_EXPIRY_HOURS = 24 * 7  # صلاحية الجلسة: 7 أيام
 
@@ -60,8 +101,6 @@ if not ADMIN_API_KEY:
     logging.warning("⚠️ ADMIN_API_KEY غير مضبوط — مسارات الإدارة (تغيير الخطط) سترفض كل الطلبات حتى يُضبط.")
 
 # ── تشفير مفاتيح API لمتاجر العملاء الخارجية (WooCommerce/Shopify) ─────
-# مفتاح مستقل تماماً عن JWT_SECRET — لا يُستعمل إلا لتشفير/فك تشفير
-# بيانات الاعتماد الحساسة قبل تخزينها بقاعدة البيانات، حتى لو سُرّبت القاعدة تبقى غير قابلة للقراءة.
 ENCRYPTION_KEY = os.environ.get("ENCRYPTION_KEY", "").strip()
 if not ENCRYPTION_KEY:
     ENCRYPTION_KEY = Fernet.generate_key().decode()
@@ -83,10 +122,7 @@ def _decrypt_secret(token):
         return None
 
 def issue_token(uid, username, role="owner", perms=None, member_username="", member_name=""):
-    """يولّد JWT لصاحب الحساب (owner) أو لعضو فريق (member).
-    uid/username دائماً يشيران لصاحب المتجر (owner) حتى بالنسبة لعضو الفريق،
-    لأن كل بيانات المتجر مخزّنة تحت uid الخاص بصاحب الحساب — الصلاحيات (perms)
-    هي اللي تتحكم بما يقدر العضو يوصله فعلياً عبر require_perm."""
+    """يولّد JWT لصاحب الحساب (owner) أو لعضو فريق (member)."""
     payload = {
         "uid": str(uid), "username": str(username), "role": role,
         "iat": int(time.time()), "exp": int(time.time()) + JWT_EXPIRY_HOURS * 3600,
@@ -108,10 +144,6 @@ def _extract_bearer(req):
     return h.split(" ", 1)[1].strip() if h.lower().startswith("bearer ") else ""
 
 def require_auth(f):
-    """يفرض تسجيل الدخول، ويحقن request.auth_uid / request.auth_username من الـ JWT فقط
-    (لا يُعتمد أبداً على userId المرسل من العميل لتفادي انتحال حسابات أخرى).
-    كما يحقن معلومات الدور (owner/member) وصلاحيات عضو الفريق إن وُجدت،
-    ليستعملها require_perm بعد ذلك فتحديد الوصول لكل مسار."""
     @wraps(f)
     def wrapper(*args, **kwargs):
         token = _extract_bearer(request)
@@ -128,9 +160,6 @@ def require_auth(f):
     return wrapper
 
 def require_perm(perm):
-    """يُستعمل بعد require_auth مباشرة لتقييد مسار مُعيّن بصلاحية محددة.
-    صاحب الحساب (owner) يمر دائماً بلا قيود؛ عضو الفريق (member) يمر فقط
-    إذا كانت الصلاحية المطلوبة مفعّلة له من طرف صاحب الحساب."""
     def decorator(f):
         @wraps(f)
         def wrapper(*args, **kwargs):
@@ -143,18 +172,21 @@ def require_perm(perm):
     return decorator
 
 def require_admin(f):
-    """يحمي مسارات حساسة جداً (تغيير الخطط مثلاً) بمفتاح إدارة منفصل عن جلسات المستخدمين."""
     @wraps(f)
     def wrapper(*args, **kwargs):
         key = request.headers.get("X-Admin-Key", "").strip()
-        if not ADMIN_API_KEY or key != ADMIN_API_KEY:
+        # request.remote_addr مُصحَّح الآن عبر ProxyFix (بروكسي موثوق واحد) بدل الوثوق
+        # بهيدر X-Forwarded-For الخام القادم من العميل مباشرة.
+        client_ip = request.remote_addr or ""
+        if _login_rate_limited(f"admin:{client_ip}", max_attempts=10, window=300):
+            return err_json("محاولات كثيرة جداً — حاول لاحقاً", 429)
+        # مقارنة زمن-ثابت (constant-time) بدل != العادية، لمنع هجوم قياس التوقيت (timing attack)
+        if not ADMIN_API_KEY or not hmac.compare_digest(key, ADMIN_API_KEY):
             return err_json("Forbidden", 403)
         return f(*args, **kwargs)
     return wrapper
 
 def require_owner(f):
-    """يحمي مسارات خاصة بصاحب الحساب فقط (لا تُفتح لأعضاء الفريق مهما كانت صلاحياتهم) —
-    مثل إدارة الفريق نفسه، ربط فيسبوك/إنستغرام، وتفاصيل الحساب."""
     @wraps(f)
     def wrapper(*args, **kwargs):
         if getattr(request, "auth_role", "owner") != "owner":
@@ -176,8 +208,37 @@ def _verify_password(pw, stored):
             return bcrypt.checkpw(pw.encode("utf-8"), stored.encode("utf-8"))
         except Exception:
             return False
-    # توافق مرحلي مع كلمات السر القديمة غير المُجزّأة (سيتم ترقيتها تلقائياً بعد أول دخول ناجح)
-    return pw == stored
+    # توافق مرحلي مع كلمات السر القديمة غير المُجزّأة — compare_digest بدل == العادية
+    # لتفادي كشف طول/محتوى كلمة السر عبر فروقات التوقيت (timing side-channel).
+    try:
+        return hmac.compare_digest(pw.encode("utf-8"), stored.encode("utf-8"))
+    except Exception:
+        return False
+
+# ── Rate limiting (تسجيل الدخول / لوحة الإدارة) ─────────────
+# قبل: /api/login و /api/admin/* بلا أي حد لمحاولات الدخول — brute force مفتوح بالكامل.
+_login_attempts: dict = {}
+_login_lock          = threading.Lock()
+
+def _login_rate_limited(identifier, max_attempts=8, window=300):
+    now = time.time()
+    with _login_lock:
+        hist = [t for t in _login_attempts.get(identifier, []) if now - t < window]
+        hist.append(now)
+        _login_attempts[identifier] = hist
+        return len(hist) > max_attempts
+
+def _cleanup_login_attempts():
+    while True:
+        sleep(1800)
+        cutoff = time.time() - 1800
+        with _login_lock:
+            for k in list(_login_attempts.keys()):
+                _login_attempts[k] = [t for t in _login_attempts[k] if t > cutoff]
+                if not _login_attempts[k]:
+                    del _login_attempts[k]
+
+threading.Thread(target=_cleanup_login_attempts, daemon=True).start()
 
 last_msg_time: dict   = {}
 _rate_limit_lock      = threading.Lock()
@@ -186,7 +247,6 @@ _settings_cache_lock  = threading.Lock()
 _CACHE_TTL            = 120
 
 # منع تكرار تسجيل نفس الطلب من البوت عدة مرات لنفس المحادثة
-# (كان Gemini يعيد إرفاق بيانات JSON في كل رد بعد جمع المعلومات، مما يُنشئ طلباً مكرراً كل مرة)
 _recent_bot_orders: dict   = {}
 _recent_bot_orders_lock    = threading.Lock()
 _DUPLICATE_ORDER_WINDOW    = 1800  # 30 دقيقة
@@ -307,11 +367,11 @@ def ok_json(data):
 def err_json(msg, code=400):
     return jsonify({"status": "error", "message": msg}), code
 
-def is_rate_limited(user_id, platform="fb"):
+def is_rate_limited(user_id, platform="fb", window=2):
     key = f"{platform}:{user_id}"
     now = time.time()
     with _rate_limit_lock:
-        if key in last_msg_time and now - last_msg_time[key] < 2:
+        if key in last_msg_time and now - last_msg_time[key] < window:
             return True
         last_msg_time[key] = now
     return False
@@ -322,25 +382,17 @@ PLANS = {
     "starter":    {"bot": False, "store": True,  "landing": True,  "dashboard": True, "orders": True, "integrations": False, "team": True,  "label": "Starter"},
     "pro":        {"bot": True,  "store": True,  "landing": True,  "dashboard": True, "orders": True, "integrations": True,  "team": True,  "label": "Pro"},
     "enterprise": {"bot": True,  "store": True,  "landing": True,  "dashboard": True, "orders": True, "integrations": True,  "team": True,  "label": "Enterprise"},
-    # full = الاسم القديم (متوافق رجعياً مع حسابات قديمة)، lifetime = نفس الصلاحيات بالاسم الجديد للبيع
     "full":       {"bot": True,  "store": True,  "landing": True,  "dashboard": True, "orders": True, "integrations": True,  "team": True,  "label": "Full",
                     "orderCap": 300, "botMsgCap": 3000},
     "lifetime":   {"bot": True,  "store": True,  "landing": True,  "dashboard": True, "orders": True, "integrations": True,  "team": True,  "label": "Lifetime",
                     "orderCap": 300, "botMsgCap": 3000},
 }
 
-# رموز العملات المستعملة عند بناء صفحات الهبوط سيرفرياً (نفس القيم المستعملة بالفرونت إند)
 CURRENCY_SYMBOLS_PY = {"DZD": "دج", "EUR": "€", "USD": "$"}
 
-# مفتاح تفعيل البوت العام — True الآن بما أن ميتا وافقت وأصبح البوت جاهزاً فعلياً على إنستغرام.
-# وقت يكون True، البوت يبان "متاح" بالداشبورد لكل خطة عندها bot:True بـ PLANS فوق.
-# يمكن تعطيله مؤقتاً بضبط BOT_LAUNCHED=false كمتغير بيئة بلا حاجة لإعادة نشر الكود.
 BOT_LAUNCHED = os.environ.get("BOT_LAUNCHED", "true").strip().lower() == "true"
 
 # ── فريق العمل (Team Members) ──────────────────────────────
-# كل صاحب حساب (owner) يقدر يضيف حتى MAX_TEAM_MEMBERS من أعضاء الفريق، كل واحد
-# عندو اسم دخول وكلمة سر خاصة بيه، لكن يشتغل على نفس بيانات المتجر (data/{ownerUid}/...)
-# حسب الصلاحيات (permissions) اللي يحددها صاحب الحساب فقط.
 MAX_TEAM_MEMBERS = 6
 TEAM_PERM_KEYS = ["orders", "products", "customers", "cities", "store", "bot", "messages", "integrations", "landing"]
 
@@ -355,7 +407,7 @@ def _count_team_members(owner_uid):
     except Exception:
         return 0
 
-# ── تتبع الاستهلاك الشهري (لحماية سقوف Lifetime/Full) ─────
+# ── تتبع الاستهلاك الشهري ──────────────────────────────────
 def _usage_month_key():
     return time.strftime("%Y-%m")
 
@@ -370,19 +422,17 @@ def _increment_usage(uid, field):
     return new_val
 
 def _plan_cap(uid, cap_field):
-    """يرجع رقم السقف لهذا المستخدم لهذا النوع (None = بلا سقف)."""
     plan = get_user_plan(uid)
     return PLANS.get(plan, {}).get(cap_field)
 
 def _under_cap(uid, usage_field, cap_field):
     cap = _plan_cap(uid, cap_field)
-    if not cap: return True  # بلا سقف لهذي الخطة
+    if not cap: return True
     return _get_usage(uid, usage_field) < cap
 
 LIFETIME_MAX_SLOTS = 50
 
 def _get_user_record(uid):
-    """يرجع سجل المستخدم كامل (خطة، مصدر...) من عقدة users — استدعاء واحد يُستعمل فعدة أماكن."""
     try:
         users = _fb_get("users") or {}
         for _, u in users.items():
@@ -396,12 +446,130 @@ def get_user_plan(uid):
     return str(_get_user_record(uid).get("plan", "starter")).lower()
 
 def _count_lifetime_accounts():
-    """عدد حسابات Lifetime/Full الحالية (الاسمين يحسبان لنفس السقف 50)."""
     try:
         users = _fb_get("users") or {}
         return sum(1 for u in users.values() if isinstance(u, dict) and u.get("plan") in ("lifetime", "full"))
     except Exception:
         return 0
+
+# ── حماية حقول حساب المستخدم من التعديل الذاتي (Mass Assignment) ─────
+# قبل: /api/updateBotSettings و /api/saas (action=updateBotSettings) كانا يدمجان
+# كائن "data"/"payload" القادم كاملاً من جسم الطلب مباشرة داخل عقدة users/{username} —
+# وهي نفس العقدة التي تخزّن plan/source/Password/User_ID. أي مستخدم مسجّل (حتى بخطة
+# Free) كان يقدر يبعث {"data":{"plan":"lifetime"}} ويرقّي نفسه مجاناً، أو يبدّل
+# Username/User_ID/Password عبره. الآن: whitelist صارم يستثني كل الحقول الحساسة قبل
+# أي دمج مع سجل المستخدم — هذه المسارات مخصصة فقط لإعدادات البوت (Gemini key,
+# AI instructions, tokens الخ) وليس لبيانات الحساب/الخطة.
+_PROTECTED_USER_FIELDS = {
+    "plan", "source", "Password", "User_ID", "Username",
+    "plan_updated",
+}
+
+def _sanitize_bot_settings_patch(d):
+    if not isinstance(d, dict):
+        return {}
+    return {k: v for k, v in d.items() if k not in _PROTECTED_USER_FIELDS}
+
+# ── حماية من SSRF فربط متاجر WooCommerce الخارجية ───────────
+# قبل: كان يُقبل أي storeUrl يبدأ بـ https:// بلا أي فحص للـ host الفعلي الذي يُحلّ
+# إليه، مما يسمح لمستخدم مسجّل بتوجيه سيرفرنا لعمل طلبات HTTP لعناوين داخلية
+# (127.0.0.1, 169.254.169.254 metadata endpoint, شبكات خاصة 10.x/172.16.x/192.168.x...)
+# عبر DNS يشير لعنوان خاص.
+def _resolve_safe_public_ip(hostname):
+    """يتحقق من hostname ويرجّع أول IP عام آمن (ليس داخلي/خاص/loopback/link-local/
+    reserved/multicast) تم التحقق منه فعلياً، أو None إذا لم يوجد أي IP آمن."""
+    if not hostname:
+        return None
+    try:
+        infos = socket.getaddrinfo(hostname, None)
+    except Exception:
+        return None
+    for info in infos:
+        ip_str = info[4][0]
+        try:
+            ip = ipaddress.ip_address(ip_str)
+        except Exception:
+            continue
+        if (ip.is_private or ip.is_loopback or ip.is_link_local or
+                ip.is_reserved or ip.is_multicast or ip.is_unspecified):
+            continue
+        return ip_str
+    return None
+
+def _validate_and_pin_store_url(store_url):
+    """يتحقق من صلاحية رابط المتجر ويرجّع (hostname, safe_ip) للاستعمال المباشر مع
+    _request_with_pinned_dns، بدل السماح لـ requests بإعادة حلّ DNS من جديد وقت
+    الاتصال (يمنع DNS rebinding). يرجّع (None, None) لو الرابط غير صالح/غير آمن."""
+    try:
+        parsed = urlparse(store_url)
+    except Exception:
+        return None, None
+    if parsed.scheme != "https" or not parsed.hostname:
+        return None, None
+    ip = _resolve_safe_public_ip(parsed.hostname)
+    if not ip:
+        return None, None
+    return parsed.hostname, ip
+
+# ── تثبيت DNS (Pinning) بطريقة آمنة على مستوى الـ Thread ────────────
+# تحديث مهم (كان الإصدار السابق غير آمن تحت التزامن): النسخة السابقة كانت تُبدّل
+# urllib3.util.connection.create_connection على مستوى العملية بأكملها (module-level
+# global)، محمية بقفل _dns_pin_lock واحد. المشكلة: هذا القفل يحمي فقط الاستدعاءات
+# التي تمر عبر هذه الدالة نفسها (woo/connect وwoo/sync)، بينما بقية الكود يبعث طلبات
+# requests أخرى في threads مختلفة بالتوازي (meta_post للفيسبوك/واتساب، تحميل الوسائط،
+# Gemini API، keepalive، Facebook OAuth) بلا أي علاقة بهذا القفل. مع ThreadPoolExecutor
+# بعدة workers، thread يزامن WooCommerce في نفس اللحظة التي يبعث فيها thread آخر رسالة
+# لفيسبوك يقدر يخلي طلب فيسبوك يتوجّه بالخطأ لعنوان WooCommerce المثبَّت (أو العكس) —
+# على الأقل فشل اتصال متقطع (TLS handshake سيفشل لعدم مطابقة الشهادة)، وأسوأ الأحوال
+# سلوك غير متوقع تحت الحمل. الحل الآن: تثبيت الـ IP يتم فقط على مستوى PoolManager خاص
+# بـ HTTPAdapter مُنشأ محلياً لكل طلب (session معزولة)، بلا أي تعديل على أي حالة عالمية
+# مشتركة بين threads — كل thread يستعمل adapter خاص به فقط.
+class _PinnedHTTPSConnection(HTTPSConnection):
+    """اتصال HTTPS يفتح الـ TCP socket فعلياً على IP مثبَّت مسبقاً (self._pinned_ip)
+    بدل إعادة حلّ self.host من جديد، مع الحفاظ على SNI/التحقق من الشهادة باسم النطاق
+    الأصلي (self.host) — التعديل يطال فقط عنوان الاتصال الأدنى مستوى، ماشي التحقق من TLS."""
+    _pinned_ip = None
+
+    def _new_conn(self):
+        extra_kw = {}
+        if self.source_address:
+            extra_kw["source_address"] = self.source_address
+        if getattr(self, "socket_options", None):
+            extra_kw["socket_options"] = self.socket_options
+        target = (self._pinned_ip or self.host, self.port)
+        try:
+            conn = urllib3.util.connection.create_connection(target, self.timeout, **extra_kw)
+        except TypeError:
+            conn = urllib3.util.connection.create_connection(target, self.timeout)
+        return conn
+
+
+def _make_pinned_https_adapter(pinned_ip):
+    """يبني HTTPAdapter جديد بالكامل (poolmanager خاص به) يفرض الاتصال الفعلي على
+    pinned_ip، بلا لمس أي حالة عالمية مشتركة — آمن للاستعمال المتزامن من عدة threads
+    فالآن نفسه، كل واحد بـ pinned_ip مختلف."""
+    conn_cls = type("_PinnedConn", (_PinnedHTTPSConnection,), {"_pinned_ip": pinned_ip})
+    pool_cls = type("_PinnedHTTPSPool", (HTTPSConnectionPool,), {"ConnectionCls": conn_cls})
+
+    class _PinnedAdapter(requests.adapters.HTTPAdapter):
+        def init_poolmanager(self, *args, **kwargs):
+            self.poolmanager = PoolManager(*args, **kwargs)
+            self.poolmanager.pool_classes_by_scheme = {"https": pool_cls, "http": urllib3.HTTPConnectionPool}
+
+    return _PinnedAdapter()
+
+
+def _request_with_pinned_dns(method, url, resolved_ip, **kwargs):
+    """يرسل طلب HTTP عبر requests.Session معزولة (محلية لهذا الاستدعاء فقط)، مُلزَمة
+    بالاتصال الفعلي بـ resolved_ip الذي تم التحقق منه مسبقاً — يمنع DNS rebinding بلا
+    أي تعديل على حالة عالمية مشتركة بين threads."""
+    session = requests.Session()
+    adapter = _make_pinned_https_adapter(resolved_ip)
+    session.mount("https://", adapter)
+    try:
+        return session.request(method, url, **kwargs)
+    finally:
+        session.close()
 
 # ── Frontend ──────────────────────────────────────────────
 @app.route("/", methods=["GET"])
@@ -497,6 +665,15 @@ td{padding:8px;border-bottom:1px solid rgba(255,255,255,.05)}
 </div>
 
 <script>
+// دالة escape إجبارية لكل قيمة نصية قادمة من السيرفر قبل إدراجها بـ innerHTML —
+// قبل التعديل كانت القيم تُدرج خام (c.username, c.userId...) مما يفتح XSS مخزّن
+// لو احتوى أي اسم مستخدم وسوم HTML/سكربت.
+function esc(s){
+  return String(s === undefined || s === null ? "" : s).replace(/[&<>"']/g, function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+  });
+}
+
 function adminKey(){ return document.getElementById("adminKey").value.trim(); }
 function showMsg(id, text, type){
   var el = document.getElementById(id);
@@ -519,15 +696,18 @@ async function createClient(plan, source){
     });
     var data = await r.json();
     if(data.status==="ok"){
-      showMsg("createMsg","✅ تم إنشاء الحساب بنجاح ("+plan+" / "+source+")","ok");
+      showMsg("createMsg","✅ تم إنشاء الحساب بنجاح ("+esc(plan)+" / "+esc(source)+")","ok");
       document.getElementById("createResult").innerHTML =
         '<div class="result-box">'+
-          '<div>👤 اسم المستخدم: <code>'+username+'</code></div>'+
-          '<div>🔑 كلمة السر: <code>'+password+'</code></div>'+
-          '<div>🔗 رابط المتجر: <code id="lk">'+data.data.storeLink+'</code></div>'+
-          '<button class="copy-btn" onclick="copyText(\\''+username+' / '+password+'\\')">نسخ بيانات الدخول</button>'+
-          '<button class="copy-btn" onclick="copyText(\\''+data.data.storeLink+'\\')">نسخ رابط المتجر</button>'+
+          '<div>👤 اسم المستخدم: <code>'+esc(username)+'</code></div>'+
+          '<div>🔑 كلمة السر: <code>'+esc(password)+'</code></div>'+
+          '<div>🔗 رابط المتجر: <code id="lk">'+esc(data.data.storeLink)+'</code></div>'+
+          '<button class="copy-btn" data-copy="'+esc(username+' / '+password)+'">نسخ بيانات الدخول</button>'+
+          '<button class="copy-btn" data-copy="'+esc(data.data.storeLink)+'">نسخ رابط المتجر</button>'+
         '</div>';
+      document.querySelectorAll('.copy-btn').forEach(function(btn){
+        btn.addEventListener('click', function(){ copyText(btn.getAttribute('data-copy')); });
+      });
       document.getElementById("newUsername").value = "";
       document.getElementById("newPassword").value = "";
       document.getElementById("newStoreName").value = "";
@@ -550,26 +730,33 @@ async function loadClients(){
   try{
     var r = await fetch("/api/admin/listClients", { headers:{"X-Admin-Key":key} });
     var data = await r.json();
-    if(data.status!=="ok"){ box.innerHTML = "❌ "+data.message; return; }
+    if(data.status!=="ok"){ box.innerHTML = "❌ "+esc(data.message); return; }
 
     var lifetimeUsed = data.data.filter(function(c){ return c.plan==="lifetime"||c.plan==="full"; }).length;
     var lifetimeLeftEl = document.getElementById("lifetimeSlotsDisplay");
     if(lifetimeLeftEl) lifetimeLeftEl.textContent = Math.max(0, 50-lifetimeUsed);
 
     if(!data.data.length){ box.innerHTML = "لا يوجد عملاء بعد"; return; }
+    var allowedPlans = ["free","starter","pro","enterprise","full","lifetime"];
     box.innerHTML = '<table><thead><tr><th>المستخدم</th><th>ID</th><th>المصدر</th><th>الخطة</th><th>تغيير الخطة</th></tr></thead><tbody>'+
       data.data.map(function(c){
         var srcBadge = c.source==="fiverr" ? '<span class="badge b-pro">Fiverr</span>' : '<span class="badge b-starter">محلي</span>';
-        return '<tr><td>'+c.username+'</td><td style="font-size:10px;color:#8899bb">'+c.userId+'</td>'+
+        var safePlan = allowedPlans.indexOf(c.plan) !== -1 ? c.plan : "free";
+        return '<tr><td>'+esc(c.username)+'</td><td style="font-size:10px;color:#8899bb">'+esc(c.userId)+'</td>'+
           '<td>'+srcBadge+'</td>'+
-          '<td><span class="badge b-'+c.plan+'">'+c.plan.toUpperCase()+'</span></td>'+
-          '<td><select onchange="changePlan(\\''+c.userId+'\\',\\''+c.username+'\\',this.value)">'+
-            ["free","starter","pro","enterprise","full","lifetime"].map(function(p){
-              return '<option value="'+p+'"'+(p===c.plan?" selected":"")+'>'+p+'</option>';
+          '<td><span class="badge b-'+safePlan+'">'+esc(String(c.plan).toUpperCase())+'</span></td>'+
+          '<td><select class="plan-select" data-uid="'+esc(c.userId)+'" data-uname="'+esc(c.username)+'">'+
+            allowedPlans.map(function(p){
+              return '<option value="'+p+'"'+(p===safePlan?" selected":"")+'>'+p+'</option>';
             }).join("")+
           '</select></td></tr>';
       }).join("")+
       '</tbody></table>';
+    document.querySelectorAll('.plan-select').forEach(function(sel){
+      sel.addEventListener('change', function(){
+        changePlan(sel.getAttribute('data-uid'), sel.getAttribute('data-uname'), sel.value);
+      });
+    });
   }catch(e){ box.innerHTML = "خطأ فالاتصال"; }
 }
 
@@ -785,6 +972,13 @@ def api_login():
     body = request.get_json(silent=True) or {}
     user = str(body.get("username") or "").strip()
     pwd  = str(body.get("password") or "").strip()
+
+    # Rate limiting ضد brute-force على كلمات السر — حسب IP + اسم المستخدم معاً.
+    # request.remote_addr مُصحَّح الآن عبر ProxyFix بدل الوثوق بهيدر X-Forwarded-For الخام.
+    client_ip = request.remote_addr or ""
+    if _login_rate_limited(f"login:{client_ip}:{user.lower()}"):
+        return err_json("محاولات دخول كثيرة جداً — حاول بعد 5 دقائق", 429)
+
     if not user or not pwd:
         return err_json("Missing credentials")
 
@@ -798,7 +992,6 @@ def api_login():
             stored_pw = str(udata.get("Password") or "")
             if not _verify_password(pwd, stored_pw):
                 return err_json("Invalid credentials", 401)
-            # ترقية شفافة من كلمة سر نصية قديمة إلى bcrypt بعد أول دخول ناجح
             if not _is_bcrypt_hash(stored_pw):
                 _fb_patch(f"users/{key}", {"Password": _hash_password(pwd)})
             token = issue_token(udata.get("User_ID", ""), udata.get("Username", user), role="owner")
@@ -874,13 +1067,12 @@ def api_team_add_member():
     perms    = _clean_perms(body.get("permissions"))
     if not username or not password:
         return err_json("اسم المستخدم وكلمة السر مطلوبين")
-    if len(password) < 4:
-        return err_json("كلمة السر قصيرة جداً (4 أحرف على الأقل)")
+    if len(password) < 6:
+        return err_json("كلمة السر قصيرة جداً (6 أحرف على الأقل)")
     if not planHas_server(uid, "team"):
         return err_json("ميزة الفريق غير متاحة لخطتك الحالية", 403)
     if _count_team_members(uid) >= MAX_TEAM_MEMBERS:
         return err_json(f"وصلت للحد الأقصى ({MAX_TEAM_MEMBERS}) من أعضاء الفريق", 409)
-    # منع تعارض اسم المستخدم مع حساب رئيسي أو عضو آخر بأي متجر
     if _fb_get(f"users/{username}") or _fb_get(f"team_users/{username}"):
         return err_json("اسم المستخدم مستعمل من قبل", 409)
     now = time.strftime("%Y-%m-%d %H:%M")
@@ -916,7 +1108,7 @@ def api_team_update_member():
         patch_public["active"] = patch_login["active"] = bool(body.get("active"))
     if body.get("password"):
         newpass = str(body.get("password")).strip()
-        if len(newpass) < 4: return err_json("كلمة السر قصيرة جداً (4 أحرف على الأقل)")
+        if len(newpass) < 6: return err_json("كلمة السر قصيرة جداً (6 أحرف على الأقل)")
         patch_login["Password"] = _hash_password(newpass)
     if patch_public: _fb_patch(f"data/{uid}/teamMembers/{username}", patch_public)
     if patch_login:  _fb_patch(f"team_users/{username}", patch_login)
@@ -938,8 +1130,6 @@ def api_team_delete_member():
     return ok_json(True)
 
 def planHas_server(uid, feature):
-    """يتحقق سيرفرياً أن خطة صاحب هذا الـ uid تدعم ميزة معينة — يُستعمل لمنع تحايل
-    عضو فريق أو طلب مباشر على قيود الخطة (مثلاً تفعيل ميزة الفريق بدون خطة تدعمها)."""
     plan = get_user_plan(uid)
     return bool(PLANS.get(plan, {}).get(feature, False))
 
@@ -952,14 +1142,12 @@ def api_get_orders():
     return ok_json(_fb_list(f"data/{uid}/orders"))
 
 def _ship_values(c_data, delivery_type):
-    """يرجع (سعر الزبون، تكلفة التاجر) للتوصيل حسب النوع — منزل أو مكتب استلام."""
     is_desk = delivery_type == "desk"
     ship_cust = float(c_data.get("deskCust", 0)) if is_desk else float(c_data.get("custShip", 0))
     ship_cost = float(c_data.get("deskCost", 0)) if is_desk else float(c_data.get("costShip", 0))
     return ship_cust, ship_cost
 
 def _calc_order_profit(p_data, c_data, qty, delivery_type, status, existing_profit=0.0):
-    """نفس منطق حساب الربح بمكان واحد — يُستعمل عند تأكيد الطلب وعند تعديل نوع التوصيل لاحقاً."""
     ship_cust, ship_cost = _ship_values(c_data, delivery_type)
     if status in ("Confirmed", "Delivered"):
         return ((float(p_data.get("sell", 0)) - float(p_data.get("cost", 0))) * int(qty)) + (ship_cust - ship_cost)
@@ -969,26 +1157,53 @@ def _calc_order_profit(p_data, c_data, qty, delivery_type, status, existing_prof
 
 @app.route("/api/addOrder", methods=["POST"])
 def api_add_order():
+    """مسار عام (الزبون يطلب من صفحة المتجر بلا حساب) — لذلك مقيّد بـ:
+    1) التحقق أن userId ينتمي فعلاً لتاجر مسجّل (يمنع تعبئة uid عشوائي غير موجود).
+    2) Rate limit حسب IP+هاتف لمنع الإغراق الآلي بطلبات وهمية يستهلك سقف التاجر الشهري.
+    3) whitelist صارم لحقول الزبون + فرض status="Pending" + حساب total سيرفرياً فقط."""
     body = request.get_json(silent=True) or {}
     uid  = str(body.get("userId") or "").strip()
-    d    = body.get("data") or {}
-    if not uid or not d: return err_json("Missing fields")
+    raw  = body.get("data") or {}
+    if not uid or not raw: return err_json("Missing fields")
+
+    if not _get_user_record(uid):
+        return err_json("Invalid store", 404)
+
+    # request.remote_addr مُصحَّح عبر ProxyFix (بروكسي موثوق واحد) بدل هيدر خام قابل للتزوير.
+    client_ip = request.remote_addr or ""
+    phone_key = re.sub(r"\D", "", str(raw.get("phone", "")))
+    if is_rate_limited(f"{client_ip}:{phone_key}", "addorder", window=15):
+        return err_json("محاولات كثيرة جداً — انتظر قليلاً وحاول من جديد", 429)
+
     if not _under_cap(uid, "orderCount", "orderCap"):
         return err_json("تم الوصول للحد الشهري من الطلبات لهذه الخطة — يرجى التواصل لترقية الخطة", 429)
+
+    # whitelist صارم — لا نقبل من الزبون غير الموثوق أي حقل غير هذه القائمة (خصوصاً
+    # status/profit/id/total التي يجب أن تُحسب أو تُفرض من السيرفر فقط).
+    ALLOWED_CUSTOMER_FIELDS = {"name", "phone", "city", "product", "qty", "address", "deliveryType", "source"}
+    d = {k: v for k, v in raw.items() if k in ALLOWED_CUSTOMER_FIELDS}
+
     order_id       = f"ORD-{int(time.time() * 1000)}"
     d["id"]        = order_id
     d["date"]      = time.strftime("%Y-%m-%d %H:%M")
-    d["status"]    = d.get("status") or "Pending"
+    d["status"]    = "Pending"  # ثابت دائماً — غير قابل للتعديل من الزبون بتاتاً
     d["profit"]    = 0
     d["source"]    = d.get("source") or "manual"
-    d["deliveryType"] = d.get("deliveryType") if d.get("deliveryType") in ("home","desk") else "home"
+    d["deliveryType"] = d.get("deliveryType") if d.get("deliveryType") in ("home", "desk") else "home"
     d["date_sent"] = ""
     d["date_delivered"] = ""
+    try:
+        d["qty"] = max(1, int(d.get("qty", 1)))
+    except Exception:
+        d["qty"] = 1
     p_data = _fb_get(f"data/{uid}/products/{d.get('product')}")
     c_data = _fb_get(f"data/{uid}/cities/{d.get('city')}")
-    if p_data and c_data and not d.get("total"):
+    # "total" يُحسب سيرفرياً دائماً — لا يُقبل من الزبون بتاتاً.
+    if p_data and c_data:
         ship_cust, _ = _ship_values(c_data, d["deliveryType"])
-        d["total"] = (float(p_data.get("sell", 0)) * int(d.get("qty", 1))) + ship_cust
+        d["total"] = (float(p_data.get("sell", 0)) * d["qty"]) + ship_cust
+    else:
+        d["total"] = 0
     _fb_put(f"data/{uid}/orders/{order_id}", d)
     _increment_usage(uid, "orderCount")
     return ok_json({"orderId": order_id})
@@ -1027,8 +1242,6 @@ def api_update_status():
 @require_auth
 @require_perm("orders")
 def api_update_order_delivery():
-    """تعديل نوع التوصيل لطلب موجود (مثلاً العميل تراجع عن الاستلام بالمنزل وفضّل مكتب الاستلام)،
-    مع إعادة حساب الإجمالي والربح تلقائياً بنفس منطق الحساب الموحّد — بلا كسر أي رقم سابق."""
     body  = request.get_json(silent=True) or {}
     uid   = request.auth_uid
     oid   = str(body.get("orderId") or "").strip()
@@ -1153,7 +1366,6 @@ def api_delete_product():
 
 @app.route("/api/trackOrder", methods=["GET"])
 def api_track_order():
-    """تتبع عام للعميل عبر رقم الهاتف — لا يكشف الربح الداخلي (profit) أو بيانات عملاء آخرين."""
     uid   = request.args.get("userId", "").strip()
     phone = re.sub(r"\D", "", request.args.get("phone", ""))
     if not uid or not phone: return err_json("Missing userId or phone")
@@ -1171,7 +1383,6 @@ def api_track_order():
 
 @app.route("/api/submitRating", methods=["POST"])
 def api_submit_rating():
-    """تقييم حقيقي مرتبط بطلب مُسلَّم فعلاً — يمنع التقييمات المزوّرة بدون عملية شراء حقيقية."""
     body    = request.get_json(silent=True) or {}
     uid     = str(body.get("userId") or "").strip()
     order_id= str(body.get("orderId") or "").strip()
@@ -1230,7 +1441,6 @@ def api_get_cities():
 
 @app.route("/api/getStoreCities", methods=["GET"])
 def api_get_store_cities():
-    """نسخة عامة آمنة للمتجر — لا تكشف تكلفة التوصيل الداخلية أو رسوم الإرجاع."""
     uid = request.args.get("userId", "").strip()
     if not uid: return err_json("Missing userId")
     raw    = _fb_get(f"data/{uid}/cities") or {}
@@ -1239,8 +1449,8 @@ def api_get_store_cities():
         if isinstance(v, dict):
             cities.append({
                 "name": v.get("name", k),
-                "custShip": float(v.get("custShip", 0)),       # توصيل للمنزل
-                "deskCust": float(v.get("deskCust", 0)),        # توصيل لمكتب الاستلام
+                "custShip": float(v.get("custShip", 0)),
+                "deskCust": float(v.get("deskCust", 0)),
             })
     return ok_json(cities)
 
@@ -1255,8 +1465,8 @@ def api_add_city():
     if not name: return err_json("Missing fields")
     _fb_put(f"data/{uid}/cities/{name}", {
         "name": name,
-        "costShip": float(d.get("costShip",0)), "custShip": float(d.get("custShip",0)),  # توصيل للمنزل (الأسماء القديمة، بلا تغيير)
-        "deskCost": float(d.get("deskCost",0)), "deskCust": float(d.get("deskCust",0)),  # توصيل لمكتب الاستلام (جديد)
+        "costShip": float(d.get("costShip",0)), "custShip": float(d.get("custShip",0)),
+        "deskCost": float(d.get("deskCost",0)), "deskCust": float(d.get("deskCust",0)),
         "returnFee": float(d.get("returnFee",0)),
     })
     return ok_json(True)
@@ -1341,8 +1551,6 @@ def api_update_store_settings():
     body = request.get_json(silent=True) or {}
     uid  = request.auth_uid
     d    = body.get("data") or {}
-    # تحديث جزئي: نحدّث فقط الحقول المُرسلة فعلاً، بلا مسح باقي الإعدادات
-    # (كان الكود القديم يكتب القيم الافتراضية فوق أي حقل غير مُرسل، فيمسح اسم/شعار المتجر بالغلط)
     patch = {}
     for field, default in (("name","My Store"), ("tagline",""), ("logo","🛒"), ("logoImage",""), ("lang","AR"), ("currency","DZD")):
         if field in d:
@@ -1358,9 +1566,6 @@ def api_update_store_settings():
     return ok_json(True)
 
 # ── Landing Pages (صفحات هبوط) ─────────────────────────────
-# فكرة التخزين: كل صفحة تُخزَّن تحت data/{uid}/landingPages/{pageId}، ومعرّف الصفحة
-# نفسه (pageId) يحمل uid صاحبها مُدمجاً بداخله (LP{uid}T{timestamp})، حتى يقدر المسار
-# العام /lp/<page_id> يجيب صاحب الصفحة بلا حاجة لفهرس إضافي أو معرفة uid مسبقاً.
 LANDING_ID_PREFIX = "LP"
 
 def _new_landing_id(uid):
@@ -1377,9 +1582,14 @@ def _landing_uid_from_id(page_id):
     except Exception:
         return None
 
-# أسئلة افتراضية (احتياطية) تُستعمل إذا ما كانش مفتاح Gemini متوفراً أو فشل التوليد —
-# مبنية على أهم عناصر صفحات الهبوط عالية التحويل بسوق الدروبشيبينغ (جمهور مستهدف، مشكل/فائدة،
-# تميّز عن المنافسين، عرض/سعر، ضمانات وخصوصاً الدفع عند الاستلام، ثقة اجتماعية، وإحساس بالإلحاح).
+def _sanitize_image_url(u):
+    """يقبل فقط روابط https/http حقيقية — يمنع حقن HTML/سكربت عبر حقل 'صورة'
+    الذي يُدرج لاحقاً داخل صفحة الهبوط العامة (/lp/<id>)."""
+    u = str(u or "").strip()
+    if not re.match(r'^https?://[^\s"\'<>]+$', u, re.IGNORECASE):
+        return ""
+    return u
+
 DEFAULT_LANDING_QUESTIONS = [
     {"id": "audience",       "question": "شكون الزبون المستهدف بالضبط؟ (مثلاً: نساء 25-40 سنة، رياضيين، عائلات...)"},
     {"id": "painPoint",      "question": "شنو أكبر مشكل أو حاجة يحلّها المنتج للزبون؟"},
@@ -1392,8 +1602,6 @@ DEFAULT_LANDING_QUESTIONS = [
 ]
 
 def _generate_landing_questions(bot_settings, name, description, category=""):
-    """يولّد أسئلة ذكية مخصصة للمنتج عبر Gemini قبل بناء صفحة الهبوط، حتى يجمع التاجر
-    المعلومات الضرورية لصفحة احترافية عالية التحويل. يرجع الأسئلة الافتراضية عند غياب/فشل الذكاء الاصطناعي."""
     api_key = str(bot_settings.get("Gemini_api_key") or "").strip()
     if not api_key:
         return DEFAULT_LANDING_QUESTIONS
@@ -1425,9 +1633,6 @@ def _generate_landing_questions(bot_settings, name, description, category=""):
     return DEFAULT_LANDING_QUESTIONS
 
 def _generate_landing_copy(api_key, name, description, answers):
-    """يبني محتوى صفحة هبوط احترافي (عنوان، فوائد، إلحاح، ضمان، أسئلة شائعة) عبر Gemini
-    مستنداً على إجابات التاجر — بأسلوب صفحات الهبوط الأكثر نجاحاً بسوق الدروبشيبينغ الحالي.
-    عند غياب المفتاح أو فشل التوليد، يرجع نسخة بسيطة مبنية مباشرة من المُدخلات بلا كسر الطلب."""
     answers = answers if isinstance(answers, dict) else {}
     fallback = {
         "headline": name,
@@ -1487,14 +1692,13 @@ def _generate_landing_copy(api_key, name, description, answers):
     return fallback
 
 def _build_landing_html(uid, page):
-    """يبني صفحة هبوط HTML كاملة (بلا أي مكتبات خارجية) من بيانات المنتج المُخزّنة —
-    تصميم زجاجي (Glassmorphism) بعمق 3D: بطاقة منتج عائمة بميلان خفيف وظل ملوّن،
-    كرات إضاءة متدرجة بالخلفية، بطاقات فوائد/ضمان/أسئلة زجاجية، وزر طلب لامع بتوهّج نابض."""
+    """يبني صفحة هبوط HTML عامة. كل قيمة نصية غير ثابتة تمر عبر _esc() قبل الإدراج —
+    بما فيها روابط الصور (images) و og:image، لمنع Stored XSS يطال زوّار الصفحة."""
     store    = _fb_get(f"data/{uid}/storeSettings") or {}
     store_name = store.get("name", "Boutique")
-    images   = page.get("images") or []
+    images   = [img for img in (page.get("images") or []) if _sanitize_image_url(img)]
     imgs_html = "".join(
-        f'<div class="lp-slide{" active" if i == 0 else ""}"><img src="{img}" loading="lazy" alt=""/></div>'
+        f'<div class="lp-slide{" active" if i == 0 else ""}"><img src="{_esc(img)}" loading="lazy" alt=""/></div>'
         for i, img in enumerate(images)
     ) or '<div class="lp-slide active lp-noimg">📦</div>'
     dots_html = "".join(
@@ -1529,13 +1733,11 @@ def _build_landing_html(uid, page):
     guarantee    = str(page.get("guaranteeText") or "").strip()
     faq          = [f for f in (page.get("faq") or []) if isinstance(f, dict) and f.get("q") and f.get("a")]
 
-    # ── إحساس بالإلحاح — شريط علوي بنقطة نابضة، يظهر فقط إذا زوّد التاجر معلومات كافية ──
     urgency_html = (
         f'<div class="lp-urgency"><span class="lp-pulse-dot"></span>{_esc(urgency_text)}</div>'
         if urgency_text else ""
     )
 
-    # ── الفوائد — بطاقات زجاجية بأيقونة دائرية متدرجة (أسلوب صفحات الهبوط عالية التحويل) ──
     benefits_html = ""
     if benefits:
         items = "".join(
@@ -1544,13 +1746,11 @@ def _build_landing_html(uid, page):
         )
         benefits_html = f'<div class="lp-section"><div class="lp-benefits">{items}</div></div>'
 
-    # ── الضمان — شارة ثقة زجاجية متوهّجة (دفع عند الاستلام / استرجاع...) ──
     guarantee_html = (
         f'<div class="lp-guarantee"><span class="lp-guarantee-ico">🛡️</span>{_esc(guarantee)}</div>'
         if guarantee else ""
     )
 
-    # ── الأسئلة الشائعة — أكورديون زجاجي بسيط بلا مكتبات خارجية ──
     faq_html = ""
     if faq:
         rows = "".join(
@@ -1572,7 +1772,7 @@ def _build_landing_html(uid, page):
 <meta name="description" content="{_esc(desc_meta)}"/>
 <meta property="og:title" content="{name}"/>
 <meta property="og:description" content="{_esc(desc_meta)}"/>
-{f'<meta property="og:image" content="{images[0]}"/>' if images else ''}
+{f'<meta property="og:image" content="{_esc(images[0])}"/>' if images else ''}
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@700;800;900&family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet"/>
@@ -1739,8 +1939,6 @@ body{{
 @require_auth
 @require_perm("landing")
 def api_landing_questions():
-    """الخطوة الأولى قبل بناء صفحة الهبوط: يرجع أسئلة (مولّدة بالذكاء الاصطناعي حسب المنتج،
-    أو أسئلة افتراضية احتياطية) يجاوب عليها التاجر حتى تُبنى الصفحة باحترافية أعلى."""
     body = request.get_json(silent=True) or {}
     name = str(body.get("name") or "").strip()
     description = str(body.get("description") or "").strip()
@@ -1759,15 +1957,17 @@ def api_landing_generate():
     uid       = request.auth_uid
     name      = str(body.get("name") or "").strip()
     desc      = str(body.get("description") or "").strip()
-    images    = body.get("images") or []
+    raw_images = body.get("images") or []
+    # فقط روابط https/http سليمة — يمنع حقن HTML/سكربت عبر حقل "صورة" بصفحة الهبوط العامة.
+    images    = [x for x in raw_images if _sanitize_image_url(x)] if isinstance(raw_images, list) else []
     cta_type  = str(body.get("ctaType") or "store").strip()
     wa_number = re.sub(r"\D", "", str(body.get("whatsappNumber") or ""))
-    answers   = body.get("answers") or {}  # إجابات التاجر عن أسئلة /api/landing/questions
+    answers   = body.get("answers") or {}
 
     if not name or not desc:
         return err_json("اسم المنتج والوصف مطلوبين")
-    if not images or not isinstance(images, list):
-        return err_json("أضف صورة واحدة على الأقل")
+    if not images:
+        return err_json("أضف صورة واحدة على الأقل (رابط https صالح)")
     if cta_type not in ("store", "whatsapp"):
         cta_type = "store"
     if cta_type == "whatsapp" and not wa_number:
@@ -1775,9 +1975,6 @@ def api_landing_generate():
     if not planHas_server(uid, "landing"):
         return err_json("صفحات الهبوط غير متاحة لخطتك الحالية", 403)
 
-    # بناء محتوى احترافي كامل (عنوان، فوائد، إلحاح، ضمان، أسئلة شائعة) عبر Gemini
-    # مستنداً على إجابات التاجر — بأسلوب صفحات الهبوط الأكثر نجاحاً بسوق الدروبشيبينغ الحالي.
-    # عند غياب مفتاح Gemini أو فشل التوليد، نكمل بمحتوى بسيط بلا فشل الطلب كاملاً.
     bot_settings = _fb_get(f"users/{request.auth_username}") or {}
     api_key = str(bot_settings.get("Gemini_api_key") or "").strip()
     copy = _generate_landing_copy(api_key, name, desc, answers)
@@ -1842,9 +2039,6 @@ def api_landing_delete():
 @require_auth
 @require_perm("landing")
 def api_landing_post_instagram():
-    """ينشر صورة صفحة الهبوط الأولى كمنشور على حساب إنستغرام المرتبط، عبر Content Publishing API.
-    يتطلب: (1) حساب Instagram Business مربوط مسبقاً من الإعدادات، و(2) صلاحية
-    instagram_content_publish مفعّلة على تطبيق Meta (راجع القسم التقني بالأسفل)."""
     body    = request.get_json(silent=True) or {}
     uid     = request.auth_uid
     page_id = str(body.get("pageId") or "").strip()
@@ -1885,7 +2079,6 @@ def api_landing_post_instagram():
 
 @app.route("/lp/<page_id>", methods=["GET"])
 def landing_page_public_view(page_id):
-    """صفحة الهبوط العامة — بلا مصادقة، تُبنى وتُقدَّم سيرفرياً، وتزيد عداد المشاهدات في كل زيارة."""
     uid = _landing_uid_from_id(page_id)
     if not uid:
         return "رابط غير صالح", 404
@@ -1906,7 +2099,6 @@ def landing_page_public_view(page_id):
 @require_auth
 @require_perm("integrations")
 def api_woo_connect():
-    """ربط متجر WooCommerce حقيقي — يتحقق من المفاتيح بطلب فعلي للمتجر قبل الحفظ، ويشفّرها قبل التخزين."""
     body = request.get_json(silent=True) or {}
     uid  = request.auth_uid
     store_url = str(body.get("storeUrl") or "").strip().rstrip("/")
@@ -1916,9 +2108,18 @@ def api_woo_connect():
         return err_json("جميع الحقول مطلوبة")
     if not store_url.startswith("https://"):
         return err_json("رابط المتجر يجب أن يبدأ بـ https:// لحماية بيانات متجرك")
+    # حماية من SSRF (بما فيها DNS rebinding): نحلّ الدومين مرة واحدة، نتحقق أنه عام
+    # وآمن، ثم نُثبّت نفس الـ IP وقت الاتصال الفعلي عبر _request_with_pinned_dns —
+    # بواسطة session/adapter معزولين محلياً (بدون أي حالة عالمية) لتجنب أي تداخل بين
+    # threads متزامنة أخرى فالسيرفر (انظر تعليق _PinnedHTTPSConnection فوق).
+    hostname, safe_ip = _validate_and_pin_store_url(store_url)
+    if not safe_ip:
+        return err_json("رابط المتجر غير صالح أو يشير لعنوان غير مسموح به")
     try:
-        test = requests.get(f"{store_url}/wp-json/wc/v3/orders", params={"per_page": 1},
-                             auth=(consumer_key, consumer_secret), timeout=15)
+        test = _request_with_pinned_dns("GET", f"{store_url}/wp-json/wc/v3/orders", safe_ip,
+                                         params={"per_page": 1},
+                                         auth=(consumer_key, consumer_secret),
+                                         timeout=15, allow_redirects=False)
     except Exception as e:
         logging.error(f"woo/connect test request failed: {e}")
         return err_json("تعذر الوصول للمتجر — تأكد من صحة الرابط")
@@ -1960,20 +2161,24 @@ def api_woo_disconnect():
 @require_auth
 @require_perm("integrations")
 def api_woo_sync():
-    """يجلب آخر الطلبات من WooCommerce ويستوردها لـ OrderFlow (بلا تكرار، يتفادى أي طلب مستورد من قبل)."""
     uid   = request.auth_uid
     integ = _fb_get(f"data/{uid}/integrations/woocommerce")
     if not integ or not integ.get("connected"):
         return err_json("المتجر غير مربوط — اربطه أولاً")
     store_url = integ.get("storeUrl", "")
+    # نفس فحص SSRF + تثبيت DNS عند كل مزامنة — الرابط المخزّن سابقاً قد يكون DNS تغيّر
+    # لاحقاً (DNS rebinding) لذلك نعيد الحل والتثبيت فكل استعمال فعلي وليس فقط عند الربط.
+    hostname, safe_ip = _validate_and_pin_store_url(store_url)
+    if not safe_ip:
+        return err_json("رابط المتجر المحفوظ غير صالح — أعد ربط المتجر من جديد")
     ck = _decrypt_secret(integ.get("consumerKeyEnc", ""))
     cs = _decrypt_secret(integ.get("consumerSecretEnc", ""))
     if not ck or not cs:
         return err_json("فشل قراءة بيانات الربط — أعد ربط المتجر من جديد")
     try:
-        r = requests.get(f"{store_url}/wp-json/wc/v3/orders",
+        r = _request_with_pinned_dns("GET", f"{store_url}/wp-json/wc/v3/orders", safe_ip,
                           params={"per_page": 50, "orderby": "date", "order": "desc"},
-                          auth=(ck, cs), timeout=20)
+                          auth=(ck, cs), timeout=20, allow_redirects=False)
     except Exception as e:
         logging.error(f"woo/sync request failed: {e}")
         return err_json("تعذر الاتصال بالمتجر")
@@ -2021,34 +2226,41 @@ def api_woo_sync():
 @app.route("/api/uploadImage", methods=["POST"])
 @require_auth
 def api_upload_image():
-    """رفع آمن عبر السيرفر (Firebase Admin SDK) — يحل محل الرفع المباشر من المتصفح
-    الذي كان يسمح لأي زائر بالكتابة في Storage بلا أي مصادقة."""
+    """رفع آمن عبر السيرفر. قبل التعديل كان التحقق يعتمد فقط على امتداد اسم الملف
+    و content_type القادم من المتصفح (كلاهما قابل للتزوير الكامل من العميل)، ما يسمح
+    برفع HTML/SVG يحوي جافاسكريبت باسم ملف يبدو كصورة. الآن نفحص أول بايتات الملف
+    فعلياً (magic bytes عبر imghdr) ونفرض content-type ثابت مطابق للمحتوى الحقيقي،
+    ونولّد اسم الملف بالكامل بدل الوثوق باسم العميل."""
     if "file" not in request.files:
         return err_json("No file provided")
     file = request.files["file"]
     if not file or not file.filename:
         return err_json("Empty file")
-    allowed_ext = (".jpg", ".jpeg", ".png", ".webp", ".gif")
-    if not file.filename.lower().endswith(allowed_ext):
-        return err_json("Unsupported file type")
+
+    head = file.stream.read(512)
+    file.stream.seek(0)
+    kind = imghdr.what(None, head)
+    allowed_mime = {"jpeg": "image/jpeg", "png": "image/png", "gif": "image/gif", "webp": "image/webp"}
+    if kind not in allowed_mime:
+        return err_json("نوع الملف غير مدعوم — يجب أن يكون صورة حقيقية (jpg/png/gif/webp)")
+
     try:
         bucket    = fb_storage.bucket(FB_STORAGE_BUCKET)
-        safe_name = re.sub(r"[^a-zA-Z0-9._-]", "_", file.filename)
-        blob_path = f"{request.auth_uid}/{int(time.time()*1000)}_{safe_name}"
+        safe_ext  = {"jpeg": "jpg", "png": "png", "gif": "gif", "webp": "webp"}[kind]
+        blob_path = f"{request.auth_uid}/{int(time.time()*1000)}_{secrets.token_hex(6)}.{safe_ext}"
         blob      = bucket.blob(blob_path)
-        blob.upload_from_file(file.stream, content_type=file.mimetype)
+        blob.upload_from_file(file.stream, content_type=allowed_mime[kind])
         blob.make_public()
         return ok_json({"url": blob.public_url})
     except Exception as e:
         logging.error(f"uploadImage error: {e}")
-        return err_json("فشل رفع الصورة: " + str(e), 500)
+        return err_json("فشل رفع الصورة", 500)
 
 # ── Bot Settings ──────────────────────────────────────────
 @app.route("/api/getBotSettings", methods=["GET"])
 @require_auth
 @require_perm("bot")
 def api_get_bot_settings():
-    """يحل محل القراءة المباشرة لعقدة users كاملة من الفرونت إند (كانت تكشف بيانات كل التجار)."""
     username = request.auth_username
     data = _fb_get(f"users/{username}") or {}
     safe = {k: v for k, v in data.items() if k != "Password"}
@@ -2063,6 +2275,9 @@ def api_update_bot_settings():
     username = request.auth_username
     d        = body.get("data") or {}
     if not username: return err_json("Missing fields")
+    # حماية Mass Assignment: نستثني الحقول الحساسة (plan/source/Password/User_ID/Username)
+    # قبل الدمج — هذا المسار مخصص فقط لإعدادات البوت وليس لبيانات الحساب/الخطة.
+    d = _sanitize_bot_settings_patch(d)
     existing = _fb_get(f"users/{username}") or {}
     updated  = {**existing, **d, "Username": username, "User_ID": uid}
     _fb_put(f"users/{username}", updated)
@@ -2070,12 +2285,11 @@ def api_update_bot_settings():
         _settings_cache.clear()
     return ok_json(True)
 
-# ── Conversations / Messages — إرسال واستقبال رسائل العملاء ──────────
+# ── Conversations / Messages ───────────────────────────────
 @app.route("/api/getConversations", methods=["GET"])
 @require_auth
 @require_perm("messages")
 def api_get_conversations():
-    """قائمة محادثات العملاء لهذا التاجر، مرتبة بآخر رسالة أولاً."""
     uid = request.auth_uid
     raw = _fb_get(f"conversations_meta/{uid}") or {}
     result = []
@@ -2094,7 +2308,6 @@ def api_get_conversations():
 @require_auth
 @require_perm("messages")
 def api_get_conversation_messages():
-    """سجل رسائل محادثة واحدة مرتب زمنياً (الأقدم أولاً) لعرضه في واجهة الدردشة."""
     uid = request.auth_uid
     sender_id = request.args.get("senderId","").strip()
     if not sender_id: return err_json("Missing senderId")
@@ -2112,8 +2325,6 @@ def api_get_conversation_messages():
 @require_auth
 @require_perm("messages")
 def api_send_message():
-    """يرسل رسالة يدوية من لوحة التحكم للعميل عبر نفس القناة (فيسبوك/إنستغرام/واتساب)
-    التي راسل بها آخر مرة، باستخدام Meta Graph API — ويسجّلها في سجل المحادثة."""
     body = request.get_json(silent=True) or {}
     uid  = request.auth_uid
     sender_id = str(body.get("senderId") or "").strip()
@@ -2192,7 +2403,6 @@ def api_update_user_plan():
 @app.route("/api/admin/createClient", methods=["POST"])
 @require_admin
 def api_admin_create_client():
-    """إنشاء حساب جديد لعميل (محلي أو Fiverr) — يولّد User_ID فريد، يشفّر كلمة السر، ويهيّئ متجراً افتراضياً."""
     body     = request.get_json(silent=True) or {}
     username = str(body.get("username") or "").strip()
     password = str(body.get("password") or "").strip()
@@ -2201,6 +2411,7 @@ def api_admin_create_client():
     source   = str(body.get("source") or "local").strip().lower()
     if source not in ("local", "fiverr"): source = "local"
     if not username or not password: return err_json("اسم المستخدم وكلمة السر مطلوبين")
+    if len(password) < 6: return err_json("كلمة السر قصيرة جداً (6 أحرف على الأقل)")
     if plan not in PLANS: return err_json(f"خطة غير صحيحة: {list(PLANS.keys())}")
     if plan in ("lifetime", "full") and _count_lifetime_accounts() >= LIFETIME_MAX_SLOTS:
         return err_json(f"تم الوصول للحد الأقصى ({LIFETIME_MAX_SLOTS}) من عروض Lifetime", 409)
@@ -2233,6 +2444,11 @@ def api_admin_list_clients():
     return ok_json(result)
 
 # ── /api/saas ─────────────────────────────────────────────
+# مسارات محمية تحت data/{uid}/ لا يُسمح بلمسها عبر أفعال firebaseGet/Set/Update/Push
+# العامة أدناه — لأن لها منطق تحقق خاص (صلاحيات الخطة، الحدود الشهرية، فحوصات SSRF...)
+# ضمن endpoints مخصصة (landing/generate, woo/connect, إلخ).
+_SAAS_BLOCKED_DATA_SUBPATHS = ("usage/", "integrations/", "landingPages/", "teamMembers/")
+
 @app.route("/api/saas", methods=["POST","OPTIONS"])
 def api_saas():
     if request.method == "OPTIONS": return jsonify({}), 200
@@ -2250,12 +2466,18 @@ def api_saas():
     if not action: return err_json("missing_action")
 
     def _path_allowed(path):
-        """يسمح فقط بمسارات بيانات المستخدم المصادَق عليه — يمنع الوصول لبيانات تجار آخرين أو عقدة users/ الحساسة."""
         path = str(path or "")
-        return path.startswith(f"data/{auth_uid}/") or path.startswith(f"ai_logs/{auth_uid}")
+        data_prefix = f"data/{auth_uid}/"
+        if path.startswith(data_prefix):
+            rest = path[len(data_prefix):]
+            if any(rest.startswith(p) for p in _SAAS_BLOCKED_DATA_SUBPATHS):
+                return False
+            return True
+        # تصحيح حد المسار: نتأكد أن الجزء بعد ai_logs/{uid} إما فارغ أو يبدأ بـ "/"،
+        # بدل startswith الخام الذي كان يقبل نظرياً أي uid آخر يبدأ بنفس السلسلة.
+        ai_logs_prefix = f"ai_logs/{auth_uid}"
+        return path == ai_logs_prefix or path.startswith(ai_logs_prefix + "/")
 
-    # المسارات الخام (firebaseGet/Set/Update/Push) قوية جداً وتتجاوز نظام الصلاحيات المُجزّأة —
-    # نقصرها على صاحب الحساب فقط، وعضو الفريق يستعمل مسارات /api المخصصة (المقيّدة بـ require_perm).
     if action in ("firebaseGet", "firebaseSet", "firebaseUpdate", "firebasePush") and auth_role == "member":
         return err_json("غير مسموح لعضو الفريق باستعمال هذا المسار", 403)
     if action in ("getBotLogs", "updateBotSettings") and auth_role == "member" and not auth_perms.get("bot"):
@@ -2299,6 +2521,9 @@ def api_saas():
         if action == "updateBotSettings":
             if not auth_username: return err_json("missing_username")
             data = payload.get("payload", payload.get("data")) or {}
+            data = _sanitize_bot_settings_patch(data)
+            if not data:
+                return ok_json(True)
             _fb_patch(f"users/{auth_username}", data)
             with _settings_cache_lock: _settings_cache.clear()
             return ok_json(True)
@@ -2333,8 +2558,6 @@ def get_user_settings(identifier):
         logging.error(f"get_user_settings: {e}"); return None
 
 def _bot_allowed_for(bot_settings):
-    """يتحقق أن خطة التاجر تسمح باستعمال البوت قبل معالجة أي رسالة — يمنع الرد
-    على عملاء التجار اللي خطتهم ما فيهاش bot:True حتى لو ربطو صفحاتهم."""
     if not bot_settings: return False
     plan = str(bot_settings.get("plan", "starter")).lower()
     return PLANS.get(plan, {}).get("bot", False)
@@ -2363,7 +2586,7 @@ def fb_oauth_callback():
             timeout=15)
         r3.raise_for_status()
         pages = r3.json().get("data",[]) or []
-        logging.info(f"📘 FB /me/accounts raw response: {pages}")
+        logging.info(f"📘 FB /me/accounts pages received: {len(pages)}")
         fb_page_id = ig_page_id = ig_token = ""
         fb_token   = long_token
         pages_info = []
@@ -2399,7 +2622,7 @@ def fb_oauth_callback():
         logging.info(f"✅ OAuth OK UID={uid}")
         ph = "".join(f"<div style='display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12px'>"
                      f"<span>{'📷' if p['type']=='instagram' else '📘'}</span>"
-                     f"<span>{p.get('name','—')}</span></div>" for p in pages_info)
+                     f"<span>{_esc(p.get('name','—'))}</span></div>" for p in pages_info)
         return f"""<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"/><title>تم الربط</title>
 <style>body{{margin:0;font-family:Arial;background:#0a1628;color:#e8edf5;display:flex;align-items:center;justify-content:center;min-height:100vh;}}</style></head>
 <body><div style="text-align:center;padding:40px;background:rgba(15,32,68,.92);border:1px solid rgba(0,214,143,.3);border-radius:16px;max-width:340px">
@@ -2418,15 +2641,14 @@ def _oauth_error_page(msg):
 <style>body{{margin:0;font-family:Arial;background:#0a1628;color:#e8edf5;display:flex;align-items:center;justify-content:center;min-height:100vh;}}</style></head>
 <body><div style="text-align:center;padding:40px;background:rgba(15,32,68,.92);border:1px solid rgba(255,77,109,.3);border-radius:16px;max-width:340px">
 <div style="font-size:56px">❌</div><h2 style="color:#ff4d6d">فشل الربط</h2>
-<p style="color:#8899bb;font-size:12px;word-break:break-all">{msg}</p>
-</div><script>window.opener&&window.opener.postMessage({{type:"FB_AUTH_ERROR",message:{json.dumps(msg)}}},"*");
+<p style="color:#8899bb;font-size:12px;word-break:break-all">{_esc(msg)}</p>
+</div><script>window.opener&&window.opener.postMessage({{type:"FB_AUTH_ERROR",message:{json.dumps(str(msg))}}},"*");
 setTimeout(()=>window.close(),4000);</script></body></html>"""
 
 @app.route("/api/getOAuthState", methods=["GET"])
 @require_auth
 @require_owner
 def api_get_oauth_state():
-    """state موقّع بـ JWT (صلاحية 10 دقائق) بدل JSON عادي قابل للتزوير من أي زائر يعرف الـ uid."""
     state = jwt.encode({
         "uid": request.auth_uid, "uname": request.auth_username,
         "exp": int(time.time()) + 600,
@@ -2581,9 +2803,6 @@ def log_ai_message(sender_id, user_msg, bot_msg, platform="FB", merchant_uid="")
         logging.error(f"log_ai_message: {e}")
 
 def _log_conversation(uid, sender_id, direction, text, platform, via="", page_id="", name=""):
-    """يسجّل رسالة (واردة أو صادرة) في سجل محادثة موحّد لكل عميل، ويحدّث ملخّص المحادثة
-    (آخر رسالة، القناة، معرّف الصفحة/الرقم المستعمل) — يغذّي واجهة 'المحادثات' الجديدة
-    بدون أي تأثير على ai_logs أو chats الموجودة مسبقاً."""
     if not uid or not sender_id:
         return
     now = time.time()
@@ -2640,7 +2859,6 @@ def _find_field(order_data, *exact_keys):
     return ""
 
 def _normalize_delivery_type(raw):
-    """يحوّل أي صياغة حرة (عربي/فرنسي) لنوع التوصيل إلى home أو desk بشكل موحّد."""
     raw = str(raw or "").strip().lower()
     desk_keywords = ["مكتب", "ستوب ديسك", "ستوب دسك", "stop desk", "stopdesk", "bureau",
                       "نقطة استلام", "office", "agence", "وكالة"]
@@ -2676,12 +2894,10 @@ def save_order_from_bot(order_data, bot_settings, sender_id=""):
         product = _find_field(order_data, "product", "product_name", "المنتج", "اسم المنتج")
         delivery_type = _normalize_delivery_type(_find_field(order_data, "delivery_type", "نوع التوصيل", "التوصيل"))
 
-        # ✅ منع التكرار: لو نفس المحادثة سجّلت طلب لنفس الهاتف/المنتج مؤخراً، لا ننشئ طلباً جديداً
         if sender_id and _is_duplicate_bot_order(sender_id, phone, product):
             logging.info(f"⏭️ تجاهل طلب مكرر من البوت | sender={sender_id} | product={product}")
             return False
 
-        # ✅ سقف الطلبات الشهري الموحّد (يدوي + متجر + بوت معاً) لخطط Lifetime/Full
         if not _under_cap(uid, "orderCount", "orderCap"):
             logging.warning(f"⏭️ تجاوز سقف الطلبات الشهري | uid={uid}")
             return False
@@ -2824,11 +3040,33 @@ def process_bg(sender_id, user_text, bot, send_fn,
     _executor.submit(task)
 
 def verify_sig(raw_body, headers):
-    if not META_APP_SECRET: return True
+    """قبل: لو META_APP_SECRET غير مضبوط كان يُرجع True (يقبل أي طلب بلا توقيع) —
+    fail-open خطير يسمح لأي شخص بانتحال ويبهوك ميتا. الآن: fail-closed، يرفض كل شيء
+    حتى يُضبط السر بشكل صريح.
+
+    ملاحظة تشخيصية مؤقتة: نسجل سبب أي رفض (بلا كشف أي سر) لتشخيص حالات فشل webhook
+    الحقيقية القادمة من ميتا — يمكن حذف أسطر logging.warning هذه بعد التأكد أن كل شيء
+    يعمل بشكل طبيعي."""
+    logging.warning(f"🔍 DEBUG BODY -> raw_body type: {type(raw_body)} | Length of raw_body: {len(raw_body) if raw_body else 0}")
+    if not META_APP_SECRET:
+        logging.critical("🚨 رفض /webhook لأن META_APP_SECRET غير مضبوط")
+        return False
     sig = headers.get("X-Hub-Signature-256","")
-    if not sig.startswith("sha256="): return False
+    logging.warning(f"🔍 DEBUG SIG -> Received Header Sig: {sig} | Calculated My Sig: 'sha256=' + hmac.new(META_APP_SECRET.encode('utf-8'), raw_body, hashlib.sha256).hexdigest()")
+    if not sig.startswith("sha256="):
+        logging.warning(f"⚠️ /webhook رُفض: لا يوجد هيدر X-Hub-Signature-256 صالح "
+                         f"(القيمة المستلمة: {'فارغة' if not sig else 'موجودة لكن بصيغة خاطئة'})")
+        return False
     expected = hmac.new(META_APP_SECRET.encode(), raw_body, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(expected, sig[7:])
+    matched = hmac.compare_digest(expected, sig[7:])
+    if not matched:
+        logging.warning(
+            f"⚠️ /webhook رُفض: التوقيع لا يطابق. طول META_APP_SECRET المستعمل = "
+            f"{len(META_APP_SECRET)} حرف، طول جسم الطلب = {len(raw_body)} بايت. "
+            f"تأكد أن نفس القيمة بالضبط (بلا مسافات/أسطر زائدة) مضبوطة فـ App Secret "
+            f"بلوحة تحكم Meta وفـ متغير البيئة META_APP_SECRET."
+        )
+    return matched
 
 @app.before_request
 def limit_size():
@@ -2848,7 +3086,9 @@ def sticker_reply():
 @app.route("/webhook", methods=["GET","POST"])
 def webhook():
     if request.method == "GET":
-        if request.args.get("hub.verify_token") == VERIFY_TOKEN:
+        # مقارنة زمن-ثابت (compare_digest) بدل == العادية لتفادي كشف verify_token
+        # عبر فروقات التوقيت الدقيقة (timing side-channel)، بنفس أسلوب باقي الملف.
+        if VERIFY_TOKEN and hmac.compare_digest(request.args.get("hub.verify_token") or "", VERIFY_TOKEN):
             return request.args.get("hub.challenge",""), 200
         return "Forbidden", 403
     raw_body = request.get_data()
@@ -2922,8 +3162,6 @@ def webhook():
                     if not tok:
                         logging.warning(f"⚠️ webhook: merchant found (User_ID={bot.get('User_ID')}) but NO access token for page_id={page_id} (is_instagram={is_instagram})")
                         continue
-                    # ✅ Instagram Messaging API يرفض الإرسال إذا استُعمل معرف حساب إنستغرام (ig_pid) بالرابط —
-                    # Meta تفرض استعمال معرف صفحة فيسبوك (fb_pid) أو الكلمة "me" مع توكن الصفحة، وإلا يرجع خطأ (#3).
                     send_pid = (fb_pid or None) if is_instagram else page_id
                     logging.info(f"🔑 Using {'Instagram' if is_instagram else 'Facebook'} token for page_id={page_id} | send_pid={send_pid or 'me'}")
                     platform_str = "ig" if is_instagram else "fb"
@@ -2932,7 +3170,7 @@ def webhook():
                     logging.info(f"📋 messaging entries count: {len(msging_list)}")
                     for me in msging_list:
                         sid=me.get("sender",{}).get("id","")
-                        logging.info(f"👤 processing message from sid={sid} | raw={me}")
+                        logging.info(f"👤 processing message from sid={sid}")
                         if not sid or sid==page_id:
                             logging.info(f"⏭️ skipped: sid empty or equals page_id")
                             continue
@@ -2955,10 +3193,7 @@ def webhook():
                         elif "postback" in me:
                             utxt=me["postback"].get("title") or me["postback"].get("payload","")
                         if not utxt and not mdata:
-                            # حدث بلا محتوى (مثلاً message_edit، read receipt...) — يُتجاهل بلا لمس عداد الـ rate limit،
-                            # لأن لمسه هنا كان يحرق نافذة الـ 2 ثواني ويخلي الرسالة الحقيقية التالية تنرفض كـ"rate limited"
-                            # ويبقى البوت ساكت (هذا كان سبب توقف الرد على إنستغرام).
-                            logging.info(f"⏭️ skipped: no text/media extracted from message (utxt empty, mdata empty) | me={me}")
+                            logging.info(f"⏭️ skipped: no text/media extracted from message")
                             continue
                         log_text_fb = utxt or ("🎙️ [رسالة صوتية]" if isvoc else "🖼️ [صورة]" if isimg else "")
                         if merchant_uid_fb:
