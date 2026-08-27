@@ -3038,42 +3038,33 @@ def process_bg(sender_id, user_text, bot, send_fn,
             try: send_fn("عذراً، حدث خطأ مؤقت.")
             except Exception: pass
     _executor.submit(task)
-
 def verify_sig(raw_body, headers):
-    """قبل: لو META_APP_SECRET غير مضبوط كان يُرجع True (يقبل أي طلب بلا توقيع) —
-    fail-open خطير يسمح لأي شخص بانتحال ويبهوك ميتا. الآن: fail-closed، يرفض كل شيء
-    حتى يُضبط السر بشكل صريح.
-
-    تصحيح مهم: سطر الـ debug السابق كان يطبع نص الكود الحرفي بدل القيمة المحسوبة
-    فعلياً (لأن جزء الحساب ما كانش داخل {} بالـ f-string) — ما كان يعرض والو مفيد
-    للمقارنة. الآن نحسب القيمة فعلاً ونطبعها + نطبع تمثيل hex للسر المستعمل لكشف
-    أي حرف مخفي (RTL mark, zero-width space, BOM...) قد يكون انسخ عرضياً معه."""
     if not META_APP_SECRET:
-        logging.critical("🚨 رفض /webhook لأن META_APP_SECRET غير مضبوط")
+        logging.critical("🚨 META_APP_SECRET غير موجود في متغيرات البيئة!")
         return False
+    
     sig = headers.get("X-Hub-Signature-256", "")
     if not sig.startswith("sha256="):
-        logging.warning(f"⚠️ /webhook رُفض: لا يوجد هيدر X-Hub-Signature-256 صالح "
-                         f"(القيمة المستلمة: {'فارغة' if not sig else 'موجودة لكن بصيغة خاطئة'})")
         return False
 
-    expected = hmac.new(META_APP_SECRET.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
+    # الحساب الصحيح للتوقيع
+    expected = hmac.new(
+        META_APP_SECRET.encode("utf-8"), 
+        raw_body, 
+        hashlib.sha256
+    ).hexdigest()
+    
     received = sig[7:]
-    matched  = hmac.compare_digest(expected, received)
+    matched = hmac.compare_digest(expected, received)
 
-    # تشخيص مؤقت — هذا السطر يحل مكان سطر الـ debug القديم المكسور: الآن نطبع
-    # القيمة المحسوبة الحقيقية جنب المستلمة، + hex للسر (64 حرف hex متوقعة لسر
-    # 32 حرف) لكشف أي حرف مخفي غير مرئي بالعين المجردة.
     if not matched:
-        logging.warning(
-            f"⚠️ /webhook رُفض: التوقيع لا يطابق.\n"
-            f"   Received : sha256={received}\n"
-            f"   Expected : sha256={expected}\n"
-            f"   Secret hex ({len(META_APP_SECRET)} حرف نصي): {META_APP_SECRET.encode('utf-8').hex()}\n"
-            f"   طول جسم الطلب = {len(raw_body)} بايت."
-        )
+        # هذه الأسطر ستطبع لكِ القيم الحقيقية في الـ Logs لتعرفي الفرق
+        logging.warning(f"❌ فشل التحقق!")
+        logging.warning(f"المستلم من فيسبوك: {received}")
+        logging.warning(f"المحسوب في السيرفر: {expected}")
+        logging.warning(f"طول السر المستخدم: {len(META_APP_SECRET)}")
+    
     return matched
-
 @app.before_request
 def limit_size():
     if request.content_length and request.content_length > MAX_PAYLOAD_SIZE:
