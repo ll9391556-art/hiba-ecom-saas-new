@@ -3044,27 +3044,33 @@ def verify_sig(raw_body, headers):
     fail-open خطير يسمح لأي شخص بانتحال ويبهوك ميتا. الآن: fail-closed، يرفض كل شيء
     حتى يُضبط السر بشكل صريح.
 
-    ملاحظة تشخيصية مؤقتة: نسجل سبب أي رفض (بلا كشف أي سر) لتشخيص حالات فشل webhook
-    الحقيقية القادمة من ميتا — يمكن حذف أسطر logging.warning هذه بعد التأكد أن كل شيء
-    يعمل بشكل طبيعي."""
-    logging.warning(f"🔍 DEBUG BODY -> raw_body type: {type(raw_body)} | Length of raw_body: {len(raw_body) if raw_body else 0}")
+    تصحيح مهم: سطر الـ debug السابق كان يطبع نص الكود الحرفي بدل القيمة المحسوبة
+    فعلياً (لأن جزء الحساب ما كانش داخل {} بالـ f-string) — ما كان يعرض والو مفيد
+    للمقارنة. الآن نحسب القيمة فعلاً ونطبعها + نطبع تمثيل hex للسر المستعمل لكشف
+    أي حرف مخفي (RTL mark, zero-width space, BOM...) قد يكون انسخ عرضياً معه."""
     if not META_APP_SECRET:
         logging.critical("🚨 رفض /webhook لأن META_APP_SECRET غير مضبوط")
         return False
-    sig = headers.get("X-Hub-Signature-256","")
-    logging.warning(f"🔍 DEBUG SIG -> Received Header Sig: {sig} | Calculated My Sig: 'sha256=' + hmac.new(META_APP_SECRET.encode('utf-8'), raw_body, hashlib.sha256).hexdigest()")
+    sig = headers.get("X-Hub-Signature-256", "")
     if not sig.startswith("sha256="):
         logging.warning(f"⚠️ /webhook رُفض: لا يوجد هيدر X-Hub-Signature-256 صالح "
                          f"(القيمة المستلمة: {'فارغة' if not sig else 'موجودة لكن بصيغة خاطئة'})")
         return False
-    expected = hmac.new(META_APP_SECRET.encode(), raw_body, hashlib.sha256).hexdigest()
-    matched = hmac.compare_digest(expected, sig[7:])
+
+    expected = hmac.new(META_APP_SECRET.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
+    received = sig[7:]
+    matched  = hmac.compare_digest(expected, received)
+
+    # تشخيص مؤقت — هذا السطر يحل مكان سطر الـ debug القديم المكسور: الآن نطبع
+    # القيمة المحسوبة الحقيقية جنب المستلمة، + hex للسر (64 حرف hex متوقعة لسر
+    # 32 حرف) لكشف أي حرف مخفي غير مرئي بالعين المجردة.
     if not matched:
         logging.warning(
-            f"⚠️ /webhook رُفض: التوقيع لا يطابق. طول META_APP_SECRET المستعمل = "
-            f"{len(META_APP_SECRET)} حرف، طول جسم الطلب = {len(raw_body)} بايت. "
-            f"تأكد أن نفس القيمة بالضبط (بلا مسافات/أسطر زائدة) مضبوطة فـ App Secret "
-            f"بلوحة تحكم Meta وفـ متغير البيئة META_APP_SECRET."
+            f"⚠️ /webhook رُفض: التوقيع لا يطابق.\n"
+            f"   Received : sha256={received}\n"
+            f"   Expected : sha256={expected}\n"
+            f"   Secret hex ({len(META_APP_SECRET)} حرف نصي): {META_APP_SECRET.encode('utf-8').hex()}\n"
+            f"   طول جسم الطلب = {len(raw_body)} بايت."
         )
     return matched
 
