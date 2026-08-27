@@ -73,7 +73,7 @@ VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN", "").strip()
 if not VERIFY_TOKEN:
     logging.critical("🚨 VERIFY_TOKEN غير مضبوط بالبيئة — أي محاولة تحقق GET من ميتا على /webhook سترفض حتى تضبطه.")
 
-META_APP_SECRET = os.environ.get("META_APP_SECRET", "").strip()
+META_APP_SECRET = (os.environ.get("META_APP_SECRET") or os.environ.get("FB_APP_SECRET") or "").strip()
 if not META_APP_SECRET:
     logging.critical("🚨 META_APP_SECRET غير مضبوط — /webhook سيرفض كل الطلبات POST حتى يُضبط (fail-closed).")
 logging.critical(f"🔍 DEBUG -> META_APP_SECRET Value check: Starts with '{META_APP_SECRET[:5]}' ... Ends with '{META_APP_SECRET[-5:]}' | Length: {len(META_APP_SECRET)}")
