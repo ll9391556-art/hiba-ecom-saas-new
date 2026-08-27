@@ -3040,30 +3040,26 @@ def process_bg(sender_id, user_text, bot, send_fn,
     _executor.submit(task)
 def verify_sig(raw_body, headers):
     if not META_APP_SECRET:
-        logging.critical("🚨 META_APP_SECRET غير موجود في متغيرات البيئة!")
+        logging.critical("🚨 META_APP_SECRET مفقود")
         return False
     
     sig = headers.get("X-Hub-Signature-256", "")
     if not sig.startswith("sha256="):
         return False
 
-    # الحساب الصحيح للتوقيع
-    expected = hmac.new(
-        META_APP_SECRET.encode("utf-8"), 
-        raw_body, 
-        hashlib.sha256
-    ).hexdigest()
+    # الحساب باستخدام hmac
+    # تأكدي أن META_APP_SECRET ليس به أي فراغات مخفية
+    key = META_APP_SECRET.strip().encode('utf-8')
+    expected = hmac.new(key, raw_body, hashlib.sha256).hexdigest()
     
     received = sig[7:]
     matched = hmac.compare_digest(expected, received)
 
     if not matched:
-        # هذه الأسطر ستطبع لكِ القيم الحقيقية في الـ Logs لتعرفي الفرق
-        logging.warning(f"❌ فشل التحقق!")
-        logging.warning(f"المستلم من فيسبوك: {received}")
-        logging.warning(f"المحسوب في السيرفر: {expected}")
-        logging.warning(f"طول السر المستخدم: {len(META_APP_SECRET)}")
-    
+        logging.warning(f"❌ فشل التحقق - المستلم: {received[:10]}... | المحسوب: {expected[:10]}...")
+    else:
+        logging.info("✅ تم التحقق بنجاح من توقيع فيسبوك")
+        
     return matched
 @app.before_request
 def limit_size():
