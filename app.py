@@ -3089,7 +3089,7 @@ def webhook():
             return request.args.get("hub.challenge",""), 200
         return "Forbidden", 403
     raw_body = request.get_data()
-    #if not verify_sig(raw_body, request.headers): return "Forbidden", 403
+    if not verify_sig(raw_body, request.headers): return "Forbidden", 403
     data = request.get_json(silent=True)
     if not data: return "Bad Request", 400
     logging.info(f"📩 webhook RECEIVED: object={data.get('object')} | entries={len(data.get('entry',[]))}")
