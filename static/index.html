@@ -1394,7 +1394,19 @@ var I18N = {
 };
 
 function t(k){ return (I18N[currentLang]||I18N.FR)[k] || k; }
-
+// ── حماية من XSS: escape إجباري لأي نص جاي من مصدر غير موثوق (زبون/عميل)
+// قبل إدراجه فـ innerHTML. بيانات الطلبات (name/phone/city/product) تجي من
+// /api/addOrder العام بلا مصادقة — أي زبون يقدر يدخل <script> أو onerror=...
+// كاسم، ووقت التاجر يفتح لوحة الطلبات يتنفذ الكود فمتصفحه ويسرق التوكن.
+function esc(s){
+  return String(s === undefined || s === null ? "" : s).replace(/[&<>"']/g, function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+  });
+}
+// نسخة آمنة لإدراج نص داخل onclick='...' (بالإضافة لـ esc العادية)
+function escAttr(s){
+  return esc(s).replace(/\r?\n/g, " ");
+}
 function applyLang(lang){
   currentLang = lang;
   localStorage.setItem("of_lang", lang);
@@ -1867,29 +1879,30 @@ function renderOrders(orders){
     var opts = ["Pending","Confirmed","Delivered","Refused","No Answer"].map(function(s){
       return '<option value="'+s+'"'+(o.status===s?" selected":"")+'>'+s+'</option>';
     }).join("");
+    var safeId = escAttr(o.id);
     return '<tr>'+
       '<td>'+(i+1)+'</td>'+
-      '<td style="font-size:11px">'+(o.date||"—")+'</td>'+
-      '<td><strong>'+(o.name||"—")+'</strong></td>'+
-      '<td><a href="tel:'+(o.phone||"")+'" style="color:var(--accent)">'+(o.phone||"—")+'</a></td>'+
-      '<td>'+(o.product||"—")+'</td>'+
-      '<td>'+(o.qty||1)+'</td>'+
-      '<td>'+(o.city||"—")+'</td>'+
+      '<td style="font-size:11px">'+esc(o.date||"—")+'</td>'+
+      '<td><strong>'+esc(o.name||"—")+'</strong></td>'+
+      '<td><a href="tel:'+esc(o.phone||"")+'" style="color:var(--accent)">'+esc(o.phone||"—")+'</a></td>'+
+      '<td>'+esc(o.product||"—")+'</td>'+
+      '<td>'+esc(o.qty||1)+'</td>'+
+      '<td>'+esc(o.city||"—")+'</td>'+
       '<td>'+
         '<span class="badge bn me-1">'+(o.deliveryType==="desk"?t("desk_short"):t("home_short"))+'</span>'+
-        '<select class="status-sel" onchange="updateOrderDelivery(\''+o.id+'\',this.value)">'+
+        '<select class="status-sel" onchange="updateOrderDelivery(\''+safeId+'\',this.value)">'+
           '<option value="home"'+(o.deliveryType!=="desk"?" selected":"")+'>'+t("home_delivery")+'</option>'+
           '<option value="desk"'+(o.deliveryType==="desk"?" selected":"")+'>'+t("desk_delivery")+'</option>'+
         '</select>'+
       '</td>'+
-      '<td><strong>'+(o.total||0)+' '+cur+'</strong></td>'+
-      '<td style="color:'+(parseFloat(o.profit||0)>=0?"var(--green)":"var(--red)")+'">'+(o.profit||0)+' '+cur+'</td>'+
-      '<td><span class="badge bn">'+(o.source||"manual")+'</span></td>'+
-      '<td style="font-size:11px;color:var(--muted)">'+(o.date_sent||"—")+'</td>'+
-      '<td style="font-size:11px;color:var(--muted)">'+(o.date_delivered||"—")+'</td>'+
+      '<td><strong>'+esc(o.total||0)+' '+cur+'</strong></td>'+
+      '<td style="color:'+(parseFloat(o.profit||0)>=0?"var(--green)":"var(--red)")+'">'+esc(o.profit||0)+' '+cur+'</td>'+
+      '<td><span class="badge bn">'+esc(o.source||"manual")+'</span></td>'+
+      '<td style="font-size:11px;color:var(--muted)">'+esc(o.date_sent||"—")+'</td>'+
+      '<td style="font-size:11px;color:var(--muted)">'+esc(o.date_delivered||"—")+'</td>'+
       '<td>'+
-        '<span class="badge '+stCls+' me-1">'+o.status+'</span>'+
-        '<select class="status-sel" onchange="updateStatus(\''+o.id+'\',this.value)" data-id="'+o.id+'">'+opts+'</select>'+
+        '<span class="badge '+stCls+' me-1">'+esc(o.status)+'</span>'+
+        '<select class="status-sel" onchange="updateStatus(\''+safeId+'\',this.value)" data-id="'+safeId+'">'+opts+'</select>'+
       '</td>'+
     '</tr>';
   }).join("");
@@ -2036,14 +2049,14 @@ function renderCustomers(list){
   tbl.innerHTML = list.map(function(c){
     var typeCls = {Good:"bc",Bad:"br",Neutral:"bn"}[c.type]||"bp";
     return '<tr>'+
-      '<td><strong>'+(c.name||"—")+'</strong></td>'+
-      '<td>'+(c.phone||"—")+'</td>'+
-      '<td>'+(c.city||"—")+'</td>'+
-      '<td>'+(c.totalOrders||0)+'</td>'+
-      '<td style="color:var(--green)">'+(c.stats&&c.stats.confirmed||0)+'</td>'+
-      '<td style="color:var(--blue)">'+(c.stats&&c.stats.delivered||0)+'</td>'+
-      '<td style="color:var(--red)">'+(c.stats&&c.stats.refused||0)+'</td>'+
-      '<td><span class="badge '+typeCls+'">'+(c.type||"?")+'</span></td>'+
+      '<td><strong>'+esc(c.name||"—")+'</strong></td>'+
+      '<td>'+esc(c.phone||"—")+'</td>'+
+      '<td>'+esc(c.city||"—")+'</td>'+
+      '<td>'+esc(c.totalOrders||0)+'</td>'+
+      '<td style="color:var(--green)">'+esc(c.stats&&c.stats.confirmed||0)+'</td>'+
+      '<td style="color:var(--blue)">'+esc(c.stats&&c.stats.delivered||0)+'</td>'+
+      '<td style="color:var(--red)">'+esc(c.stats&&c.stats.refused||0)+'</td>'+
+      '<td><span class="badge '+typeCls+'">'+esc(c.type||"?")+'</span></td>'+
     '</tr>';
   }).join("") || '<tr><td colspan="8"><div class="empty-state"><i class="bi bi-people"></i></div></td></tr>';
 }
@@ -2490,19 +2503,18 @@ function renderConversationsList(list){
     var active = (c.senderId===CURRENT_CONV_SENDER) ? " active" : "";
     var dirIcon = c.lastDirection==="out" ? "↩️ " : "";
     var timeTxt = c.lastTimestamp ? new Date(c.lastTimestamp*1000).toLocaleString("fr-DZ",{hour:"2-digit",minute:"2-digit",day:"2-digit",month:"2-digit"}) : "";
-    var safeSid  = String(c.senderId).replace(/'/g,"\\'");
-    var safeName = String(c.name||"").replace(/'/g,"\\'");
+    var safeSid  = escAttr(c.senderId);
+    var safeName = escAttr(c.name||"");
     return '<div class="conv-item'+active+'" onclick="openConversation(\''+safeSid+'\',\''+c.platform+'\',\''+safeName+'\')">'+
       '<div class="conv-avatar">'+icon+'</div>'+
       '<div class="conv-info">'+
-        '<div class="conv-name">'+(c.name||c.senderId)+'</div>'+
-        '<div class="conv-last">'+dirIcon+(c.lastMessage||"").substring(0,40)+'</div>'+
+        '<div class="conv-name">'+esc(c.name||c.senderId)+'</div>'+
+        '<div class="conv-last">'+dirIcon+esc((c.lastMessage||"").substring(0,40))+'</div>'+
       '</div>'+
-      '<div class="conv-time">'+timeTxt+'</div>'+
+      '<div class="conv-time">'+esc(timeTxt)+'</div>'+
     '</div>';
   }).join("");
 }
-
 function openConversation(senderId, platform, name){
   CURRENT_CONV_SENDER   = senderId;
   CURRENT_CONV_PLATFORM = platform;
@@ -2541,8 +2553,8 @@ function renderConversationMessages(items){
   box.innerHTML = items.map(function(m){
     var cls = m.direction==="out" ? "msg-out" : "msg-in";
     var viaBadge = m.via==="manual" ? " 👤" : m.via==="bot" ? " 🤖" : "";
-    var safeText = (m.text||"").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-    return '<div class="msg-bubble-wrap '+cls+'"><div class="msg-bubble">'+safeText+'<div class="msg-meta">'+(m.date||"")+viaBadge+'</div></div></div>';
+    var safeText = esc(m.text||"");
+    return '<div class="msg-bubble-wrap '+cls+'"><div class="msg-bubble">'+safeText+'<div class="msg-meta">'+esc(m.date||"")+viaBadge+'</div></div></div>';
   }).join("");
   box.scrollTop = box.scrollHeight;
 }
@@ -2844,11 +2856,11 @@ async function loadBotLogs(){
         var platform = l.platform || "FB";
         var userMsg  = l.user_message || l.user || "";
         var botReply = l.bot_reply   || l.bot  || "";
-        var sender   = l.sender_id   ? '<span style="font-size:9px;color:var(--muted);margin-left:6px">'+l.sender_id.substring(0,8)+'...</span>' : "";
+        var sender   = l.sender_id   ? '<span style="font-size:9px;color:var(--muted);margin-left:6px">'+esc(l.sender_id.substring(0,8))+'...</span>' : "";
         return '<div style="border-bottom:1px solid var(--border);padding:10px 0">'+
-          '<div style="color:var(--muted);font-size:10px;margin-bottom:4px">'+date+' • '+platform+sender+'</div>'+
-          (userMsg  ? '<div style="background:rgba(37,99,235,.08);border-radius:8px;padding:6px 10px;margin-bottom:4px;font-size:12px"><span style="color:var(--muted);font-size:10px">👤 Client</span><br>'+userMsg.substring(0,200)+'</div>' : '')+
-          (botReply ? '<div style="background:rgba(16,185,129,.08);border-radius:8px;padding:6px 10px;font-size:12px"><span style="color:var(--muted);font-size:10px">🤖 Bot</span><br>'+botReply.substring(0,300)+'</div>' : '')+
+          '<div style="color:var(--muted);font-size:10px;margin-bottom:4px">'+esc(date)+' • '+esc(platform)+sender+'</div>'+
+          (userMsg  ? '<div style="background:rgba(37,99,235,.08);border-radius:8px;padding:6px 10px;margin-bottom:4px;font-size:12px"><span style="color:var(--muted);font-size:10px">👤 Client</span><br>'+esc(userMsg.substring(0,200))+'</div>' : '')+
+          (botReply ? '<div style="background:rgba(16,185,129,.08);border-radius:8px;padding:6px 10px;font-size:12px"><span style="color:var(--muted);font-size:10px">🤖 Bot</span><br>'+esc(botReply.substring(0,300))+'</div>' : '')+
         '</div>';
       }).join("");
     }
@@ -3196,7 +3208,7 @@ async function sh_trackOrder(){
           }
         }
         return '<div class="track-result"><div style="display:flex;justify-content:space-between;align-items:center">'+
-          '<div><strong>'+o.product+'</strong> × '+o.qty+'<div style="font-size:11px;color:var(--muted)">'+o.date+'</div></div>'+
+          '<div><strong>'+esc(o.product)+'</strong> × '+esc(o.qty)+'<div style="font-size:11px;color:var(--muted)">'+esc(o.date)+'</div></div>'+
           '<span class="badge '+stCls+'">'+o.status+'</span></div>'+rateBlock+'</div>';
       }).join("");
     } else {
