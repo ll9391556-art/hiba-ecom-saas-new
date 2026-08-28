@@ -3134,7 +3134,7 @@ def webhook():
         # إذا فشل التحقق، سنكتفي بطباعة التحذير ولن نوقف البوت حالياً 
         # لكي نرى إذا كان سيرد، لكن يفضل تفعيلها بعد التأكد
         logging.error("❌ فشل التحقق ولكن سنستمر للمعالجة (مؤقتاً)")
-        # return "Forbidden", 403 # عطليه مؤقتاً لضمان عمل البوت
+        return "Forbidden", 403 # عطليه مؤقتاً لضمان عمل البوت
     
     data = request.get_json(silent=True)
     if not data: return "Bad Request", 400
