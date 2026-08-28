@@ -1501,7 +1501,16 @@ def api_add_city():
         "returnFee": float(d.get("returnFee",0)),
     })
     return ok_json(True)
-
+@app.route("/api/deleteCity", methods=["POST"])
+@require_auth
+@require_perm("cities")
+def api_delete_city():
+    body = request.get_json(silent=True) or {}
+    uid  = request.auth_uid
+    name = str(body.get("name") or "").strip()
+    if not name: return err_json("Missing fields")
+    _fb_delete(f"data/{uid}/cities/{name}")
+    return ok_json(True)
 # ── Customers ─────────────────────────────────────────────
 @app.route("/api/getCustomers", methods=["GET"])
 @require_auth
