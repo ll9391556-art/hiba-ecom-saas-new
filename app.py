@@ -94,7 +94,12 @@ if not JWT_SECRET:
                       "(كل التوكنات الحالية ستُبطَل عند إعادة التشغيل القادمة). "
                       "اضبط JWT_SECRET بقيمة ثابتة بالإنتاج فوراً!")
 JWT_ALGO         = "HS256"
-JWT_EXPIRY_HOURS = 24 * 7  # صلاحية الجلسة: 7 أيام
+# صلاحية الجلسة: تختلف حسب الدور — عضو الفريق 24 ساعة (نافذة أضيق لو تاجر
+# طرد موظف)، صاحب الحساب 7 أيام (بلا حاجة يعاود الدخول يوميًا لحسابه الخاص).
+# ملاحظة: بفضل التحقق الحي من team_users فـ require_auth، حتى لو التوكن ماشي
+# منتهي، عضو معطّل/محذوف يُرفض فورًا بلا انتظار — هاذي المدة طبقة دفاع إضافية فقط.
+JWT_EXPIRY_HOURS_OWNER  = 24 * 7   # 7 أيام
+JWT_EXPIRY_HOURS_MEMBER = 24       # 24 ساعة
 
 ADMIN_API_KEY = os.environ.get("ADMIN_API_KEY", "").strip()
 if not ADMIN_API_KEY:
@@ -123,9 +128,10 @@ def _decrypt_secret(token):
 
 def issue_token(uid, username, role="owner", perms=None, member_username="", member_name=""):
     """يولّد JWT لصاحب الحساب (owner) أو لعضو فريق (member)."""
+    expiry_hours = JWT_EXPIRY_HOURS_MEMBER if role == "member" else JWT_EXPIRY_HOURS_OWNER
     payload = {
         "uid": str(uid), "username": str(username), "role": role,
-        "iat": int(time.time()), "exp": int(time.time()) + JWT_EXPIRY_HOURS * 3600,
+        "iat": int(time.time()), "exp": int(time.time()) + expiry_hours * 3600,
     }
     if role == "member":
         payload["perms"]           = perms or {}
@@ -150,12 +156,37 @@ def require_auth(f):
         payload = decode_token(token) if token else None
         if not payload or not payload.get("uid"):
             return err_json("Unauthorized — يرجى تسجيل الدخول من جديد", 401)
-        request.auth_uid            = payload["uid"]
-        request.auth_username       = payload.get("username", "")
-        request.auth_role           = payload.get("role", "owner")
-        request.auth_perms          = payload.get("perms", {}) or {}
+
+        role = payload.get("role", "owner")
+
+        # ── تحديث فوري لحالة/صلاحيات عضو الفريق من قاعدة البيانات ──
+        # قبل: active/permissions كانا يُقرآن فقط من داخل الـ JWT نفسه (لقطة
+        # لحظة تسجيل الدخول)، فإذا التاجر عطّل العضو أو غيّر صلاحياته أو حذفه
+        # نهائياً، التوكن القديم يبقى صالح بنفس الصلاحيات القديمة لمدة تصل
+        # لـ 7 أيام (JWT_EXPIRY_HOURS) — نافذة خطيرة لموظف مطرود مثلاً.
+        # الآن: كل طلب من عضو فريق يتحقق فوراً من team_users/{username} —
+        # إذا العضو محذوف أو معطّل، التوكن يُرفض فوراً بلا انتظار انتهاء صلاحيته.
+        if role == "member":
+            member_username = payload.get("memberUsername", "")
+            member = _fb_get(f"team_users/{member_username}") if member_username else None
+            if not member or not isinstance(member, dict):
+                return err_json("هذا الحساب لم يعد موجوداً — يرجى تسجيل الدخول من جديد", 401)
+            if not member.get("active", True):
+                return err_json("هذا الحساب معطّل حالياً — تواصل مع صاحب المتجر", 403)
+            # التأكد أن العضو ما زال تابعاً لنفس صاحب الحساب (uid) الموجود بالتوكن —
+            # حماية إضافية لو انحذف الحساب الأصلي وانخلق يوزرنيم بنفس الاسم لاحقاً.
+            if str(member.get("ownerUid", "")) != str(payload["uid"]):
+                return err_json("Unauthorized", 401)
+            request.auth_perms = _clean_perms(member.get("permissions"))
+            request.auth_member_name = member.get("name", member_username)
+        else:
+            request.auth_perms = {}
+            request.auth_member_name = ""
+
+        request.auth_uid             = payload["uid"]
+        request.auth_username        = payload.get("username", "")
+        request.auth_role            = role
         request.auth_member_username = payload.get("memberUsername", "")
-        request.auth_member_name    = payload.get("memberName", "")
         return f(*args, **kwargs)
     return wrapper
 
