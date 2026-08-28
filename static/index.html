@@ -7,6 +7,7 @@
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet"/>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
 <style>
 :root{
   --bg:#0d1b2e;--sidebar:#0a1628;--card:#111f35;--card2:#0f1c30;
@@ -623,6 +624,7 @@ select.status-sel{background:var(--card2);border:1px solid var(--border);color:v
         <thead><tr>
           <th data-i18n="city">Ville</th><th data-i18n="home_cost_th">🏠 منزل (تكلفة)</th><th data-i18n="home_cust_th">🏠 منزل (زبون)</th>
           <th data-i18n="desk_cost_th">🏢 مكتب (تكلفة)</th><th data-i18n="desk_cust_th">🏢 مكتب (زبون)</th><th data-i18n="return_fee_shared">Retour</th>
+          <th data-i18n="return_fee_shared">Retour</th><th></th>
         </tr></thead>
         <tbody id="citiesTbl"></tbody>
       </table>
@@ -2078,24 +2080,35 @@ async function loadCities(){
       var cur = curSym();
       var tbl = document.getElementById("citiesTbl");
       tbl.innerHTML = (r.data||[]).map(function(c){
+        var safeName = escAttr(c.name);
         return '<tr>'+
-          '<td><strong>'+(c.name||"—")+'</strong></td>'+
-          '<td>'+(c.costShip||0)+' '+cur+'</td>'+
-          '<td>'+(c.custShip||0)+' '+cur+'</td>'+
-          '<td>'+(c.deskCost||0)+' '+cur+'</td>'+
-          '<td>'+(c.deskCust||0)+' '+cur+'</td>'+
-          '<td>'+(c.returnFee||0)+' '+cur+'</td>'+
+          '<td><strong>'+esc(c.name||"—")+'</strong></td>'+
+          '<td>'+esc(c.costShip||0)+' '+cur+'</td>'+
+          '<td>'+esc(c.custShip||0)+' '+cur+'</td>'+
+          '<td>'+esc(c.deskCost||0)+' '+cur+'</td>'+
+          '<td>'+esc(c.deskCust||0)+' '+cur+'</td>'+
+          '<td>'+esc(c.returnFee||0)+' '+cur+'</td>'+
+          '<td><button class="btn-danger" onclick="deleteCity(\''+safeName+'\')"><i class="bi bi-trash"></i></button></td>'+
         '</tr>';
-      }).join("") || '<tr><td colspan="6"><div class="empty-state"><i class="bi bi-geo-alt"></i></div></td></tr>';
+      }).join("") || '<tr><td colspan="7"><div class="empty-state"><i class="bi bi-geo-alt"></i></div></td></tr>';
 
       var citySel = document.getElementById("o_city");
       if(citySel){
         citySel.innerHTML = (r.data||[]).map(function(c){
-          return '<option value="'+c.name+'">'+c.name+'</option>';
+          return '<option value="'+esc(c.name)+'">'+esc(c.name)+'</option>';
         }).join("");
       }
     }
   }catch(e){ console.error(e); }
+}
+
+async function deleteCity(name){
+  if(!confirm("حذف "+name+" نهائياً؟ (هذا يزيل التسعيرة الخاصة بها فقط، الطلبات القديمة تبقى محفوظة)")) return;
+  try{
+    var r = await apiPost("/deleteCity", {name:name});
+    if(r.status==="ok"){ toast("✅ تم حذف الولاية","ok"); loadCities(); }
+    else toast("❌ "+r.message,"err");
+  }catch(e){ toast("خطأ فالاتصال","err"); }
 }
 
 async function addCity(){
