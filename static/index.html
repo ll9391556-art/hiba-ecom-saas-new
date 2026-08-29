@@ -1905,7 +1905,8 @@ function renderOrders(orders){
       '<td>'+
         '<span class="badge '+stCls+' me-1">'+esc(o.status)+'</span>'+
         '<select class="status-sel" onchange="updateStatus(\''+safeId+'\',this.value)" data-id="'+safeId+'">'+opts+'</select>'+
-      '</td>'+
+      '</td>'+  
+      '<td><button class="btn-outline btn-sm" onclick="printOrderSlip(\''+safeId+'\')" title="طباعة بون دو كوموند"><i class="bi bi-printer"></i></button></td>'+
     '</tr>';
   }).join("");
 }
@@ -1923,7 +1924,77 @@ function filterOrders(){
   });
   renderOrders(res);
 }
+// =========================================================
+// طباعة بون دو كوموند + كود بار لكل طلب (يُسلَّم لشركة التوصيل)
+// =========================================================
+async function printOrderSlip(orderId){
+  var o = allOrders.find(function(x){ return x.id===orderId; });
+  if(!o){ toast("الطلب غير موجود","err"); return; }
 
+  // جلب اسم/شعار المتجر لعرضه فرأس الورقة (اختياري، لو فشل نكمل بدونه)
+  var storeName = "متجري";
+  try{
+    var sr = await apiGet("/getStoreSettings", {userId: uid()}, false);
+    if(sr.status==="ok" && sr.data && sr.data.name) storeName = sr.data.name;
+  }catch(e){}
+
+  var cur = curSym();
+  var deliveryLabel = o.deliveryType==="desk" ? "🏢 مكتب الاستلام (Stop Desk)" : "🏠 توصيل للمنزل";
+
+  var w = window.open("", "_blank", "width=420,height:600");
+  if(!w){ toast("فعّل النوافذ المنبثقة (Popups) للطباعة","err"); return; }
+
+  w.document.write(`<!DOCTYPE html>
+<html lang="ar" dir="rtl"><head><meta charset="UTF-8"/>
+<title>بون كوموند — ${esc(o.id)}</title>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;font-family:Arial,'Segoe UI',sans-serif}
+  body{padding:16px;color:#111}
+  .slip{max-width:380px;margin:0 auto;border:2px solid #111;border-radius:6px;padding:14px}
+  .head{text-align:center;border-bottom:2px dashed #111;padding-bottom:10px;margin-bottom:10px}
+  .head h2{font-size:18px}
+  .head small{color:#555;font-size:11px}
+  .barcode-wrap{text-align:center;margin:10px 0}
+  .row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px dotted #ccc;font-size:13px}
+  .row span:first-child{color:#555}
+  .row span:last-child{font-weight:700}
+  .cod{background:#111;color:#fff;text-align:center;padding:10px;border-radius:6px;margin-top:10px;font-size:16px;font-weight:800}
+  .foot{text-align:center;margin-top:10px;font-size:11px;color:#777}
+  @media print{ .no-print{display:none} }
+  .no-print{text-align:center;margin-top:14px}
+  .no-print button{padding:8px 20px;font-size:14px;cursor:pointer}
+</style></head>
+<body>
+  <div class="slip">
+    <div class="head">
+      <h2>${esc(storeName)}</h2>
+      <small>بون كوموند / Bon de Commande</small>
+    </div>
+    <div class="barcode-wrap"><svg id="bcode"></svg></div>
+    <div class="row"><span>رقم الطلب</span><span>${esc(o.id)}</span></div>
+    <div class="row"><span>التاريخ</span><span>${esc(o.date||"—")}</span></div>
+    <div class="row"><span>الزبون</span><span>${esc(o.name||"—")}</span></div>
+    <div class="row"><span>الهاتف</span><span>${esc(o.phone||"—")}</span></div>
+    <div class="row"><span>الولاية</span><span>${esc(o.city||"—")}</span></div>
+    <div class="row"><span>العنوان</span><span>${esc(o.address||"—")}</span></div>
+    <div class="row"><span>نوع التوصيل</span><span>${esc(deliveryLabel)}</span></div>
+    <div class="row"><span>المنتج</span><span>${esc(o.product||"—")}</span></div>
+    <div class="row"><span>الكمية</span><span>${esc(o.qty||1)}</span></div>
+    <div class="cod">المبلغ للتحصيل: ${esc(o.total||0)} ${esc(cur)}</div>
+    <div class="foot">Propulsé par OrderFlow</div>
+  </div>
+  <div class="no-print">
+    <button onclick="window.print()">🖨️ طباعة</button>
+  </div>
+  <script>
+    JsBarcode("#bcode", ${JSON.stringify(o.id)}, {
+      format: "CODE128", width: 2, height: 55, displayValue: true, fontSize: 13, margin: 6
+    });
+  <\/script>
+</body></html>`);
+  w.document.close();
+}
 async function updateStatus(orderId, newStatus){
   try{
     var r = await apiPost("/updateStatus", {orderId:orderId, status:newStatus});
