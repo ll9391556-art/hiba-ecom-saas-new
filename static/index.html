@@ -566,6 +566,7 @@ select.status-sel{background:var(--card2);border:1px solid var(--border);color:v
             <th>📅 <span data-i18n="sent">Envoyé</span></th>
             <th>📦 <span data-i18n="delivered_date">Livré</span></th>
             <th data-i18n="status">Statut</th>
+            <th></th>
           </tr></thead>
           <tbody id="ordersTbl"></tbody>
         </table>
@@ -620,14 +621,16 @@ select.status-sel{background:var(--card2);border:1px solid var(--border);color:v
           <i class="bi bi-plus-lg"></i> <span data-i18n="add_city">Ajouter</span>
         </button>
       </div>
-      <table>
-        <thead><tr>
-          <th data-i18n="city">Ville</th><th data-i18n="home_cost_th">🏠 منزل (تكلفة)</th><th data-i18n="home_cust_th">🏠 منزل (زبون)</th>
-          <th data-i18n="desk_cost_th">🏢 مكتب (تكلفة)</th><th data-i18n="desk_cust_th">🏢 مكتب (زبون)</th><th data-i18n="return_fee_shared">Retour</th>
-          <th data-i18n="return_fee_shared">Retour</th><th></th>
-        </tr></thead>
-        <tbody id="citiesTbl"></tbody>
-      </table>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr>
+            <th data-i18n="city">Ville</th><th data-i18n="home_cost_th">🏠 منزل (تكلفة)</th><th data-i18n="home_cust_th">🏠 منزل (زبون)</th>
+            <th data-i18n="desk_cost_th">🏢 مكتب (تكلفة)</th><th data-i18n="desk_cust_th">🏢 مكتب (زبون)</th><th data-i18n="return_fee_shared">Retour</th>
+            <th></th>
+          </tr></thead>
+          <tbody id="citiesTbl"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -1859,20 +1862,20 @@ async function loadTrendChart(cur){
 // =========================================================
 async function loadOrders(){
   var tbl = document.getElementById("ordersTbl");
-  tbl.innerHTML = '<tr><td colspan="14" class="empty-state"><span class="spinner"></span></td></tr>';
+  tbl.innerHTML = '<tr><td colspan="15" class="empty-state"><span class="spinner"></span></td></tr>';
   try{
     var r = await apiGet("/getOrders", {});
     if(r.status==="ok"){
       allOrders = r.data||[];
       renderOrders(allOrders);
     }
-  }catch(e){ tbl.innerHTML='<tr><td colspan="14" class="empty-state">Erreur</td></tr>'; }
+  }catch(e){ tbl.innerHTML='<tr><td colspan="15" class="empty-state">Erreur</td></tr>'; }
 }
 
 function renderOrders(orders){
   var tbl = document.getElementById("ordersTbl");
   if(!orders||!orders.length){
-    tbl.innerHTML='<tr><td colspan="14"><div class="empty-state"><i class="bi bi-bag"></i>'+t("nav_orders")+'</div></td></tr>';
+    tbl.innerHTML='<tr><td colspan="15"><div class="empty-state"><i class="bi bi-bag"></i>'+t("nav_orders")+'</div></td></tr>';
     return;
   }
   var cur = curSym();
@@ -2179,7 +2182,7 @@ async function deleteCity(name){
     var r = await apiPost("/deleteCity", {name:name});
     if(r.status==="ok"){ toast("✅ تم حذف الولاية","ok"); loadCities(); }
     else toast("❌ "+r.message,"err");
-  }catch(e){ toast("خطأ فالاتصال","err"); }
+  }catch(e){ toast("Erreur réseau","err"); }
 }
 
 async function addCity(){
