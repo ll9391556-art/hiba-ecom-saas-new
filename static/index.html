@@ -1979,6 +1979,14 @@ async function addOrder(){
 // =========================================================
 // طباعة بون دو كوموند + كود بار لكل طلب (يُسلَّم لشركة التوصيل)
 // =========================================================
+// =========================================================
+// طباعة بون دو كوموند + كود بار لكل طلب (يُسلَّم لشركة التوصيل)
+// ملاحظة: نبني الـ HTML بتجميع نص عادي (+) بلا backticks وبلا أي وسم
+// <script> جوه النافذة المنبثقة — لأن أي وسم <script> أو backtick متداخل
+// جوه template literal يقدر يكسر بارسينغ الصفحة الرئيسية بالكامل. نولّد
+// الباركود هنا فالصفحة الرئيسية (JsBarcode محمّلة أصلاً فالـ head) ونحقن
+// الـ SVG الجاهز كنص عادي داخل الصفحة المطبوعة.
+// =========================================================
 async function printOrderSlip(orderId){
   var o = allOrders.find(function(x){ return x.id===orderId; });
   if(!o){ toast("الطلب غير موجود","err"); return; }
@@ -1992,58 +2000,56 @@ async function printOrderSlip(orderId){
   var cur = curSym();
   var deliveryLabel = o.deliveryType==="desk" ? "🏢 مكتب الاستلام (Stop Desk)" : "🏠 توصيل للمنزل";
 
+  var barcodeSvgMarkup = "";
+  try{
+    var tmpSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    JsBarcode(tmpSvg, o.id, { format:"CODE128", width:2, height:55, displayValue:true, fontSize:13, margin:6 });
+    barcodeSvgMarkup = tmpSvg.outerHTML;
+  }catch(e){ barcodeSvgMarkup = ""; }
+
   var w = window.open("", "_blank", "width=420,height=600");
   if(!w){ toast("فعّل النوافذ المنبثقة (Popups) للطباعة","err"); return; }
 
-  w.document.write(`<!DOCTYPE html>
-<html lang="ar" dir="rtl"><head><meta charset="UTF-8"/>
-<title>بون كوموند — ${esc(o.id)}</title>
-<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
-<style>
-  *{box-sizing:border-box;margin:0;padding:0;font-family:Arial,'Segoe UI',sans-serif}
-  body{padding:16px;color:#111}
-  .slip{max-width:380px;margin:0 auto;border:2px solid #111;border-radius:6px;padding:14px}
-  .head{text-align:center;border-bottom:2px dashed #111;padding-bottom:10px;margin-bottom:10px}
-  .head h2{font-size:18px}
-  .head small{color:#555;font-size:11px}
-  .barcode-wrap{text-align:center;margin:10px 0}
-  .row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px dotted #ccc;font-size:13px}
-  .row span:first-child{color:#555}
-  .row span:last-child{font-weight:700}
-  .cod{background:#111;color:#fff;text-align:center;padding:10px;border-radius:6px;margin-top:10px;font-size:16px;font-weight:800}
-  .foot{text-align:center;margin-top:10px;font-size:11px;color:#777}
-  @media print{ .no-print{display:none} }
-  .no-print{text-align:center;margin-top:14px}
-  .no-print button{padding:8px 20px;font-size:14px;cursor:pointer}
-</style></head>
-<body>
-  <div class="slip">
-    <div class="head">
-      <h2>${esc(storeName)}</h2>
-      <small>بون كوموند / Bon de Commande</small>
-    </div>
-    <div class="barcode-wrap"><svg id="bcode"></svg></div>
-    <div class="row"><span>رقم الطلب</span><span>${esc(o.id)}</span></div>
-    <div class="row"><span>التاريخ</span><span>${esc(o.date||"—")}</span></div>
-    <div class="row"><span>الزبون</span><span>${esc(o.name||"—")}</span></div>
-    <div class="row"><span>الهاتف</span><span>${esc(o.phone||"—")}</span></div>
-    <div class="row"><span>الولاية</span><span>${esc(o.city||"—")}</span></div>
-    <div class="row"><span>العنوان</span><span>${esc(o.address||"—")}</span></div>
-    <div class="row"><span>نوع التوصيل</span><span>${esc(deliveryLabel)}</span></div>
-    <div class="row"><span>المنتج</span><span>${esc(o.product||"—")}</span></div>
-    <div class="row"><span>الكمية</span><span>${esc(o.qty||1)}</span></div>
-    <div class="cod">المبلغ للتحصيل: ${esc(o.total||0)} ${esc(cur)}</div>
-    <div class="foot">Propulsé par OrderFlow</div>
-  </div>
-  <div class="no-print">
-    <button onclick="window.print()">🖨️ طباعة</button>
-  </div>
-  <script>
-    JsBarcode("#bcode", ${JSON.stringify(o.id)}, {
-      format: "CODE128", width: 2, height: 55, displayValue: true, fontSize: 13, margin: 6
-    });
-  <\/script>
-</body></html>`);
+  var html = "";
+  html += "<!DOCTYPE html><html lang=\"ar\" dir=\"rtl\"><head><meta charset=\"UTF-8\"/>";
+  html += "<title>بون كوموند — " + esc(o.id) + "</title>";
+  html += "<style>";
+  html += "*{box-sizing:border-box;margin:0;padding:0;font-family:Arial,'Segoe UI',sans-serif}";
+  html += "body{padding:16px;color:#111}";
+  html += ".slip{max-width:380px;margin:0 auto;border:2px solid #111;border-radius:6px;padding:14px}";
+  html += ".head{text-align:center;border-bottom:2px dashed #111;padding-bottom:10px;margin-bottom:10px}";
+  html += ".head h2{font-size:18px}";
+  html += ".head small{color:#555;font-size:11px}";
+  html += ".barcode-wrap{text-align:center;margin:10px 0}";
+  html += ".row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px dotted #ccc;font-size:13px}";
+  html += ".row span:first-child{color:#555}";
+  html += ".row span:last-child{font-weight:700}";
+  html += ".cod{background:#111;color:#fff;text-align:center;padding:10px;border-radius:6px;margin-top:10px;font-size:16px;font-weight:800}";
+  html += ".foot{text-align:center;margin-top:10px;font-size:11px;color:#777}";
+  html += "@media print{ .no-print{display:none} }";
+  html += ".no-print{text-align:center;margin-top:14px}";
+  html += ".no-print button{padding:8px 20px;font-size:14px;cursor:pointer}";
+  html += "</style></head><body>";
+  html += "<div class=\"slip\">";
+  html += "<div class=\"head\"><h2>" + esc(storeName) + "</h2><small>بون كوموند / Bon de Commande</small></div>";
+  html += "<div class=\"barcode-wrap\">" + barcodeSvgMarkup + "</div>";
+  html += "<div class=\"row\"><span>رقم الطلب</span><span>" + esc(o.id) + "</span></div>";
+  html += "<div class=\"row\"><span>التاريخ</span><span>" + esc(o.date||"—") + "</span></div>";
+  html += "<div class=\"row\"><span>الزبون</span><span>" + esc(o.name||"—") + "</span></div>";
+  html += "<div class=\"row\"><span>الهاتف</span><span>" + esc(o.phone||"—") + "</span></div>";
+  html += "<div class=\"row\"><span>الولاية</span><span>" + esc(o.city||"—") + "</span></div>";
+  html += "<div class=\"row\"><span>العنوان</span><span>" + esc(o.address||"—") + "</span></div>";
+  html += "<div class=\"row\"><span>نوع التوصيل</span><span>" + esc(deliveryLabel) + "</span></div>";
+  html += "<div class=\"row\"><span>المنتج</span><span>" + esc(o.product||"—") + "</span></div>";
+  html += "<div class=\"row\"><span>الكمية</span><span>" + esc(o.qty||1) + "</span></div>";
+  html += "<div class=\"cod\">المبلغ للتحصيل: " + esc(o.total||0) + " " + esc(cur) + "</div>";
+  html += "<div class=\"foot\">Propulsé par OrderFlow</div>";
+  html += "</div>";
+  html += "<div class=\"no-print\"><button onclick=\"window.print()\">🖨️ طباعة</button></div>";
+  html += "</body></html>";
+
+  w.document.open();
+  w.document.write(html);
   w.document.close();
 }
 
