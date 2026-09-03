@@ -3265,6 +3265,7 @@ from features.support_api import support_bp
 from features.shipping_api import shipping_bp
 from features.assistant_api import assistant_bp
 from features.multistore_api import multistore_bp
+from features.bot_only_api import bot_bp
 
 app.register_blueprint(discounts_bp)
 app.register_blueprint(tracking_bp)
@@ -3272,6 +3273,7 @@ app.register_blueprint(support_bp)
 app.register_blueprint(shipping_bp)
 app.register_blueprint(assistant_bp)
 app.register_blueprint(multistore_bp)
+app.register_blueprint(bot_bp)
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port, debug=False)
