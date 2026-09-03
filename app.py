@@ -3259,7 +3259,8 @@ def webhook():
             logging.error(f"handle() error: {e}")
     _executor.submit(handle, data)
     return "OK", 200
-
+from features.discounts_api import discounts_bp
+app.register_blueprint(discounts_bp)
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port, debug=False)
