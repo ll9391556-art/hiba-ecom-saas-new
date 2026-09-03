@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>أكواد الخصم — OrderFlow</title>
+<style>
+:root{--bg:#0d1b2e;--card:#111f35;--card2:#0f1c30;--accent:#2563eb;--green:#10b981;--red:#ef4444;
+--text:#e8edf5;--muted:#8899bb;--border:rgba(255,255,255,.07)}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',Arial,sans-serif;padding:20px}
+.wrap{max-width:900px;margin:0 auto}
+h1{font-size:20px;margin-bottom:16px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:18px}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:12px}
+label{display:block;font-size:11px;color:var(--muted);margin-bottom:5px}
+input,select{width:100%;background:var(--card2);border:1px solid var(--border);color:var(--text);
+border-radius:8px;padding:8px 10px;font-size:13px}
+button{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:9px 18px;
+font-size:13px;font-weight:700;cursor:pointer}
+button:hover{opacity:.9}
+.btn-danger{background:rgba(239,68,68,.15);color:var(--red);border:1px solid rgba(239,68,68,.3)}
+table{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px}
+th{text-align:right;color:var(--muted);font-size:11px;padding:8px;border-bottom:1px solid var(--border)}
+td{padding:8px;border-bottom:1px solid var(--border)}
+.badge{padding:2px 8px;border-radius:12px;font-size:10px;font-weight:700}
+.b-on{background:rgba(16,185,129,.15);color:var(--green)}
+.b-off{background:rgba(239,68,68,.15);color:var(--red)}
+.msg{margin-top:10px;font-size:12px;display:none}
+.msg.ok{color:var(--green);display:block}
+.msg.err{color:var(--red);display:block}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🏷️ أكواد الخصم والقسائم</h1>
+
+  <div class="card">
+    <h3 style="margin-bottom:14px;font-size:14px">➕ إنشاء قسيمة جديدة</h3>
+    <div class="row">
+      <div><label>الكود (اتركه فارغ لتوليد تلقائي)</label><input id="c_code" placeholder="EX: SUMMER20"/></div>
+      <div><label>النوع</label><select id="c_type"><option value="percent">نسبة %</option><option value="fixed">مبلغ ثابت</option></select></div>
+      <div><label>القيمة</label><input id="c_value" type="number" value="10"/></div>
+      <div><label>حد أدنى للطلب</label><input id="c_min" type="number" value="0"/></div>
+      <div><label>عدد مرات الاستعمال (0=بلا حد)</label><input id="c_max" type="number" value="0"/></div>
+      <div><label>تاريخ الانتهاء (اختياري)</label><input id="c_exp" type="date"/></div>
+    </div>
+    <button onclick="createCoupon()">إنشاء القسيمة</button>
+    <div id="createMsg" class="msg"></div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-bottom:10px;font-size:14px">📋 القسائم الحالية</h3>
+    <div id="couponsBox">⏳ جاري التحميل...</div>
+  </div>
+</div>
+
+<script>
+var API_URL = "https://orderconfidence.com/api";
+var authToken = localStorage.getItem("of_token");
+
+async function apiGet(path, params){
+  var url = API_URL+path+(params?("?"+new URLSearchParams(params)):"");
+  var r = await fetch(url, {headers:{"Authorization":"Bearer "+authToken}});
+  return r.json();
+}
+async function apiPost(path, body){
+  var r = await fetch(API_URL+path, {method:"POST",
+    headers:{"Content-Type":"application/json","Authorization":"Bearer "+authToken},
+    body:JSON.stringify(body)});
+  return r.json();
+}
+function esc(s){ return String(s??"").replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); }
+
+async function loadCoupons(){
+  var box = document.getElementById("couponsBox");
+  var r = await apiGet("/coupons/list");
+  if(r.status!=="ok"){ box.innerHTML = "❌ "+esc(r.message); return; }
+  if(!r.data.length){ box.innerHTML = "لا توجد قسائم بعد"; return; }
+  box.innerHTML = '<table><thead><tr><th>الكود</th><th>النوع</th><th>القيمة</th><th>الاستعمال</th><th>الحالة</th><th></th></tr></thead><tbody>'+
+    r.data.map(function(c){
+      var val = c.type==="percent" ? c.value+"%" : c.value+" دج";
+      var used = c.maxUses ? (c.usedCount+" / "+c.maxUses) : (c.usedCount+" / ∞");
+      return '<tr><td><strong>'+esc(c.code)+'</strong></td><td>'+(c.type==="percent"?"نسبة":"ثابت")+'</td>'+
+        '<td>'+val+'</td><td>'+used+'</td>'+
+        '<td><span class="badge '+(c.active?"b-on":"b-off")+'">'+(c.active?"فعّالة":"موقوفة")+'</span></td>'+
+        '<td>'+
+          '<button style="padding:4px 10px;font-size:11px" onclick="toggleCoupon(\''+esc(c.code)+'\','+(!c.active)+')">'+(c.active?"إيقاف":"تفعيل")+'</button> '+
+          '<button class="btn-danger" style="padding:4px 10px;font-size:11px" onclick="deleteCoupon(\''+esc(c.code)+'\')">حذف</button>'+
+        '</td></tr>';
+    }).join("")+'</tbody></table>';
+}
+
+async function createCoupon(){
+  var data = {
+    code: document.getElementById("c_code").value.trim(),
+    type: document.getElementById("c_type").value,
+    value: parseFloat(document.getElementById("c_value").value)||0,
+    minOrderTotal: parseFloat(document.getElementById("c_min").value)||0,
+    maxUses: parseInt(document.getElementById("c_max").value)||0,
+    expiresAt: document.getElementById("c_exp").value,
+    active: true,
+  };
+  var r = await apiPost("/coupons/create", data);
+  var msg = document.getElementById("createMsg");
+  if(r.status==="ok"){
+    msg.className="msg ok"; msg.textContent="✅ تم إنشاء القسيمة: "+r.data.code;
+    loadCoupons();
+  } else { msg.className="msg err"; msg.textContent="❌ "+r.message; }
+}
+
+async function toggleCoupon(code, active){
+  await apiPost("/coupons/update", {code:code, active:active});
+  loadCoupons();
+}
+async function deleteCoupon(code){
+  if(!confirm("حذف "+code+" نهائياً؟")) return;
+  await apiPost("/coupons/delete", {code:code});
+  loadCoupons();
+}
+
+loadCoupons();
+</script>
+</body>
+</html>

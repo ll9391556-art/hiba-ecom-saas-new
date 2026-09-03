@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>الدعم الفني — OrderFlow</title>
+<style>
+:root{--bg:#0d1b2e;--card:#111f35;--card2:#0f1c30;--accent:#2563eb;--green:#10b981;--red:#ef4444;
+--text:#e8edf5;--muted:#8899bb;--border:rgba(255,255,255,.07)}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',Arial,sans-serif;padding:20px}
+.wrap{max-width:640px;margin:0 auto}
+h1{font-size:20px;margin-bottom:16px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:22px;margin-bottom:16px}
+label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+select,textarea{width:100%;background:var(--card2);border:1px solid var(--border);color:var(--text);
+border-radius:8px;padding:10px 12px;font-size:13px;font-family:inherit}
+textarea{min-height:120px;resize:vertical;margin-top:14px}
+button{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px 22px;
+font-size:13px;font-weight:700;cursor:pointer;margin-top:14px}
+.msg{margin-top:12px;font-size:12px;display:none}
+.msg.ok{color:var(--green);display:block}
+.msg.err{color:var(--red);display:block}
+table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
+th{text-align:right;color:var(--muted);font-size:11px;padding:6px;border-bottom:1px solid var(--border)}
+td{padding:6px;border-bottom:1px solid var(--border)}
+.badge{padding:2px 8px;border-radius:12px;font-size:10px;font-weight:700}
+.b-open{background:rgba(245,158,11,.15);color:#f59e0b}
+.b-closed{background:rgba(16,185,129,.15);color:var(--green)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>💬 تواصل مع فريق الدعم</h1>
+
+  <div class="card">
+    <label>نوع الرسالة</label>
+    <select id="s_type">
+      <option value="bug">🐛 مشكلة تقنية</option>
+      <option value="suggestion">💡 اقتراح</option>
+      <option value="feature_request">✨ طلب ميزة جديدة</option>
+      <option value="other">📋 أخرى</option>
+    </select>
+    <textarea id="s_message" placeholder="اشرحلنا مشكلتك أو اقتراحك بالتفصيل..."></textarea>
+    <button onclick="submitTicket()">إرسال</button>
+    <div id="submitMsg" class="msg"></div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-bottom:10px;font-size:14px">📋 رسائلك السابقة</h3>
+    <div id="ticketsBox">⏳ جاري التحميل...</div>
+  </div>
+</div>
+
+<script>
+var API_URL = "https://orderconfidence.com/api";
+var authToken = localStorage.getItem("of_token");
+
+async function apiGet(path){
+  var r = await fetch(API_URL+path, {headers:{"Authorization":"Bearer "+authToken}});
+  return r.json();
+}
+async function apiPost(path, body){
+  var r = await fetch(API_URL+path, {method:"POST",
+    headers:{"Content-Type":"application/json","Authorization":"Bearer "+authToken},
+    body:JSON.stringify(body)});
+  return r.json();
+}
+function esc(s){ return String(s??"").replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); }
+
+var TYPE_LABELS = {bug:"🐛 مشكلة",suggestion:"💡 اقتراح",feature_request:"✨ طلب ميزة",other:"📋 أخرى"};
+
+async function submitTicket(){
+  var type = document.getElementById("s_type").value;
+  var message = document.getElementById("s_message").value.trim();
+  var msg = document.getElementById("submitMsg");
+  if(!message){ msg.className="msg err"; msg.textContent="اكتب رسالتك أولاً"; return; }
+  var r = await apiPost("/support/submit", {type:type, message:message});
+  if(r.status==="ok"){
+    msg.className="msg ok"; msg.textContent="✅ تم الإرسال، راح نتواصل معك قريباً";
+    document.getElementById("s_message").value = "";
+    loadTickets();
+  } else { msg.className="msg err"; msg.textContent="❌ "+r.message; }
+}
+
+async function loadTickets(){
+  var box = document.getElementById("ticketsBox");
+  var r = await apiGet("/support/myTickets");
+  if(r.status!=="ok"){ box.innerHTML="❌ "+esc(r.message); return; }
+  if(!r.data.length){ box.innerHTML="لا توجد رسائل سابقة"; return; }
+  box.innerHTML = '<table><thead><tr><th>التاريخ</th><th>النوع</th><th>الرسالة</th><th>الحالة</th></tr></thead><tbody>'+
+    r.data.map(function(t){
+      return '<tr><td style="white-space:nowrap">'+esc(t.created_at)+'</td>'+
+        '<td>'+(TYPE_LABELS[t.type]||t.type)+'</td>'+
+        '<td>'+esc((t.message||"").substring(0,80))+'</td>'+
+        '<td><span class="badge '+(t.status==="open"?"b-open":"b-closed")+'">'+(t.status==="open"?"قيد المعالجة":"مغلقة")+'</span></td></tr>';
+    }).join("")+'</tbody></table>';
+}
+
+loadTickets();
+</script>
+</body>
+</html>

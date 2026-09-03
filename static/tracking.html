@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>أدوات التتبع الإعلاني — OrderFlow</title>
+<style>
+:root{--bg:#0d1b2e;--card:#111f35;--card2:#0f1c30;--accent:#2563eb;--green:#10b981;--red:#ef4444;
+--text:#e8edf5;--muted:#8899bb;--border:rgba(255,255,255,.07)}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',Arial,sans-serif;padding:20px}
+.wrap{max-width:640px;margin:0 auto}
+h1{font-size:20px;margin-bottom:16px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:22px;margin-bottom:16px}
+.field{margin-bottom:16px}
+label{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);margin-bottom:6px;font-weight:700}
+.hint{font-size:11px;color:var(--muted);margin-bottom:6px}
+input{width:100%;background:var(--card2);border:1px solid var(--border);color:var(--text);
+border-radius:8px;padding:9px 12px;font-size:13px}
+button{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px 22px;
+font-size:13px;font-weight:700;cursor:pointer;margin-top:6px}
+.msg{margin-top:12px;font-size:12px;display:none}
+.msg.ok{color:var(--green);display:block}
+.msg.err{color:var(--red);display:block}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>📈 أدوات التتبع الإعلاني</h1>
+  <div class="card">
+    <p class="hint" style="margin-bottom:16px">أدخلي معرّفات البكسل تبعك، وراح تنحقن تلقائياً بصفحة متجرك العامة
+    (بلا حاجة تلمسي أي كود). الأحداث الأساسية (زيارة الصفحة، إضافة للسلة، بدء الدفع، الشراء) بتنتبّع أوتوماتيكياً.</p>
+
+    <div class="field">
+      <label>📘 Meta Pixel ID (فيسبوك/إنستغرام)</label>
+      <input id="t_meta" placeholder="مثال: 123456789012345"/>
+    </div>
+    <div class="field">
+      <label>🎵 TikTok Pixel ID</label>
+      <input id="t_tiktok" placeholder="مثال: CXXXXXXXXXXXXXXXXXXX"/>
+    </div>
+    <div class="field">
+      <label>🔍 Google Ads Conversion ID</label>
+      <input id="t_gads" placeholder="مثال: AW-1234567890"/>
+    </div>
+    <div class="field">
+      <label>📊 Google Analytics (GA4) ID</label>
+      <input id="t_ga4" placeholder="مثال: G-XXXXXXXXXX"/>
+    </div>
+    <div class="field">
+      <label>👻 Snapchat Pixel ID</label>
+      <input id="t_snap" placeholder="مثال: xxxxxxxx-xxxx-xxxx"/>
+    </div>
+
+    <button onclick="saveTracking()">حفظ الإعدادات</button>
+    <div id="saveMsg" class="msg"></div>
+  </div>
+</div>
+
+<script>
+var API_URL = "https://orderconfidence.com/api";
+var authToken = localStorage.getItem("of_token");
+
+async function apiGet(path){
+  var r = await fetch(API_URL+path, {headers:{"Authorization":"Bearer "+authToken}});
+  return r.json();
+}
+async function apiPost(path, body){
+  var r = await fetch(API_URL+path, {method:"POST",
+    headers:{"Content-Type":"application/json","Authorization":"Bearer "+authToken},
+    body:JSON.stringify(body)});
+  return r.json();
+}
+
+async function loadTracking(){
+  var r = await apiGet("/tracking/getSettings");
+  if(r.status==="ok"){
+    var d = r.data||{};
+    document.getElementById("t_meta").value = d.metaPixelId||"";
+    document.getElementById("t_tiktok").value = d.tiktokPixelId||"";
+    document.getElementById("t_gads").value = d.googleAdsId||"";
+    document.getElementById("t_ga4").value = d.googleAnalyticsId||"";
+    document.getElementById("t_snap").value = d.snapPixelId||"";
+  }
+}
+
+async function saveTracking(){
+  var data = {
+    metaPixelId: document.getElementById("t_meta").value.trim(),
+    tiktokPixelId: document.getElementById("t_tiktok").value.trim(),
+    googleAdsId: document.getElementById("t_gads").value.trim(),
+    googleAnalyticsId: document.getElementById("t_ga4").value.trim(),
+    snapPixelId: document.getElementById("t_snap").value.trim(),
+  };
+  var r = await apiPost("/tracking/save", data);
+  var msg = document.getElementById("saveMsg");
+  if(r.status==="ok"){ msg.className="msg ok"; msg.textContent="✅ تم الحفظ بنجاح"; }
+  else { msg.className="msg err"; msg.textContent="❌ "+r.message; }
+}
+
+loadTracking();
+</script>
+</body>
+</html>
