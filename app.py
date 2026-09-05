@@ -417,6 +417,8 @@ PLANS = {
                     "orderCap": 300, "botMsgCap": 3000},
     "lifetime":   {"bot": True,  "store": True,  "landing": True,  "dashboard": True, "orders": True, "integrations": True,  "team": True,  "label": "Lifetime",
                     "orderCap": 300, "botMsgCap": 3000},
+    "bot_only":   {"bot": True, "store": False, "landing": False, "dashboard": False,
+                    "orders": False, "integrations": False, "team": False, "label": "Bot Only"},
 }
 
 CURRENCY_SYMBOLS_PY = {"DZD": "دج", "EUR": "€", "USD": "$"}
@@ -1158,6 +1160,8 @@ def api_team_delete_member():
         return err_json("العضو غير موجود", 404)
     _fb_delete(f"data/{uid}/teamMembers/{username}")
     _fb_delete(f"team_users/{username}")
+    from features.assistant_api import log_audit_entry
+    log_audit_entry(uid, request.auth_member_username or "owner", f"حذف عضو فريق {username}")
     return ok_json(True)
 
 def planHas_server(uid, feature):
@@ -1211,7 +1215,7 @@ def api_add_order():
 
     # whitelist صارم — لا نقبل من الزبون غير الموثوق أي حقل غير هذه القائمة (خصوصاً
     # status/profit/id/total التي يجب أن تُحسب أو تُفرض من السيرفر فقط).
-    ALLOWED_CUSTOMER_FIELDS = {"name", "phone", "city", "product", "qty", "address", "deliveryType", "source"}
+    ALLOWED_CUSTOMER_FIELDS = {"name", "phone", "city", "product", "qty", "address", "deliveryType", "source", "couponCode", "discountApplied"}
     d = {k: v for k, v in raw.items() if k in ALLOWED_CUSTOMER_FIELDS}
 
     order_id       = f"ORD-{int(time.time() * 1000)}"
@@ -1235,6 +1239,13 @@ def api_add_order():
         d["total"] = (float(p_data.get("sell", 0)) * d["qty"]) + ship_cust
     else:
         d["total"] = 0
+            # تطبيق الخصم إذا كان الزبون استعمل كود خصم صالح (تحقّق حقيقي صار مسبقاً
+    # بـ /api/coupons/validate من الفرونت — هون بس بنطرح المبلغ من الإجمالي)
+    if d.get("couponCode") and d.get("discountApplied"):
+        try:
+            d["total"] = max(0, d["total"] - float(d["discountApplied"]))
+        except Exception:
+            pass
     _fb_put(f"data/{uid}/orders/{order_id}", d)
     _increment_usage(uid, "orderCount")
     return ok_json({"orderId": order_id})
@@ -1267,6 +1278,9 @@ def api_update_status():
                 _update_product_stock(uid, order.get("product", ""))
     order["profit"] = profit
     _fb_put(f"data/{uid}/orders/{oid}", order)
+    from features.assistant_api import log_audit_entry
+    log_audit_entry(uid, request.auth_member_username or "owner",
+                     "تغيير حالة طلب", f"الطلب {oid} → {status}")
     return ok_json(True)
 
 @app.route("/api/updateOrderDelivery", methods=["POST"])
@@ -1393,6 +1407,8 @@ def api_delete_product():
     name = str(d.get("name") or "").strip()
     if not name: return err_json("Missing fields")
     _fb_delete(f"data/{uid}/products/{name}")
+    from features.assistant_api import log_audit_entry
+    log_audit_entry(uid, request.auth_member_username or "owner", f"حذف منتج {name}")
     return ok_json(True)
 
 @app.route("/api/trackOrder", methods=["GET"])
