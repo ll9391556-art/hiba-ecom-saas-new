@@ -1160,7 +1160,7 @@ def api_team_delete_member():
         return err_json("العضو غير موجود", 404)
     _fb_delete(f"data/{uid}/teamMembers/{username}")
     _fb_delete(f"team_users/{username}")
-    from features.assistant_api import log_audit_entry
+    from static.assistant_api import log_audit_entry
     log_audit_entry(uid, request.auth_member_username or "owner", f"حذف عضو فريق {username}")
     return ok_json(True)
 
@@ -1278,7 +1278,7 @@ def api_update_status():
                 _update_product_stock(uid, order.get("product", ""))
     order["profit"] = profit
     _fb_put(f"data/{uid}/orders/{oid}", order)
-    from features.assistant_api import log_audit_entry
+    from static.assistant_api import log_audit_entry
     log_audit_entry(uid, request.auth_member_username or "owner",
                      "تغيير حالة طلب", f"الطلب {oid} → {status}")
     return ok_json(True)
@@ -1407,7 +1407,7 @@ def api_delete_product():
     name = str(d.get("name") or "").strip()
     if not name: return err_json("Missing fields")
     _fb_delete(f"data/{uid}/products/{name}")
-    from features.assistant_api import log_audit_entry
+    from static.assistant_api import log_audit_entry
     log_audit_entry(uid, request.auth_member_username or "owner", f"حذف منتج {name}")
     return ok_json(True)
 
@@ -3275,13 +3275,13 @@ def webhook():
             logging.error(f"handle() error: {e}")
     _executor.submit(handle, data)
     return "OK", 200
-from features.discounts_api import discounts_bp
-from features.tracking_api import tracking_bp
-from features.support_api import support_bp
-from features.shipping_api import shipping_bp
-from features.assistant_api import assistant_bp
-from features.multistore_api import multistore_bp
-from features.bot_only_api import bot_bp
+from static.features.discounts_api import discounts_bp
+from static.features.tracking_api import tracking_bp
+from static.support_api import support_bp
+from static.features.shipping_api import shipping_bp
+from static.assistant_api import assistant_bp
+from static.features.multistore_api import multistore_bp
+from static.features.bot_only_api import bot_bp
 
 app.register_blueprint(discounts_bp)
 app.register_blueprint(tracking_bp)
