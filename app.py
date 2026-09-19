@@ -3275,13 +3275,12 @@ def webhook():
             logging.error(f"handle() error: {e}")
     _executor.submit(handle, data)
     return "OK", 200
-from static.features.discounts_api import discounts_bp
-from static.features.tracking_api import tracking_bp
-from static.support_api import support_bp
-from static.features.shipping_api import shipping_bp
-from static.assistant_api import assistant_bp
-from static.features.multistore_api import multistore_bp
-from static.features.bot_only_api import bot_bp
+from features.discounts_api import discounts_bp
+from features.tracking_api import tracking_bp
+from features.support_api import support_bp
+from features.shipping_api import shipping_bp
+from features.assistant_api import assistant_bp
+from features.multistore_api import multistore_bp
 
 app.register_blueprint(discounts_bp)
 app.register_blueprint(tracking_bp)
