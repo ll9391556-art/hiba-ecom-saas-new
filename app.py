@@ -1160,7 +1160,7 @@ def api_team_delete_member():
         return err_json("العضو غير موجود", 404)
     _fb_delete(f"data/{uid}/teamMembers/{username}")
     _fb_delete(f"team_users/{username}")
-    from static.assistant_api import log_audit_entry
+    from features.assistant_api import log_audit_entry
     log_audit_entry(uid, request.auth_member_username or "owner", f"حذف عضو فريق {username}")
     return ok_json(True)
 
@@ -1278,7 +1278,7 @@ def api_update_status():
                 _update_product_stock(uid, order.get("product", ""))
     order["profit"] = profit
     _fb_put(f"data/{uid}/orders/{oid}", order)
-    from static.assistant_api import log_audit_entry
+    from features.assistant_api import log_audit_entry
     log_audit_entry(uid, request.auth_member_username or "owner",
                      "تغيير حالة طلب", f"الطلب {oid} → {status}")
     return ok_json(True)
@@ -1407,7 +1407,7 @@ def api_delete_product():
     name = str(d.get("name") or "").strip()
     if not name: return err_json("Missing fields")
     _fb_delete(f"data/{uid}/products/{name}")
-    from static.assistant_api import log_audit_entry
+    from features.assistant_api import log_audit_entry
     log_audit_entry(uid, request.auth_member_username or "owner", f"حذف منتج {name}")
     return ok_json(True)
 
@@ -3288,7 +3288,6 @@ app.register_blueprint(support_bp)
 app.register_blueprint(shipping_bp)
 app.register_blueprint(assistant_bp)
 app.register_blueprint(multistore_bp)
-app.register_blueprint(bot_bp)
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port, debug=False)
