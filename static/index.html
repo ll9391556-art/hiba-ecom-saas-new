@@ -457,20 +457,21 @@ select.status-sel{background:var(--card2);border:1px solid var(--border);color:v
     <div class="nav-item" onclick="showSection('settings')">
       <i class="bi bi-gear"></i><span data-i18n="nav_settings">Paramètres</span>
     </div>
-        <div class="nav-item" onclick="window.open('/static/features/discounts.html','_blank')">
-      <i class="bi bi-tag"></i><span>أكواد الخصم</span>
+       <!-- بعد: زدنا data-i18n لكل span -->
+    <div class="nav-item" onclick="window.open('/static/features/discounts.html','_blank')">
+     <i class="bi bi-tag"></i><span data-i18n="nav_discounts">أكواد الخصم</span>
     </div>
     <div class="nav-item" onclick="window.open('/static/features/tracking.html','_blank')">
-      <i class="bi bi-graph-up-arrow"></i><span>التتبع الإعلاني</span>
+     <i class="bi bi-graph-up-arrow"></i><span data-i18n="nav_tracking">التتبع الإعلاني</span>
     </div>
     <div class="nav-item" onclick="window.open('/static/features/shipping.html','_blank')">
-      <i class="bi bi-truck"></i><span>شركات الشحن</span>
+     <i class="bi bi-truck"></i><span data-i18n="nav_shipping">شركات الشحن</span>
     </div>
     <div class="nav-item" onclick="window.open('/static/features/assistant.html','_blank')">
-      <i class="bi bi-robot"></i><span>المساعد الإداري</span>
+     <i class="bi bi-robot"></i><span data-i18n="nav_assistant">المساعد الإداري</span>
     </div>
     <div class="nav-item" onclick="window.open('/static/features/support.html','_blank')">
-      <i class="bi bi-headset"></i><span>الدعم الفني</span>
+     <i class="bi bi-headset"></i><span data-i18n="nav_support">الدعم الفني</span>
     </div>
   </div>
   <div class="sidebar-footer">
@@ -1235,7 +1236,7 @@ var I18N = {
   FR:{
     nav_dashboard:"Tableau de bord",nav_orders:"Commandes",nav_products:"Produits",
     nav_customers:"Clients",nav_cities:"Villes",nav_store:"Boutique",nav_bot:"Bot AI",
-    nav_plans:"Abonnements",nav_settings:"Paramètres",logout:"Déconnexion",
+    nav_plans:"Abonnements",nav_settings:"Paramètres",nav_discounts:"Codes promo", nav_tracking:"Suivi publicitaire",nav_shipping:"Sociétés de livraison", nav_assistant:"Assistant administratif",nav_support:"Support technique", logout:"Déconnexion",
     total_orders:"Total Commandes",confirmed:"Confirmées",refused:"Refusées",
     delivered:"Livré",total_profit:"Bénéfice Total",top_products:"Top Produits",
     low_stock:"Stock Faible",add_order:"Ajouter commande",add_product:"Ajouter produit",
@@ -1294,7 +1295,7 @@ var I18N = {
   AR:{
     nav_dashboard:"الرئيسية",nav_orders:"الطلبات",nav_products:"المنتجات",
     nav_customers:"العملاء",nav_cities:"المدن",nav_store:"المتجر",nav_bot:"بوت الذكاء",
-    nav_plans:"الاشتراكات",nav_settings:"الإعدادات",logout:"تسجيل الخروج",
+    nav_plans:"الاشتراكات",nav_settings:"الإعدادات",nav_discounts:"أكواد الخصم", nav_tracking:"التتبع الإعلاني",nav_shipping:"شركات الشحن", nav_assistant:"المساعد الإداري",nav_support:"الدعم الفني", logout:"تسجيل الخروج",
     total_orders:"إجمالي الطلبات",confirmed:"المؤكدة",refused:"المرفوضة",
     delivered:"تم التسليم",total_profit:"إجمالي الأرباح",top_products:"أفضل المنتجات",
     low_stock:"مخزون منخفض",add_order:"إضافة طلب",add_product:"إضافة منتج",
@@ -1353,7 +1354,7 @@ var I18N = {
   EN:{
     nav_dashboard:"Dashboard",nav_orders:"Orders",nav_products:"Products",
     nav_customers:"Customers",nav_cities:"Cities",nav_store:"Store",nav_bot:"AI Bot",
-    nav_plans:"Plans",nav_settings:"Settings",logout:"Logout",
+    nav_plans:"Plans",nav_settings:"Settings",nav_discounts:"Discount Codes", nav_tracking:"Ad Tracking",nav_shipping:"Shipping Companies", nav_assistant:"Admin Assistant",nav_support:"Technical Support", logout:"Logout",
     total_orders:"Total Orders",confirmed:"Confirmed",refused:"Refused",
     delivered:"Delivered",total_profit:"Total Profit",top_products:"Top Products",
     low_stock:"Low Stock",add_order:"Add Order",add_product:"Add Product",
