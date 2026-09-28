@@ -3129,6 +3129,12 @@ def verify_sig(raw_body, headers):
         logging.warning(f"اختبار السر (test): {test_hash[:10]}...")
     
     return match
+@app.after_request
+def security_headers(resp):
+    resp.headers["X-Content-Type-Options"] = "nosniff"
+    resp.headers["X-Frame-Options"] = "SAMEORIGIN"
+    resp.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return resp
 @app.before_request
 def limit_size():
     if request.content_length and request.content_length > MAX_PAYLOAD_SIZE:

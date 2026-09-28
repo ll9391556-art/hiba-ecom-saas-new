@@ -2084,17 +2084,17 @@ async function loadProducts(){
       tbl.innerHTML = products.map(function(p){
         var stCls = {InStock:"bc","In Stock":"bc","Low Stock":"bn",LowStock:"bn","Out of Stock":"br",OutOfStock:"br"}[p.stat||""]||"bp";
         return '<tr>'+
-          '<td><strong>'+(p.name||"—")+'</strong></td>'+
-          '<td>'+(p.category||"—")+'</td>'+
-          '<td>'+(p.size||"—")+'</td>'+
-          '<td>'+(p.colors||"—")+'</td>'+
-          '<td>'+(p.cost||0)+' '+cur+'</td>'+
-          '<td><strong>'+(p.sell||0)+' '+cur+'</strong></td>'+
-          '<td>'+(p.init||0)+'</td>'+
-          '<td>'+(p.sold||0)+'</td>'+
-          '<td>'+(p.available||0)+'</td>'+
-          '<td><span class="badge '+(stCls)+'">'+(p.stat||"?")+'</span></td>'+
-          '<td><button class="btn-danger" onclick="deleteProduct(\''+p.name+'\')"><i class="bi bi-trash"></i></button></td>'+
+          '<td><strong>'+esc(p.name||"—")+'</strong></td>'+
+          '<td>'+esc(p.category||"—")+'</td>'+
+          '<td>'+esc(p.size||"—")+'</td>'+
+          '<td>'+esc(p.colors||"—")+'</td>'+
+          '<td>'+esc(p.cost||0)+' '+cur+'</td>'+
+          '<td><strong>'+esc(p.sell||0)+' '+cur+'</strong></td>'+
+          '<td>'+esc(p.init||0)+'</td>'+
+          '<td>'+esc(p.sold||0)+'</td>'+
+          '<td>'+esc(p.available||0)+'</td>'+
+          '<td><span class="badge '+stCls+'">'+esc(p.stat||"?")+'</span></td>'+
+          '<td><button class="btn-danger" data-name="'+esc(p.name)+'" onclick="deleteProduct(this.dataset.name)"><i class="bi bi-trash"></i></button></td>'+
         '</tr>';
       }).join("") || '<tr><td colspan="11"><div class="empty-state"><i class="bi bi-box-seam"></i></div></td></tr>';
     }
@@ -2174,7 +2174,6 @@ async function loadCities(){
       var cur = curSym();
       var tbl = document.getElementById("citiesTbl");
       tbl.innerHTML = (r.data||[]).map(function(c){
-        var safeName = escAttr(c.name);
         return '<tr>'+
           '<td><strong>'+esc(c.name||"—")+'</strong></td>'+
           '<td>'+esc(c.costShip||0)+' '+cur+'</td>'+
@@ -2182,7 +2181,7 @@ async function loadCities(){
           '<td>'+esc(c.deskCost||0)+' '+cur+'</td>'+
           '<td>'+esc(c.deskCust||0)+' '+cur+'</td>'+
           '<td>'+esc(c.returnFee||0)+' '+cur+'</td>'+
-          '<td><button class="btn-danger" onclick="deleteCity(\''+safeName+'\')"><i class="bi bi-trash"></i></button></td>'+
+          '<td><button class="btn-danger" data-name="'+esc(c.name)+'" onclick="deleteCity(this.dataset.name)"><i class="bi bi-trash"></i></button></td>'+
         '</tr>';
       }).join("") || '<tr><td colspan="7"><div class="empty-state"><i class="bi bi-geo-alt"></i></div></td></tr>';
 
@@ -3389,23 +3388,21 @@ function sh_renderGrid(q){
   grid.innerHTML = list.map(function(p){
     var av  = Number(p.available||0);
     var dis = av<=0;
-    var pname = p.name.replace(/'/g,"\\'");
-    var img   = p.image
-      ? '<img src="'+p.image+'" onerror="this.style.display=\'none\'" style="width:100%;height:100%;object-fit:cover"/>'
+    var img = p.image
+      ? '<img src="'+esc(p.image)+'" onerror="this.style.display=\'none\'" style="width:100%;height:100%;object-fit:cover"/>'
       : '📦';
-    return '<div class="shop-card" onclick="pdp_open(\''+pname+'\')" style="cursor:pointer">'+
+    return '<div class="shop-card" data-name="'+esc(p.name)+'" onclick="pdp_open(this.dataset.name)" style="cursor:pointer">'+
       '<div class="shop-card-img">'+img+'</div>'+
       '<div class="shop-card-body">'+
-        '<div class="shop-card-name">'+p.name+'</div>'+
-        (p.category?'<div class="shop-card-cat">'+p.category+'</div>':'')+
+        '<div class="shop-card-name">'+esc(p.name)+'</div>'+
+        (p.category?'<div class="shop-card-cat">'+esc(p.category)+'</div>':'')+
         starsHtml(p.avgRating, p.ratingCount)+
-        (p.description?'<div style="font-size:11px;color:var(--muted);margin-top:4px">'+p.description+'</div>':'')+
+        (p.description?'<div style="font-size:11px;color:var(--muted);margin-top:4px">'+esc(p.description)+'</div>':'')+
         (av>0 && av<=5?'<div style="font-size:11px;color:var(--red);font-weight:700;margin-top:4px">⚡ متبقي '+av+' قطع فقط!</div>':'')+
       '</div>'+
       '<div class="shop-card-footer">'+
-        '<div class="shop-price">'+(p.sell||0)+' '+sh_cur()+'</div>'+
-        '<button class="shop-add-btn"'+(dis?' disabled':'')+
-        ' onclick="event.stopPropagation();sh_addToCart(\''+pname+'\')">'+
+        '<div class="shop-price">'+esc(p.sell||0)+' '+sh_cur()+'</div>'+
+        '<button class="shop-add-btn"'+(dis?' disabled':'')+' data-name="'+esc(p.name)+'" onclick="event.stopPropagation();sh_addToCart(this.dataset.name)">'+
         (dis?'Rupture':'🛒 Ajouter')+'</button>'+
       '</div></div>';
   }).join("");
@@ -3473,11 +3470,12 @@ async function pdp_toggleReviews(){
     var items = (r.status==="ok" && r.data) ? r.data : [];
     if(!items.length){ box.innerHTML = '<div style="color:var(--muted);font-size:12px">لا توجد تقييمات بعد</div>'; return; }
     box.innerHTML = items.map(function(it){
-      var stars = "★".repeat(it.rating)+"☆".repeat(5-it.rating);
+      var rating = Math.max(0, Math.min(5, parseInt(it.rating)||0));
+      var stars = "★".repeat(rating)+"☆".repeat(5-rating);
       return '<div class="review-item">'+
         '<div class="stars-display">'+stars+'</div>'+
-        (it.comment?'<div style="font-size:12px;margin-top:4px">'+it.comment+'</div>':'')+
-        '<div style="font-size:10px;color:var(--muted);margin-top:4px">'+it.date+'</div>'+
+        (it.comment?'<div style="font-size:12px;margin-top:4px">'+esc(it.comment)+'</div>':'')+
+        '<div style="font-size:10px;color:var(--muted);margin-top:4px">'+esc(it.date)+'</div>'+
       '</div>';
     }).join("");
   }catch(e){ box.innerHTML = '<div style="color:var(--red);font-size:12px">خطأ فالتحميل</div>'; }
@@ -3508,20 +3506,20 @@ function sh_updateCartUI(){
   } else {
     items.innerHTML = SHOP_CART.map(function(c){
       var img = c.image
-        ? '<img src="'+c.image+'" style="width:100%;height:100%;object-fit:cover"/>'
+        ? '<img src="'+esc(c.image)+'" style="width:100%;height:100%;object-fit:cover"/>'
         : '📦';
       return '<div class="cart-item">'+
         '<div class="cart-item-img">'+img+'</div>'+
         '<div class="cart-item-info">'+
-          '<div class="cart-item-name">'+c.name+'</div>'+
-          '<div class="cart-item-price">'+(c.sell||0)+' '+sh_cur()+'</div>'+
+          '<div class="cart-item-name">'+esc(c.name)+'</div>'+
+          '<div class="cart-item-price">'+esc(c.sell||0)+' '+sh_cur()+'</div>'+
         '</div>'+
         '<div class="cart-qty">'+
-          '<button class="cart-qty-btn" onclick="sh_changeQty(\''+c.name.replace(/'/g,"\\'")+'\', -1)">−</button>'+
+          '<button class="cart-qty-btn" data-name="'+esc(c.name)+'" onclick="sh_changeQty(this.dataset.name,-1)">−</button>'+
           '<span style="font-weight:700;min-width:20px;text-align:center">'+c.qty+'</span>'+
-          '<button class="cart-qty-btn" onclick="sh_changeQty(\''+c.name.replace(/'/g,"\\'")+'\', 1)">+</button>'+
+          '<button class="cart-qty-btn" data-name="'+esc(c.name)+'" onclick="sh_changeQty(this.dataset.name,1)">+</button>'+
         '</div>'+
-        '<button onclick="sh_removeFromCart(\''+c.name.replace(/'/g,"\\'")+'\') " style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;padding:4px">🗑️</button>'+
+        '<button data-name="'+esc(c.name)+'" onclick="sh_removeFromCart(this.dataset.name)" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;padding:4px">🗑️</button>'+
       '</div>';
     }).join("");
   }
@@ -3557,7 +3555,7 @@ function goCheckout(){
   closeCart();
   document.getElementById("sh-checkout-items").innerHTML = SHOP_CART.map(function(c){
     return '<div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0">'+
-      '<span>'+c.name+' × '+c.qty+'</span>'+
+      '<span>'+esc(c.name)+' × '+c.qty+'</span>'+
       '<span style="font-weight:700">'+(c.sell*c.qty).toLocaleString()+' '+sh_cur()+'</span></div>';
   }).join("");
   sh_updateTotal();
