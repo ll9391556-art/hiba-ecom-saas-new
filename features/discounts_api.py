@@ -158,24 +158,3 @@ def validate_coupon_public():
         "appliesTo": c.get("appliesTo", "all"),
         "discountAmount": round(discount_amount, 2),
     })
-
-
-@discounts_bp.route("/api/coupons/redeem", methods=["POST"])
-def redeem_coupon_public():
-    """
-    مسار عام يُستدعى بعد إرسال الطلب بنجاح عشان يزيد usedCount بـ 1.
-    ملاحظة: ده حل بسيط (best-effort) — عميل خبيث نظرياً يقدر يستدعيه بلا ما يعمل
-    طلب فعلي. لو بدك ضبط 100%، الحل الأدق هو إلحاق التحقق والزيادة داخل
-    /api/addOrder نفسها بالملف الأصلي (تعديل صغير موضّح بالخطة).
-    """
-    body = request.get_json(silent=True) or {}
-    uid = str(body.get("userId") or "").strip()
-    code = str(body.get("code") or "").strip().upper()
-    if not uid or not code:
-        return err_json("بيانات ناقصة")
-    c = _fb_get(f"data/{uid}/coupons/{code}")
-    if not c:
-        return err_json("غير موجود", 404)
-    new_used = int(c.get("usedCount", 0) or 0) + 1
-    _fb_patch(f"data/{uid}/coupons/{code}", {"usedCount": new_used})
-    return ok_json(True)

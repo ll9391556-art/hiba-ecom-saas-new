@@ -1181,6 +1181,43 @@ def _ship_values(c_data, delivery_type):
     ship_cust = float(c_data.get("deskCust", 0)) if is_desk else float(c_data.get("custShip", 0))
     ship_cost = float(c_data.get("deskCost", 0)) if is_desk else float(c_data.get("costShip", 0))
     return ship_cust, ship_cost
+def _validate_and_apply_coupon(uid, code, subtotal):
+    """يعيد حساب الخصم من قاعدة الكوبونات على السيرفر — لا يثق بأي رقم قادم من الزبون.
+    يرجّع (discount_amount, coupon_code_or_None). عند أي مشكلة يرجّع (0, None) بصمت
+    (الطلب يستمر بلا خصم بدل ما يفشل بالكامل بسبب كود خصم غير صالح)."""
+    code = str(code or "").strip().upper()
+    if not code:
+        return 0.0, None
+    c = _fb_get(f"data/{uid}/coupons/{code}")
+    if not c or not isinstance(c, dict):
+        return 0.0, None
+    if not c.get("active", True):
+        return 0.0, None
+    if c.get("expiresAt"):
+        try:
+            if time.strftime("%Y-%m-%d") > str(c["expiresAt"])[:10]:
+                return 0.0, None
+        except Exception:
+            pass
+    max_uses = int(c.get("maxUses", 0) or 0)
+    used = int(c.get("usedCount", 0) or 0)
+    if max_uses and used >= max_uses:
+        return 0.0, None
+    min_total = float(c.get("minOrderTotal", 0) or 0)
+    if subtotal < min_total:
+        return 0.0, None
+    ctype = c.get("type", "percent")
+    value = float(c.get("value", 0) or 0)
+    discount = (subtotal * value / 100.0) if ctype == "percent" else min(value, subtotal)
+    return round(max(0.0, discount), 2), code
+
+def _increment_coupon_usage(uid, code):
+    try:
+        c = _fb_get(f"data/{uid}/coupons/{code}") or {}
+        new_used = int(c.get("usedCount", 0) or 0) + 1
+        _fb_patch(f"data/{uid}/coupons/{code}", {"usedCount": new_used})
+    except Exception as e:
+        logging.error(f"_increment_coupon_usage: {e}")
 
 def _calc_order_profit(p_data, c_data, qty, delivery_type, status, existing_profit=0.0):
     ship_cust, ship_cost = _ship_values(c_data, delivery_type)
@@ -1239,15 +1276,23 @@ def api_add_order():
         d["total"] = (float(p_data.get("sell", 0)) * d["qty"]) + ship_cust
     else:
         d["total"] = 0
-            # تطبيق الخصم إذا كان الزبون استعمل كود خصم صالح (تحقّق حقيقي صار مسبقاً
-    # بـ /api/coupons/validate من الفرونت — هون بس بنطرح المبلغ من الإجمالي)
-    if d.get("couponCode") and d.get("discountApplied"):
-        try:
-            d["total"] = max(0, d["total"] - float(d["discountApplied"]))
-        except Exception:
-            pass
+               # الخصم يُعاد حسابه بالكامل هنا من قاعدة الكوبونات — discountApplied القادم
+    # من الزبون لا يُستعمل نهائياً، يُتجاهل تماماً حتى لو أُرسل.
+    applied_coupon = None
+    if d.get("couponCode"):
+        discount_amount, applied_coupon = _validate_and_apply_coupon(uid, d.get("couponCode"), d["total"])
+        if applied_coupon:
+            d["total"] = max(0, round(d["total"] - discount_amount, 2))
+            d["couponCode"] = applied_coupon
+            d["discountApplied"] = discount_amount
+        else:
+            d.pop("couponCode", None)
+            d.pop("discountApplied", None)
+
     _fb_put(f"data/{uid}/orders/{order_id}", d)
     _increment_usage(uid, "orderCount")
+    if applied_coupon:
+        _increment_coupon_usage(uid, applied_coupon)
     return ok_json({"orderId": order_id})
 
 @app.route("/api/updateStatus", methods=["POST"])
@@ -2503,7 +2548,7 @@ def api_admin_list_clients():
 # مسارات محمية تحت data/{uid}/ لا يُسمح بلمسها عبر أفعال firebaseGet/Set/Update/Push
 # العامة أدناه — لأن لها منطق تحقق خاص (صلاحيات الخطة، الحدود الشهرية، فحوصات SSRF...)
 # ضمن endpoints مخصصة (landing/generate, woo/connect, إلخ).
-_SAAS_BLOCKED_DATA_SUBPATHS = ("usage/", "integrations/", "landingPages/", "teamMembers/")
+
 
 @app.route("/api/saas", methods=["POST","OPTIONS"])
 def api_saas():
@@ -2520,17 +2565,16 @@ def api_saas():
     payload = request.get_json(silent=True) or {}
     action  = str(payload.get("action") or "").strip()
     if not action: return err_json("missing_action")
-
     def _path_allowed(path):
         path = str(path or "")
         data_prefix = f"data/{auth_uid}/"
         if path.startswith(data_prefix):
             rest = path[len(data_prefix):]
-            if any(rest.startswith(p) for p in _SAAS_BLOCKED_DATA_SUBPATHS):
+            first_segment = rest.split("/", 1)[0]
+            blocked_segments = {"usage", "integrations", "landingPages", "teamMembers"}
+            if first_segment in blocked_segments:
                 return False
             return True
-        # تصحيح حد المسار: نتأكد أن الجزء بعد ai_logs/{uid} إما فارغ أو يبدأ بـ "/"،
-        # بدل startswith الخام الذي كان يقبل نظرياً أي uid آخر يبدأ بنفس السلسلة.
         ai_logs_prefix = f"ai_logs/{auth_uid}"
         return path == ai_logs_prefix or path.startswith(ai_logs_prefix + "/")
 
