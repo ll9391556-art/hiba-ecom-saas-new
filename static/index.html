@@ -2225,14 +2225,14 @@ async function prefillOrderSelects(){
     var prodSel = document.getElementById("o_product");
     if(prodSel && pr.status==="ok"){
       prodSel.innerHTML = (pr.data||[]).map(function(p){
-        return '<option value="'+p.name+'">'+p.name+'</option>';
+        return '<option value="'+esc(p.name)+'">'+esc(p.name)+'</option>';
       }).join("");
     }
     var cr = await apiGet("/getCities", {});
     var citySel = document.getElementById("o_city");
     if(citySel && cr.status==="ok"){
       citySel.innerHTML = (cr.data||[]).map(function(c){
-        return '<option value="'+c.name+'">'+c.name+'</option>';
+        return '<option value="'+esc(c.name)+'">'+esc(c.name)+'</option>';
       }).join("");
     }
   }catch(e){}
@@ -2415,9 +2415,9 @@ async function lp_goToQuestions(){
 function renderLandingQuestions(){
   var box = document.getElementById("lp_questions");
   box.innerHTML = currentLandingQuestions.map(function(q){
-    var safeId = String(q.id).replace(/"/g,"");
-    return '<div class="form-group"><label>'+q.question+'</label>'+
-      '<textarea class="form-control lp-answer" data-qid="'+safeId+'" rows="2"></textarea></div>';
+    var safeId = String(q.id).replace(/[^a-zA-Z0-9_-]/g,"");
+    return '<div class="form-group"><label>'+esc(q.question)+'</label>'+
+      '<textarea class="form-control lp-answer" data-qid="'+esc(safeId)+'" rows="2"></textarea></div>';
   }).join("");
 }
 
@@ -2491,23 +2491,22 @@ function renderLandingList(list){
   if(!list || !list.length){ grid.innerHTML=""; empty.style.display="block"; return; }
   empty.style.display = "none";
   grid.innerHTML = list.map(function(p){
-    var img = (p.images&&p.images[0]) ? '<img src="'+p.images[0]+'" style="width:100%;height:160px;object-fit:cover" onerror="this.style.display=\'none\'"/>'
+    var img = (p.images&&p.images[0]) ? '<img src="'+esc(p.images[0])+'" style="width:100%;height:160px;object-fit:cover" onerror="this.style.display=\'none\'"/>'
                                        : '<div style="height:160px;display:flex;align-items:center;justify-content:center;background:var(--card2);font-size:40px">🎯</div>';
     var pubBadge = p.published ? '<span class="badge bc">'+t("landing_published")+'</span>' : '<span class="badge bp">'+t("landing_unpublished")+'</span>';
     var igBadge  = p.instagramPostId ? '<span class="badge bi" style="margin-right:4px">📷 IG</span>' : '';
-    var safeId   = String(p.id).replace(/'/g,"\\'");
     return '<div class="store-card">'+
       img+
       '<div class="store-card-body">'+
-        '<div class="store-card-title">'+p.name+'</div>'+
-        '<div style="font-size:11px;color:var(--muted);margin:4px 0">'+(p.created_at||"")+' · 👁️ '+(p.views||0)+' '+t("landing_views")+'</div>'+
+        '<div class="store-card-title">'+esc(p.name)+'</div>'+
+        '<div style="font-size:11px;color:var(--muted);margin:4px 0">'+esc(p.created_at||"")+' · 👁️ '+esc(p.views||0)+' '+t("landing_views")+'</div>'+
         '<div style="margin-bottom:8px">'+pubBadge+' '+igBadge+'</div>'+
-        '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
-          '<button class="btn-outline btn-sm" onclick="window.open(\''+p.publicUrl+'\',\'_blank\')"><i class="bi bi-eye"></i> '+t("landing_preview")+'</button>'+
-          '<button class="btn-outline btn-sm" onclick="copyLandingLink(\''+p.publicUrl+'\')"><i class="bi bi-clipboard"></i> '+t("landing_copy_link")+'</button>'+
-          '<button class="btn-success" onclick="toggleLandingPublish(\''+safeId+'\')">'+(p.published?'⏸️':'▶️')+'</button>'+
-          '<button class="btn-primary btn-sm" onclick="postLandingToInstagram(\''+safeId+'\')"><i class="bi bi-instagram"></i> '+t("landing_post_ig")+'</button>'+
-          '<button class="btn-danger" onclick="deleteLandingPage(\''+safeId+'\')"><i class="bi bi-trash"></i></button>'+
+        '<div style="display:flex;gap:6px;flex-wrap:wrap" data-id="'+esc(p.id)+'" data-url="'+esc(p.publicUrl)+'">'+
+          '<button class="btn-outline btn-sm" onclick="window.open(this.closest(\'div[data-url]\').dataset.url,\'_blank\')"><i class="bi bi-eye"></i> '+t("landing_preview")+'</button>'+
+          '<button class="btn-outline btn-sm" onclick="copyLandingLink(this.closest(\'div[data-url]\').dataset.url)"><i class="bi bi-clipboard"></i> '+t("landing_copy_link")+'</button>'+
+          '<button class="btn-success" onclick="toggleLandingPublish(this.closest(\'div[data-id]\').dataset.id)">'+(p.published?'⏸️':'▶️')+'</button>'+
+          '<button class="btn-primary btn-sm" onclick="postLandingToInstagram(this.closest(\'div[data-id]\').dataset.id)"><i class="bi bi-instagram"></i> '+t("landing_post_ig")+'</button>'+
+          '<button class="btn-danger" onclick="deleteLandingPage(this.closest(\'div[data-id]\').dataset.id)"><i class="bi bi-trash"></i></button>'+
         '</div>'+
       '</div></div>';
   }).join("");
@@ -2826,20 +2825,19 @@ function renderTeamTable(list){
   tbl.innerHTML = list.map(function(m){
     var perms = m.permissions||{};
     var permsHtml = TEAM_PERM_KEYS.filter(function(k){ return perms[k]; }).map(function(k){
-      return '<span class="member-perm-badge">'+_teamPermLabel(k)+'</span>';
+      return '<span class="member-perm-badge">'+esc(_teamPermLabel(k))+'</span>';
     }).join("") || '<span style="color:var(--muted);font-size:11px">—</span>';
     var statusBadge = m.active!==false
       ? '<span class="badge bc">'+t("active")+'</span>'
       : '<span class="badge br">'+t("inactive")+'</span>';
-    var safeUser = String(m.username).replace(/'/g,"\\'");
     return '<tr>'+
-      '<td><strong>'+m.username+'</strong></td>'+
-      '<td>'+(m.name||m.username)+'</td>'+
+      '<td><strong>'+esc(m.username)+'</strong></td>'+
+      '<td>'+esc(m.name||m.username)+'</td>'+
       '<td style="white-space:normal;max-width:280px">'+permsHtml+'</td>'+
       '<td>'+statusBadge+'</td>'+
-      '<td style="display:flex;gap:6px">'+
-        '<button class="btn-outline btn-sm" onclick="openEditMemberModal(\''+safeUser+'\')"><i class="bi bi-pencil"></i></button>'+
-        '<button class="btn-danger" onclick="deleteTeamMember(\''+safeUser+'\')"><i class="bi bi-trash"></i></button>'+
+      '<td style="display:flex;gap:6px" data-user="'+esc(m.username)+'">'+
+        '<button class="btn-outline btn-sm" onclick="openEditMemberModal(this.closest(\'td\').dataset.user)"><i class="bi bi-pencil"></i></button>'+
+        '<button class="btn-danger" onclick="deleteTeamMember(this.closest(\'td\').dataset.user)"><i class="bi bi-trash"></i></button>'+
       '</td>'+
     '</tr>';
   }).join("");
@@ -3043,14 +3041,14 @@ async function checkFbStatus(){
     });
     var d = await r.json();
     if(d.connected){
-      el.innerHTML = '<span style="color:var(--green)">✅ Connecté — '+( d.updated_at||"—")+'</span>';
+      el.innerHTML = '<span style="color:var(--green)">✅ Connecté — '+esc(d.updated_at||"—")+'</span>';
       if(d.pages&&d.pages.length){
         pl.style.display="block";
         pc.innerHTML = d.pages.map(function(p){
           return '<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--card2);border-radius:8px;margin-bottom:6px">'
             +'<span>'+(p.type==="instagram"?"📷":"📘")+'</span>'
-            +'<div><div style="font-size:12px;font-weight:700">'+(p.name||"—")+'</div>'
-            +'<div style="font-size:10px;color:var(--muted)">'+p.type+' · '+(p.id||"—")+'</div></div></div>';
+            +'<div><div style="font-size:12px;font-weight:700">'+esc(p.name||"—")+'</div>'
+            +'<div style="font-size:10px;color:var(--muted)">'+esc(p.type)+' · '+esc(p.id||"—")+'</div></div></div>';
         }).join("");
       } else { pl.style.display="none"; }
     } else {
@@ -3061,6 +3059,7 @@ async function checkFbStatus(){
     if(el) el.innerHTML = '<span style="color:var(--muted)">⚠️ Erreur serveur</span>';
   }
 }
+ 
 
 // =========================================================
 // MODALS
@@ -3268,9 +3267,9 @@ function sh_renderCategories(){
   var toolbar = document.getElementById("sh-toolbar");
   if(!cats.length){ toolbar.style.display="none"; return; }
   toolbar.style.display = "flex";
-  box.innerHTML = '<span class="shop-chip'+(SHOP_CATEGORY===""?" active":"")+'" onclick="sh_filterCategory(\'\')">الكل</span>' +
+  box.innerHTML = '<span class="shop-chip'+(SHOP_CATEGORY===""?" active":"")+'" data-cat="" onclick="sh_filterCategory(this.dataset.cat)">الكل</span>' +
     cats.map(function(c){
-      return '<span class="shop-chip'+(SHOP_CATEGORY===c?" active":"")+'" onclick="sh_filterCategory(\''+c.replace(/'/g,"\\'")+'\')">'+c+'</span>';
+      return '<span class="shop-chip'+(SHOP_CATEGORY===c?" active":"")+'" data-cat="'+esc(c)+'" onclick="sh_filterCategory(this.dataset.cat)">'+esc(c)+'</span>';
     }).join("");
 }
 
@@ -3302,25 +3301,26 @@ async function sh_trackOrder(){
           if(o.rated){
             rateBlock = '<div style="font-size:11px;color:var(--green);margin-top:6px">✅ تم تقييم هذا الطلب، شكراً لك</div>';
           } else {
-            rateBlock = '<div class="rate-widget">'+
+            rateBlock = '<div class="rate-widget" data-order-id="'+esc(o.id)+'">'+
               '<div style="font-size:12px;margin-bottom:6px">⭐ قيّم هذا المنتج:</div>'+
               '<div class="rate-stars" data-value="0">'+
-                [1,2,3,4,5].map(function(n){ return '<span onclick="setRateStar(this,'+n+')">☆</span>'; }).join("")+
+                [1,2,3,4,5].map(function(n){ return '<span data-n="'+n+'" onclick="setRateStar(this,parseInt(this.dataset.n))">☆</span>'; }).join("")+
               '</div>'+
               '<textarea class="rate-comment" placeholder="تعليق (اختياري)"></textarea>'+
-              '<button class="btn-primary btn-sm" style="margin-top:8px" onclick="submitProductRating(\''+o.id+'\',this)">إرسال التقييم</button>'+
+              '<button class="btn-primary btn-sm" style="margin-top:8px" onclick="submitProductRating(this.closest(\'.rate-widget\').dataset.orderId,this)">إرسال التقييم</button>'+
             '</div>';
           }
         }
         return '<div class="track-result"><div style="display:flex;justify-content:space-between;align-items:center">'+
           '<div><strong>'+esc(o.product)+'</strong> × '+esc(o.qty)+'<div style="font-size:11px;color:var(--muted)">'+esc(o.date)+'</div></div>'+
-          '<span class="badge '+stCls+'">'+o.status+'</span></div>'+rateBlock+'</div>';
+          '<span class="badge '+stCls+'">'+esc(o.status)+'</span></div>'+rateBlock+'</div>';
       }).join("");
     } else {
       resBox.innerHTML = '<div class="track-result">لا توجد طلبات بهذا الرقم</div>';
     }
   }catch(e){ resBox.innerHTML = '<div class="track-result">خطأ، حاول مرة أخرى</div>'; }
 }
+     
 
 function setRateStar(el, value){
   var wrap = el.parentElement;
