@@ -52,7 +52,9 @@ _ALLOWED_ORIGINS = [o.strip() for o in os.environ.get(
     "ALLOWED_ORIGINS", "https://orderconfidence.com"
 ).split(",") if o.strip()]
 CORS(app, resources={r"/*": {"origins": _ALLOWED_ORIGINS}}, supports_credentials=False)
-
+_store_products_cache = {}
+_store_products_cache_lock = threading.Lock()
+_STORE_CACHE_TTL = 30  # ثواني — توازن بين حداثة المخزون وتخفيف الحمل
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s", force=True)
 
 _executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="bot_worker")
@@ -450,9 +452,16 @@ def _get_usage(uid, field):
     except Exception: return 0
 
 def _increment_usage(uid, field):
-    new_val = _get_usage(uid, field) + 1
-    _fb_put(f"data/{uid}/usage/{_usage_month_key()}/{field}", new_val)
-    return new_val
+    path = f"data/{uid}/usage/{_usage_month_key()}/{field}"
+    try:
+        ref = _firebase_ref(path)
+        new_val = ref.transaction(lambda current: (current or 0) + 1)
+        return new_val if isinstance(new_val, int) else _get_usage(uid, field)
+    except Exception as e:
+        logging.error(f"_increment_usage transaction failed, fallback: {e}")
+        new_val = _get_usage(uid, field) + 1
+        _fb_put(path, new_val)
+        return new_val
 
 def _plan_cap(uid, cap_field):
     plan = get_user_plan(uid)
@@ -467,9 +476,19 @@ LIFETIME_MAX_SLOTS = 50
 
 def _get_user_record(uid):
     try:
+        uname = _fb_get(f"uid_index/{uid}")
+        if uname:
+            rec = _fb_get(f"users/{uname}")
+            if isinstance(rec, dict) and str(rec.get("User_ID", "")) == str(uid):
+                return rec
+        # فهرس ناقص (مستخدم قديم) — بحث كامل مرة وحدة فقط، ثم نصلّح الفهرس تلقائياً
         users = _fb_get("users") or {}
-        for _, u in users.items():
+        for uname2, u in users.items():
             if isinstance(u, dict) and str(u.get("User_ID", "")) == str(uid):
+                try:
+                    _fb_put(f"uid_index/{uid}", uname2)
+                except Exception:
+                    pass
                 return u
     except Exception:
         pass
@@ -1374,10 +1393,7 @@ def api_get_products():
     uid = request.auth_uid
     return ok_json(_fb_list(f"data/{uid}/products"))
 
-@app.route("/api/getStoreProducts", methods=["GET"])
-def api_get_store_products():
-    uid = request.args.get("userId", "").strip()
-    if not uid: return err_json("Missing userId")
+def _compute_store_products(uid):
     products_raw = _fb_get(f"data/{uid}/products") or {}
     orders_raw   = _fb_get(f"data/{uid}/orders")   or {}
     ratings_raw  = _fb_get(f"data/{uid}/ratings")  or {}
@@ -1409,7 +1425,20 @@ def api_get_store_products():
                         "visible": p.get("visible","yes"), "created_at": p.get("created_at", 0),
                         "avgRating": avg_rating, "ratingCount": rating_count})
     result.sort(key=lambda x: {"In Stock":0,"Low Stock":1,"Out of Stock":2}.get(x["stat"],0))
-    return ok_json(result)
+    return result
+
+@app.route("/api/getStoreProducts", methods=["GET"])
+def api_get_store_products():
+    uid = request.args.get("userId", "").strip()
+    if not uid: return err_json("Missing userId")
+    with _store_products_cache_lock:
+        cached = _store_products_cache.get(uid)
+        if cached and time.time() - cached["ts"] < _STORE_CACHE_TTL:
+            return ok_json(cached["data"])
+    result = _compute_store_products(uid)
+    with _store_products_cache_lock:
+        _store_products_cache[uid] = {"data": result, "ts": time.time()}
+    return ok_json(result) 
 
 @app.route("/api/addProduct", methods=["POST"])
 @require_auth
@@ -2523,6 +2552,7 @@ def api_admin_create_client():
         "User_ID": new_uid, "plan": plan, "source": source,
         "plan_updated": time.strftime("%Y-%m-%d %H:%M"),
     })
+    _fb_put(f"uid_index/{new_uid}", username)
     _fb_put(f"data/{new_uid}/storeSettings", {
         "name": store_name, "tagline": "", "logo": "🛒", "lang": "AR", "currency": "DZD",
     })
@@ -2641,15 +2671,32 @@ def get_user_settings(identifier):
         if cached and time.time() - cached["ts"] < _CACHE_TTL:
             return cached["data"]
     try:
+        uname = _fb_get(f"channel_index/{identifier}")
+        if uname:
+            data = _fb_get(f"users/{uname}")
+            if isinstance(data, dict):
+                ids = [str(data.get("page_id_FB") or "").strip(),
+                       str(data.get("Page_ID_instgram") or "").strip(),
+                       str(data.get("page_id_instagram") or "").strip(),
+                       str(data.get("phone_number_id") or "").strip()]
+                if identifier in ids:
+                    with _settings_cache_lock:
+                        _settings_cache[identifier] = {"data": data, "ts": time.time()}
+                    return data
+        # فهرس ناقص أو غير محدّث — بحث كامل مرة، ثم تصحيح الفهرس تلقائياً
         users = _fb_get("users")
         if not users: return None
-        for _, data in users.items():
+        for uname2, data in users.items():
             if not isinstance(data, dict): continue
             ids = [str(data.get("page_id_FB") or "").strip(),
                    str(data.get("Page_ID_instgram") or "").strip(),
                    str(data.get("page_id_instagram") or "").strip(),
                    str(data.get("phone_number_id") or "").strip()]
             if identifier in ids:
+                try:
+                    _fb_put(f"channel_index/{identifier}", uname2)
+                except Exception:
+                    pass
                 with _settings_cache_lock:
                     _settings_cache[identifier] = {"data": data, "ts": time.time()}
                 return data
@@ -2719,6 +2766,11 @@ def fb_oauth_callback():
                 "fb_access_token":fb_token,"page_id_FB":fb_page_id,
                 "instgram_access_token":ig_token,"Page_ID_instgram":ig_page_id,
             })
+            try:
+                if fb_page_id: _fb_put(f"channel_index/{fb_page_id}", uname)
+                if ig_page_id: _fb_put(f"channel_index/{ig_page_id}", uname)
+            except Exception as e:
+                logging.error(f"channel_index update failed: {e}")
         logging.info(f"✅ OAuth OK UID={uid}")
         ph = "".join(f"<div style='display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12px'>"
                      f"<span>{'📷' if p['type']=='instagram' else '📘'}</span>"
