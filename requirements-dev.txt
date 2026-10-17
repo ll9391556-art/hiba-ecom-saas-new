@@ -1,0 +1,4 @@
+# Test-only dependencies (not installed in production).
+# Tests also need the runtime packages: Flask, Flask-Cors, requests, bcrypt, PyJWT, cryptography.
+# firebase-admin and google-genai are NOT needed: tests/fakes.py replaces them in memory.
+pytest==8.3.5
