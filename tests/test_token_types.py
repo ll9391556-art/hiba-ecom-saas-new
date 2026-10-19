@@ -44,11 +44,37 @@ def _legacy(app, **claims):
     return app.jwt.encode({"iat": now, "exp": now + 3600, **claims}, app.JWT_SECRET, algorithm=app.JWT_ALGO)
 
 
-def test_legacy_session_without_typ_still_works(client, app, seed_owner):
-    """الجلسات المفتوحة قبل الـ deploy (بلا typ) تبقى صالحة حتى تنتهي — ما حد يتخرّج."""
+@pytest.mark.parametrize("path", ["/api/getDashboard", "/api/me"])
+def test_session_without_typ_rejected(client, app, seed_owner, path):
+    """ما كاينش مرحلة انتقالية: توكن بلا typ يترفض حتى لو فيه role (ما كاين حتى تاجر قديم)."""
     owner = seed_owner()
     tok = _legacy(app, uid=owner["uid"], username=owner["username"], role="owner")
-    assert client.get("/api/getDashboard", headers=auth(tok)).status_code == 200
+    assert client.get(path, headers=auth(tok)).status_code == 401
+
+
+@pytest.mark.parametrize("typ", ["admin", ""])
+def test_unknown_typ_rejected(client, app, db, seed_owner, monkeypatch, typ):
+    owner = seed_owner()
+    tok = _legacy(app, uid=owner["uid"], username=owner["username"], uname=owner["username"],
+                  role="owner", typ=typ)
+    assert client.get("/api/getDashboard", headers=auth(tok)).status_code == 401
+    monkeypatch.setattr(app.requests, "get", lambda *a, **k: pytest.fail("Graph called"))
+    assert "FB_AUTH_ERROR" in client.get(f"/callback?code=x&state={tok}").get_data(as_text=True)
+    assert db.get(f"data/{owner['uid']}/fbTokens") is None
+
+
+def test_state_without_typ_rejected_in_callback(client, app, db, seed_owner, monkeypatch):
+    """state بلا typ يترفض حتى مع كوكي nonce مطابقة وخانة oauth_pending صالحة."""
+    owner = seed_owner()
+    nonce = "dummy-nonce-123"
+    nh = app._nonce_hash(nonce)
+    db.set(f"oauth_pending/{owner['uid']}", {"nh": nh, "exp": int(time.time()) + 600})
+    state = _legacy(app, uid=owner["uid"], uname=owner["username"], nh=nh)
+    client.set_cookie("of_oauth_nonce", nonce, path="/callback")
+    monkeypatch.setattr(app.requests, "get", lambda *a, **k: pytest.fail("Graph called"))
+    r = client.get(f"/callback?code=x&state={state}", base_url="https://localhost")
+    assert "FB_AUTH_ERROR" in r.get_data(as_text=True)
+    assert db.get(f"data/{owner['uid']}/fbTokens") is None
 
 
 def test_legacy_state_shaped_token_rejected(client, app, seed_owner):
