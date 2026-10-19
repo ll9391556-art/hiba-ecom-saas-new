@@ -1206,7 +1206,7 @@ function renderCurrencyButtons(){
   var box = document.getElementById("currencyButtons");
   if(!box) return;
   box.innerHTML = ["DZD","EUR","USD"].map(function(code){
-    return '<button class="lang-btn'+(code===merchantCurrency?" active":"")+'" onclick="setMerchantCurrency(\''+code+'\')">'+code+'</button>';
+    return '<button class="lang-btn'+(code===merchantCurrency?" active":"")+'" data-code="'+esc(code)+'" onclick="setMerchantCurrency(this.dataset.code)">'+esc(code)+'</button>';
   }).join("");
 }
 
@@ -1425,10 +1425,8 @@ function esc(s){
     return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
   });
 }
-// نسخة آمنة لإدراج نص داخل onclick='...' (بالإضافة لـ esc العادية)
-function escAttr(s){
-  return esc(s).replace(/\r?\n/g, " ");
-}
+// ما تدمجش قيم نصية داخل onclick="f('...')" — المتصفح يفك &#39; قبل ما يشغّل JS.
+// حط القيمة فـ data-* (مهرّبة بـ esc) واقراها بـ this.dataset.
 function applyLang(lang){
   currentLang = lang;
   localStorage.setItem("of_lang", lang);
@@ -1901,7 +1899,7 @@ function renderOrders(orders){
     var opts = ["Pending","Confirmed","Delivered","Refused","No Answer"].map(function(s){
       return '<option value="'+s+'"'+(o.status===s?" selected":"")+'>'+s+'</option>';
     }).join("");
-    var safeId = escAttr(o.id);
+    var safeId = esc(o.id);
     return '<tr>'+
       '<td>'+(i+1)+'</td>'+
       '<td style="font-size:11px">'+esc(o.date||"—")+'</td>'+
@@ -1912,7 +1910,7 @@ function renderOrders(orders){
       '<td>'+esc(o.city||"—")+'</td>'+
       '<td>'+
         '<span class="badge bn me-1">'+(o.deliveryType==="desk"?t("desk_short"):t("home_short"))+'</span>'+
-        '<select class="status-sel" onchange="updateOrderDelivery(\''+safeId+'\',this.value)">'+
+        '<select class="status-sel" data-id="'+safeId+'" onchange="updateOrderDelivery(this.dataset.id,this.value)">'+
           '<option value="home"'+(o.deliveryType!=="desk"?" selected":"")+'>'+t("home_delivery")+'</option>'+
           '<option value="desk"'+(o.deliveryType==="desk"?" selected":"")+'>'+t("desk_delivery")+'</option>'+
         '</select>'+
@@ -1924,9 +1922,9 @@ function renderOrders(orders){
       '<td style="font-size:11px;color:var(--muted)">'+esc(o.date_delivered||"—")+'</td>'+
           '<td>'+
         '<span class="badge '+stCls+' me-1">'+esc(o.status)+'</span>'+
-        '<select class="status-sel" onchange="updateStatus(\''+safeId+'\',this.value)" data-id="'+safeId+'">'+opts+'</select>'+
+        '<select class="status-sel" onchange="updateStatus(this.dataset.id,this.value)" data-id="'+safeId+'">'+opts+'</select>'+
       '</td>'+
-      '<td><button class="btn-outline btn-sm" onclick="printOrderSlip(\''+safeId+'\')" title="طباعة بون دو كوموند"><i class="bi bi-printer"></i></button></td>'+
+      '<td><button class="btn-outline btn-sm" data-id="'+safeId+'" onclick="printOrderSlip(this.dataset.id)" title="طباعة بون دو كوموند"><i class="bi bi-printer"></i></button></td>'+
     '</tr>';
   }).join("");
 }
@@ -2610,9 +2608,8 @@ function renderConversationsList(list){
     var active = (c.senderId===CURRENT_CONV_SENDER) ? " active" : "";
     var dirIcon = c.lastDirection==="out" ? "↩️ " : "";
     var timeTxt = c.lastTimestamp ? new Date(c.lastTimestamp*1000).toLocaleString("fr-DZ",{hour:"2-digit",minute:"2-digit",day:"2-digit",month:"2-digit"}) : "";
-    var safeSid  = escAttr(c.senderId);
-    var safeName = escAttr(c.name||"");
-    return '<div class="conv-item'+active+'" onclick="openConversation(\''+safeSid+'\',\''+c.platform+'\',\''+safeName+'\')">'+
+    return '<div class="conv-item'+active+'" data-sid="'+esc(c.senderId)+'" data-platform="'+esc(c.platform)+'" data-name="'+esc(c.name||"")+'"'+
+      ' onclick="openConversation(this.dataset.sid,this.dataset.platform,this.dataset.name)">'+
       '<div class="conv-avatar">'+icon+'</div>'+
       '<div class="conv-info">'+
         '<div class="conv-name">'+esc(c.name||c.senderId)+'</div>'+
