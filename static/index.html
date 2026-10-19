@@ -1722,13 +1722,13 @@ async function loadDashboard(){
 
     var topTbl = document.getElementById("topProductsTbl");
     topTbl.innerHTML = (d.topProducts||[]).map(function(p){
-      return "<tr><td>"+p.name+"</td><td><strong>"+p.qty+"</strong></td></tr>";
+      return "<tr><td>"+esc(p.name)+"</td><td><strong>"+esc(p.qty)+"</strong></td></tr>";
     }).join("") || '<tr><td colspan="2" class="empty-state">—</td></tr>';
 
     var lowTbl = document.getElementById("lowStockTbl");
     lowTbl.innerHTML = (d.lowStock||[]).map(function(p){
       var cl = p.rem<=0?"br":"bn";
-      return "<tr><td>"+p.name+"</td><td>"+p.rem+"</td><td><span class='badge "+cl+"'>"+p.stat+"</span></td></tr>";
+      return "<tr><td>"+esc(p.name)+"</td><td>"+esc(p.rem)+"</td><td><span class='badge "+cl+"'>"+esc(p.stat)+"</span></td></tr>";
     }).join("") || '<tr><td colspan="3" class="empty-state">✅</td></tr>';
 
     renderStatusChart(d, cur);
