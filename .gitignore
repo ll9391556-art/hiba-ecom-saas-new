@@ -1,2 +1,6 @@
 serviceaccountkey.json
 serviceaccountkey.json
+__pycache__/
+.pytest_cache/
+node_modules/
+.venv/

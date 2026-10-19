@@ -1179,6 +1179,9 @@ select.status-sel{background:var(--card2);border:1px solid var(--border);color:v
 var API_URL    = "https://orderconfidence.com/api";
 var FB_BACKEND = "https://orderconfidence.com";
 var FB_APP_ID_JS = "1484940433173462";
+// احتياطي: trackShopEvent تتعرّف فـ /static/pixel-loader.js (defer). إذا ما تحمّلش الملف،
+// السلة والدفع ما يطيحوش بـ ReferenceError — pixel-loader يستبدلها كي يتحمّل.
+window.trackShopEvent = window.trackShopEvent || function(){};
 
 var currentUser  = null;
 var authToken    = localStorage.getItem("of_token") || null;

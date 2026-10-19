@@ -7,7 +7,6 @@ import requests
 import time
 import re
 import secrets
-import imghdr
 import threading
 import bcrypt
 import jwt
@@ -78,7 +77,6 @@ if not VERIFY_TOKEN:
 META_APP_SECRET = (os.environ.get("META_APP_SECRET") or os.environ.get("FB_APP_SECRET") or "").strip()
 if not META_APP_SECRET:
     logging.critical("🚨 META_APP_SECRET غير مضبوط — /webhook سيرفض كل الطلبات POST حتى يُضبط (fail-closed).")
-logging.critical(f"🔍 DEBUG -> META_APP_SECRET Value check: Starts with '{META_APP_SECRET[:5]}' ... Ends with '{META_APP_SECRET[-5:]}' | Length: {len(META_APP_SECRET)}")
 FB_DB_URL           = os.environ.get("FB_DB_URL",    "https://saas-order-default-rtdb.europe-west1.firebasedatabase.app").strip()
 FB_APP_ID           = os.environ.get("FB_APP_ID",    "1484940433173462").strip()
 FB_APP_SECRET_OAUTH = os.environ.get("FB_APP_SECRET","").strip()
@@ -393,6 +391,11 @@ def _firebase_ref(path):
             logging.warning(f"Firebase ref attempt {attempt+1}: {e}")
             if attempt < 2: sleep(1)
     raise ConnectionError(f"Firebase unreachable: {path}")
+
+def _mask_id(v):
+    """للسجلات فقط: آخر 4 أحرف من معرّف الزبون (فواتساب = رقم هاتفه)."""
+    s = str(v or "")
+    return ("…" + s[-4:]) if len(s) > 4 else "…"
 
 def ok_json(data):
     return jsonify({"status": "ok", "data": data})
@@ -2353,13 +2356,26 @@ def api_woo_sync():
     return ok_json({"imported": imported, "checked": len(woo_orders)})
 
 
+def _detect_image_kind(head):
+    """يتعرّف على نوع الصورة من أول بايتات الملف (magic bytes) — بديل imghdr
+    اللي انحذف من Python 3.13."""
+    if head.startswith(b"\xff\xd8\xff"):
+        return "jpeg"
+    if head.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "png"
+    if head[:6] in (b"GIF87a", b"GIF89a"):
+        return "gif"
+    if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        return "webp"
+    return None
+
 @app.route("/api/uploadImage", methods=["POST"])
 @require_auth
 def api_upload_image():
     """رفع آمن عبر السيرفر. قبل التعديل كان التحقق يعتمد فقط على امتداد اسم الملف
     و content_type القادم من المتصفح (كلاهما قابل للتزوير الكامل من العميل)، ما يسمح
     برفع HTML/SVG يحوي جافاسكريبت باسم ملف يبدو كصورة. الآن نفحص أول بايتات الملف
-    فعلياً (magic bytes عبر imghdr) ونفرض content-type ثابت مطابق للمحتوى الحقيقي،
+    فعلياً (magic bytes عبر _detect_image_kind) ونفرض content-type ثابت مطابق للمحتوى الحقيقي،
     ونولّد اسم الملف بالكامل بدل الوثوق باسم العميل."""
     if "file" not in request.files:
         return err_json("No file provided")
@@ -2369,7 +2385,7 @@ def api_upload_image():
 
     head = file.stream.read(512)
     file.stream.seek(0)
-    kind = imghdr.what(None, head)
+    kind = _detect_image_kind(head)
     allowed_mime = {"jpeg": "image/jpeg", "png": "image/png", "gif": "image/gif", "webp": "image/webp"}
     if kind not in allowed_mime:
         return err_json("نوع الملف غير مدعوم — يجب أن يكون صورة حقيقية (jpg/png/gif/webp)")
@@ -2709,29 +2725,39 @@ def _bot_allowed_for(bot_settings):
     plan = str(bot_settings.get("plan", "starter")).lower()
     return PLANS.get(plan, {}).get("bot", False)
 
+# رسالة ثابتة لكل أخطاء الربط — نص الاستثناء (فيه URL كامل بـ client_secret/access_token)
+# ما يتعرضش للمستخدم ولا يتسجّل أبداً.
+_OAUTH_FAIL_MSG = "تعذّر إكمال الربط مع فيسبوك — حاول مرة أخرى"
+
 @app.route("/callback", methods=["GET"])
 def fb_oauth_callback():
     code  = request.args.get("code")
     state = request.args.get("state")
     error = request.args.get("error")
-    if error: return _oauth_error_page(error)
+    if error: return _oauth_error_page("تم إلغاء الربط أو رفضه من فيسبوك")
     if not code or not state: return _oauth_error_page("Missing code or state")
     try:
         r1 = requests.get("https://graph.facebook.com/v19.0/oauth/access_token",
             params={"client_id":FB_APP_ID,"client_secret":FB_APP_SECRET_OAUTH,
                     "redirect_uri":REDIRECT_URI,"code":code}, timeout=15)
-        r1.raise_for_status()
+        if not r1.ok:
+            logging.error(f"OAuth code exchange failed: HTTP {r1.status_code}")
+            return _oauth_error_page(_OAUTH_FAIL_MSG)
         short_token = r1.json().get("access_token")
         if not short_token: raise ValueError("No access_token")
         r2 = requests.get("https://graph.facebook.com/v19.0/oauth/access_token",
             params={"grant_type":"fb_exchange_token","client_id":FB_APP_ID,
                     "client_secret":FB_APP_SECRET_OAUTH,"fb_exchange_token":short_token}, timeout=15)
-        r2.raise_for_status()
+        if not r2.ok:
+            logging.error(f"OAuth long-lived token exchange failed: HTTP {r2.status_code}")
+            return _oauth_error_page(_OAUTH_FAIL_MSG)
         long_token = r2.json().get("access_token", short_token)
         r3 = requests.get("https://graph.facebook.com/v19.0/me/accounts",
             params={"access_token":long_token,"fields":"id,name,access_token,instagram_business_account"},
             timeout=15)
-        r3.raise_for_status()
+        if not r3.ok:
+            logging.error(f"OAuth /me/accounts failed: HTTP {r3.status_code}")
+            return _oauth_error_page(_OAUTH_FAIL_MSG)
         pages = r3.json().get("data",[]) or []
         logging.info(f"📘 FB /me/accounts pages received: {len(pages)}")
         fb_page_id = ig_page_id = ig_token = ""
@@ -2782,11 +2808,15 @@ def fb_oauth_callback():
 <p style="color:#8899bb;font-size:13px">جاري إغلاق النافذة...</p>
 {('<div style="margin-top:16px;background:rgba(255,255,255,.04);border-radius:10px;padding:12px">' + ph + '</div>') if ph else ''}
 </div><script>try{{window.opener&&window.opener.postMessage({{type:"FB_AUTH_SUCCESS",
-fb_token:{json.dumps(fb_token)},ig_token:{json.dumps(ig_token)},
-fb_page_id:{json.dumps(fb_page_id)},ig_page_id:{json.dumps(ig_page_id)}}},"*");}}catch(e){{}}
+fb_token:{_js_str(fb_token)},ig_token:{_js_str(ig_token)},
+fb_page_id:{_js_str(fb_page_id)},ig_page_id:{_js_str(ig_page_id)}}},"*");}}catch(e){{}}
 setTimeout(()=>window.close(),2500);</script></body></html>"""
     except Exception as err:
-        logging.error(f"OAuth error: {err}"); return _oauth_error_page(str(err))
+        logging.error(f"OAuth error: {type(err).__name__}"); return _oauth_error_page(_OAUTH_FAIL_MSG)
+
+def _js_str(v):
+    """نص JSON آمن داخل <script> — json.dumps وحده ما يهرّبش </script>."""
+    return json.dumps(str(v)).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
 
 def _oauth_error_page(msg):
     return f"""<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"/><title>فشل</title>
@@ -2794,7 +2824,7 @@ def _oauth_error_page(msg):
 <body><div style="text-align:center;padding:40px;background:rgba(15,32,68,.92);border:1px solid rgba(255,77,109,.3);border-radius:16px;max-width:340px">
 <div style="font-size:56px">❌</div><h2 style="color:#ff4d6d">فشل الربط</h2>
 <p style="color:#8899bb;font-size:12px;word-break:break-all">{_esc(msg)}</p>
-</div><script>window.opener&&window.opener.postMessage({{type:"FB_AUTH_ERROR",message:{json.dumps(str(msg))}}},"*");
+</div><script>window.opener&&window.opener.postMessage({{type:"FB_AUTH_ERROR",message:{_js_str(msg)}}},"*");
 setTimeout(()=>window.close(),4000);</script></body></html>"""
 
 @app.route("/api/getOAuthState", methods=["GET"])
@@ -2843,14 +2873,14 @@ def meta_post(url, payload, headers=None, retries=3):
 
 def send_facebook_message(recipient_id, text, access_token, page_id=None):
     if not access_token:
-        logging.error(f"send_facebook_message: NO access_token for recipient {recipient_id}")
+        logging.error(f"send_facebook_message: NO access_token for recipient {_mask_id(recipient_id)}")
         return False
     if not recipient_id or not text:
         logging.error(f"send_facebook_message: missing recipient_id or text")
         return False
     url = (f"https://graph.facebook.com/v21.0/{page_id}/messages"
            if page_id else "https://graph.facebook.com/v21.0/me/messages")
-    logging.info(f"📤 Sending FB message to {recipient_id} via page {page_id}")
+    logging.info(f"📤 Sending FB message to {_mask_id(recipient_id)} via page {page_id}")
     return meta_post(url, {"recipient":{"id":recipient_id},"message":{"text":text[:2000]},"access_token":access_token})
 
 def send_whatsapp_message(phone_number_id, recipient_id, text, token):
@@ -3047,7 +3077,7 @@ def save_order_from_bot(order_data, bot_settings, sender_id=""):
         delivery_type = _normalize_delivery_type(_find_field(order_data, "delivery_type", "نوع التوصيل", "التوصيل"))
 
         if sender_id and _is_duplicate_bot_order(sender_id, phone, product):
-            logging.info(f"⏭️ تجاهل طلب مكرر من البوت | sender={sender_id} | product={product}")
+            logging.info(f"⏭️ تجاهل طلب مكرر من البوت | sender={_mask_id(sender_id)} | product={product}")
             return False
 
         if not _under_cap(uid, "orderCount", "orderCap"):
@@ -3138,10 +3168,10 @@ def ask_gemini(sender_id, user_message, bot_settings,
         full_text, _ = _gemini_generate_with_fallback(api_key,contents,config,f"chat:{sender_id}")
         order_data, clean_text = extract_json(full_text)
         if order_data:
-            logging.info(f"📦 JSON extracted for {sender_id}: {order_data}")
+            logging.info(f"📦 JSON extracted for {_mask_id(sender_id)}: fields={list(order_data.keys())}")
             is_valid, reason = validate_order(order_data)
             if not is_valid:
-                logging.warning(f"⚠️ Order invalid for {sender_id}: {reason}")
+                logging.warning(f"⚠️ Order invalid for {_mask_id(sender_id)}: {reason}")
                 try:
                     retry_text, _ = _gemini_generate_with_fallback(api_key,
                         [types.Part.from_text(text=f'العميل: "{user_message}"\nالناقص: {reason}\nاسأل بلطف.')],
@@ -3153,13 +3183,13 @@ def ask_gemini(sender_id, user_message, bot_settings,
         log_ai_message(sender_id, user_message, clean_text, merchant_uid=str(bot_settings.get("User_ID","")))
         return clean_text, order_data
     except Exception as e:
-        logging.error(f"ask_gemini {sender_id}: {e}")
+        logging.error(f"ask_gemini {_mask_id(sender_id)}: {e}")
         return "عذراً، حاول مرة أخرى بعد قليل.", None
 
 def process_bg(sender_id, user_text, bot, send_fn,
                media_bytes=b"", mime_type="", is_voice=False, is_image=False, platform="fb", page_id=""):
     def task():
-        logging.info(f"🔄 process_bg START | sender={sender_id} | platform={platform} | text={user_text[:80]!r}")
+        logging.info(f"🔄 process_bg START | sender={_mask_id(sender_id)} | platform={platform} | text_len={len(user_text or '')}")
         try:
             merchant_uid = bot.get("User_ID", "")
             if merchant_uid and not _under_cap(merchant_uid, "botMsgCount", "botMsgCap"):
@@ -3171,22 +3201,22 @@ def process_bg(sender_id, user_text, bot, send_fn,
             reply, order = ask_gemini(sender_id,user_text,bot,
                                       media_bytes=media_bytes,mime_type=mime_type,
                                       is_voice=is_voice,is_image=is_image)
-            logging.info(f"🤖 ask_gemini DONE | sender={sender_id} | reply_len={len(reply or '')} | order={'yes' if order else 'no'}")
+            logging.info(f"🤖 ask_gemini DONE | sender={_mask_id(sender_id)} | reply_len={len(reply or '')} | order={'yes' if order else 'no'}")
             if order and (not reply or not reply.strip()):
                 reply = "✅ تم استلام طلبك بنجاح! سنتواصل معك قريباً لتأكيد التوصيل."
             elif not reply or not reply.strip():
                 reply = "عذراً، لم أتمكن من المعالجة الآن. حاول مرة أخرى."
             try:
                 ok = send_fn(reply)
-                logging.info(f"📨 send_fn result for {sender_id}: {ok}")
+                logging.info(f"📨 send_fn result for {_mask_id(sender_id)}: {ok}")
                 if ok and merchant_uid:
                     _log_conversation(merchant_uid, sender_id, "out", reply, platform, via="bot", page_id=page_id)
             except Exception as send_err:
-                logging.error(f"send_fn raised exception ({sender_id}): {send_err}")
+                logging.error(f"send_fn raised exception ({_mask_id(sender_id)}): {send_err}")
             if order:
                 save_order_from_bot(order, bot, sender_id)
         except Exception as e:
-            logging.error(f"BG task ({sender_id}): {e}", exc_info=True)
+            logging.error(f"BG task ({_mask_id(sender_id)}): {e}", exc_info=True)
             try: send_fn("عذراً، حدث خطأ مؤقت.")
             except Exception: pass
     _executor.submit(task)
@@ -3212,18 +3242,12 @@ def verify_sig(raw_body, headers):
         hashlib.sha256
     ).hexdigest()
 
-    # 4. تشخيص مكثف (سيظهر في الـ Logs)
+    # 4. مقارنة زمن-ثابت — بلا تسجيل أي جزء من التوقيعات أو السر أو جسم الطلب
     match = hmac.compare_digest(calculated_sig, received_sig)
-    
+
     if not match:
-        logging.warning(f"--- 🔍 تشخيص فشل التحقق ---")
-        logging.warning(f"حجم البيانات المستلمة: {len(raw_body)} بايت")
-        logging.warning(f"بداية البيانات: {raw_body[:30]}...") 
-        logging.warning(f"المستلم: {received_sig[:10]}...")
-        logging.warning(f"المحسوب: {calculated_sig[:10]}...")
-        test_hash = hmac.new(secret.encode('utf-8'), b"test", hashlib.sha256).hexdigest()
-        logging.warning(f"اختبار السر (test): {test_hash[:10]}...")
-    
+        logging.warning(f"⚠️ توقيع webhook غير مطابق | حجم البيانات: {len(raw_body)} بايت")
+
     return match
 @app.after_request
 def security_headers(resp):
@@ -3340,7 +3364,7 @@ def webhook():
                     logging.info(f"📋 messaging entries count: {len(msging_list)}")
                     for me in msging_list:
                         sid=me.get("sender",{}).get("id","")
-                        logging.info(f"👤 processing message from sid={sid}")
+                        logging.info(f"👤 processing message from sid={_mask_id(sid)}")
                         if not sid or sid==page_id:
                             logging.info(f"⏭️ skipped: sid empty or equals page_id")
                             continue
@@ -3369,7 +3393,7 @@ def webhook():
                         if merchant_uid_fb:
                             _log_conversation(merchant_uid_fb, sid, "in", log_text_fb, platform_str, page_id=(send_pid or page_id))
                         if is_rate_limited(sid,"fb"):
-                            logging.info(f"⏭️ skipped: rate limited for sid={sid}")
+                            logging.info(f"⏭️ skipped: rate limited for sid={_mask_id(sid)}")
                             continue
                         def fb_fn(reply,_sid=sid,_tok=tok,_pid=send_pid): return send_facebook_message(_sid,reply,_tok,page_id=_pid)
                         process_bg(sid,utxt,bot,fb_fn,mdata,mime,isvoc,isimg,platform_str,(send_pid or page_id))
