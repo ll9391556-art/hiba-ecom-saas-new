@@ -71,6 +71,8 @@ Deployment: production runs Python 3.10 in Docker (`Dockerfile`), so keep code c
 ## Tests
 
 - `tests/fakes.py` injects in-memory `firebase_admin` (db, storage, credentials) and `google.genai` modules into `sys.modules` before `app` is imported. The fake DB mirrors RTDB path rules (rejects `[].?#$`, drops empty segments, prunes empty dicts and `None`). Gemini calls fail unless a test sets `fakes.GEMINI_RESPONDER["fn"]`.
+- The fake supports `order_by_child`/`order_by_key` queries (`equal_to`, `start_at`, `end_at`, `limit_to_first/last`) and `get(shallow=True)`. Like the real REST API, `order_by_child` on a child without `.indexOn` in `database.rules.json` raises "Index not defined" — so a new query needs its index added to that file (and to the Firebase console). Every read is logged in `fakes.READS`, so tests can assert a route never downloads a whole node.
+- App code queries through `_fb_query(path, child_or_"$key", ...)`. `_fb_get/_fb_put/_fb_patch/_fb_delete/_fb_query` retry once on transient errors; `_fb_push` doesn't (not idempotent).
 - `tests/conftest.py` forces dummy env vars and blocks all sockets (`fakes.NetworkBlocked`). It resets the DB and the module-level caches before each test, and provides the `client`, `db`, `seed_owner()` and `seed_member(owner, perms=...)` fixtures, which return `headers` with a valid Bearer token.
 
 ## Ongoing security work
