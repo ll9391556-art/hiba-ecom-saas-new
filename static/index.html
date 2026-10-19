@@ -1178,6 +1178,7 @@ select.status-sel{background:var(--card2);border:1px solid var(--border);color:v
 // =========================================================
 var API_URL    = "https://orderconfidence.com/api";
 var FB_BACKEND = "https://orderconfidence.com";
+var FB_ORIGIN  = new URL(FB_BACKEND).origin;  // صفحة /callback تبعث postMessage غير من هنا
 var FB_APP_ID_JS = "1484940433173462";
 // احتياطي: trackShopEvent تتعرّف فـ /static/pixel-loader.js (defer). إذا ما تحمّلش الملف،
 // السلة والدفع ما يطيحوش بـ ReferenceError — pixel-loader يستبدلها كي يتحمّل.
@@ -2997,8 +2998,16 @@ async function fetchFbStatus(targetElId){
 }
 
 async function connectFacebook(){
-  // state موقّع من السيرفر (JWT) بدل JSON خام — يمنع تزوير uid عبر الرابط العام للمتجر
-  var sr = await apiGet("/getOAuthState", {});
+  // state موقّع من السيرفر (JWT) + nonce فكوكي HttpOnly مربوط بهاد المتصفح.
+  // credentials:"include" باش المتصفح يحفظ الكوكي اللي يرسلها السيرفر مع الرد.
+  var sr = {};
+  try{
+    var rr = await fetch(API_URL+"/getOAuthState", {
+      credentials:"include",
+      headers: authToken ? {"Authorization":"Bearer "+authToken} : {}
+    });
+    sr = await rr.json();
+  }catch(e){}
   if(sr.status!=="ok"){ toast("❌ يرجى تسجيل الدخول من جديد","err"); return; }
   var state = encodeURIComponent(sr.data.state);
   var scope = "pages_manage_metadata,pages_read_engagement,pages_messaging,instagram_basic,instagram_manage_messages,ads_read";
@@ -3006,17 +3015,25 @@ async function connectFacebook(){
     "&redirect_uri="+encodeURIComponent(FB_BACKEND+"/callback")+
     "&scope="+scope+"&state="+state+"&response_type=code";
   var win = window.open(oauthUrl, "fbauth", "width=600,height=700,left=300,top=100");
-  window.addEventListener("message", function handler(ev){
-    if(ev.data && ev.data.type==="FB_AUTH_SUCCESS"){
+  // الرسالة ما فيها حتى توكن: نتأكد غير من مصدرها، ومن بعد نعاود نجيب الحالة من السيرفر
+  function reloadFromServer(){ loadSettings(); loadBot(); }
+  function handler(ev){
+    if(ev.origin!==FB_ORIGIN || ev.source!==win || !ev.data) return;
+    if(ev.data.type==="FB_AUTH_SUCCESS"){
       toast("✅ Facebook connecté!","ok");
-      loadSettings();
+      window.removeEventListener("message", handler);
+      reloadFromServer();
+    }
+    if(ev.data.type==="FB_AUTH_ERROR"){
+      toast("❌ Erreur: "+String(ev.data.message||""),"err");
       window.removeEventListener("message", handler);
     }
-    if(ev.data && ev.data.type==="FB_AUTH_ERROR"){
-      toast("❌ Erreur: "+ev.data.message,"err");
-      window.removeEventListener("message", handler);
-    }
-  });
+  }
+  window.addEventListener("message", handler);
+  // احتياطي: إذا تسدّت النافذة بلا رسالة (المتصفح قطع window.opener)، نحدّث الحالة من السيرفر
+  var poll = setInterval(function(){
+    if(!win || win.closed){ clearInterval(poll); reloadFromServer(); }
+  }, 1000);
 }
 
 async function disconnectFacebook(){

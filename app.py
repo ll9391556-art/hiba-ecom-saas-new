@@ -20,7 +20,7 @@ from cryptography.fernet import Fernet, InvalidToken
 from functools import wraps
 from urllib.parse import unquote, quote, urlparse
 from concurrent.futures import ThreadPoolExecutor
-from flask import Flask, request, abort, jsonify, send_from_directory
+from flask import Flask, request, abort, jsonify, send_from_directory, make_response
 from flask_cors import CORS
 from werkzeug.middleware.proxy_fix import ProxyFix
 import firebase_admin
@@ -50,7 +50,9 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=_TRUSTED_PROXY_HOPS, x_proto=1, x_ho
 _ALLOWED_ORIGINS = [o.strip() for o in os.environ.get(
     "ALLOWED_ORIGINS", "https://orderconfidence.com"
 ).split(",") if o.strip()]
-CORS(app, resources={r"/*": {"origins": _ALLOWED_ORIGINS}}, supports_credentials=False)
+# /api/getOAuthState وحدو يقبل credentials: يحط كوكي nonce ديال ربط فيسبوك (SEC-004).
+CORS(app, resources={r"/api/getOAuthState": {"origins": _ALLOWED_ORIGINS, "supports_credentials": True},
+                     r"/*": {"origins": _ALLOWED_ORIGINS}}, supports_credentials=False)
 _store_products_cache = {}
 _store_products_cache_lock = threading.Lock()
 _STORE_CACHE_TTL = 30  # ثواني — توازن بين حداثة المخزون وتخفيف الحمل
@@ -2763,21 +2765,62 @@ def _bot_allowed_for(bot_settings):
 # رسالة ثابتة لكل أخطاء الربط — نص الاستثناء (فيه URL كامل بـ client_secret/access_token)
 # ما يتعرضش للمستخدم ولا يتسجّل أبداً.
 _OAUTH_FAIL_MSG = "تعذّر إكمال الربط مع فيسبوك — حاول مرة أخرى"
+_OAUTH_STATE_BAD_MSG = "انتهت صلاحية طلب الربط أو أنه غير صالح — أعد المحاولة من لوحة التحكم"
+
+# ── ربط state بالمتصفح (SEC-004) ──
+# getOAuthState يولّد nonce عشوائي: يتحط فكوكي HttpOnly، والـ hash ديالو فالـ state
+# وفـ oauth_pending/{uid} (خانة وحدة لكل تاجر). /callback يقبل غير إلا الكوكي مطابقة
+# والخانة موجودة، ويمسحها (استعمال واحد). هكا state مسروق أو مبعوث لضحية ما يخدمش
+# فمتصفح آخر.
+_OAUTH_COOKIE    = "of_oauth_nonce"
+_OAUTH_STATE_TTL = 600
+
+def _nonce_hash(nonce):
+    return hashlib.sha256(str(nonce).encode("utf-8")).hexdigest()
+
+def _consume_oauth_nonce(uid, nh):
+    """يمسح oauth_pending/{uid} ذرّياً إذا كان مطابق وما انتهاش — يرجّع True مرة وحدة فقط."""
+    result = {"ok": False}
+    def _txn(cur):
+        result["ok"] = False
+        if (isinstance(cur, dict) and int(cur.get("exp", 0) or 0) > time.time()
+                and hmac.compare_digest(str(cur.get("nh", "")).encode(), nh.encode())):
+            result["ok"] = True
+            return None
+        return cur
+    try:
+        _firebase_ref(f"oauth_pending/{uid}").transaction(_txn)
+    except Exception as e:
+        logging.error(f"OAuth nonce consume failed: {type(e).__name__}")
+        return False
+    return result["ok"]
 
 @app.route("/callback", methods=["GET"])
 def fb_oauth_callback():
+    resp = make_response(_fb_oauth_callback_page())
+    # الكوكي ما تبقاش بعد أي محاولة (نجاح ولا فشل)
+    resp.delete_cookie(_OAUTH_COOKIE, path="/callback", secure=True, httponly=True, samesite="Lax")
+    return resp
+
+def _fb_oauth_callback_page():
     code  = request.args.get("code")
     state = request.args.get("state")
     error = request.args.get("error")
     if error: return _oauth_error_page("تم إلغاء الربط أو رفضه من فيسبوك")
     if not code or not state: return _oauth_error_page("Missing code or state")
-    # التحقق من state قبل أي نداء لفيسبوك — توكن جلسة (أو أي نوع آخر) ما يتقبلش هنا
+    # التحقق من state + كوكي المتصفح قبل أي نداء لفيسبوك — توكن جلسة (أو أي نوع آخر) ما يتقبلش هنا
     sd    = decode_token(unquote(state), typ="oauth_state") or {}
     uid   = str(sd.get("uid","") or "").strip()
     uname = str(sd.get("uname","") or "").strip()
     if not uid:
         logging.error("OAuth state verification failed")
         return _oauth_error_page(_OAUTH_FAIL_MSG)
+    nh = str(sd.get("nh", "") or "")
+    cookie_nonce = request.cookies.get(_OAUTH_COOKIE, "")
+    if not (nh and cookie_nonce and hmac.compare_digest(_nonce_hash(cookie_nonce).encode(), nh.encode())
+            and _consume_oauth_nonce(uid, nh)):
+        logging.warning("OAuth state rejected: browser nonce missing, mismatched or already used")
+        return _oauth_error_page(_OAUTH_STATE_BAD_MSG)
     try:
         r1 = requests.get("https://graph.facebook.com/v19.0/oauth/access_token",
             params={"client_id":FB_APP_ID,"client_secret":FB_APP_SECRET_OAUTH,
@@ -2841,9 +2884,7 @@ def fb_oauth_callback():
 <div style="font-size:56px">✅</div><h2 style="color:#00d68f">تم الربط بنجاح!</h2>
 <p style="color:#8899bb;font-size:13px">جاري إغلاق النافذة...</p>
 {('<div style="margin-top:16px;background:rgba(255,255,255,.04);border-radius:10px;padding:12px">' + ph + '</div>') if ph else ''}
-</div><script>try{{window.opener&&window.opener.postMessage({{type:"FB_AUTH_SUCCESS",
-fb_token:{_js_str(fb_token)},ig_token:{_js_str(ig_token)},
-fb_page_id:{_js_str(fb_page_id)},ig_page_id:{_js_str(ig_page_id)}}},"*");}}catch(e){{}}
+</div><script>{_post_to_opener_js('{type:"FB_AUTH_SUCCESS"}')}
 setTimeout(()=>window.close(),2500);</script></body></html>"""
     except Exception as err:
         logging.error(f"OAuth error: {type(err).__name__}"); return _oauth_error_page(_OAUTH_FAIL_MSG)
@@ -2852,24 +2893,39 @@ def _js_str(v):
     """نص JSON آمن داخل <script> — json.dumps وحده ما يهرّبش </script>."""
     return json.dumps(str(v)).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
 
+def _post_to_opener_js(msg_js):
+    """postMessage لكل origin فـ ALLOWED_ORIGINS (أبداً "*"). المتصفح يتجاهل بصمت الـ origin
+    اللي ما يطابقش النافذة الأم، والرسالة ما فيها حتى توكن — الواجهة تعاود تجيب من السيرفر."""
+    targets = ",".join(_js_str(o) for o in _ALLOWED_ORIGINS)
+    return (f"[{targets}].forEach(function(o){{try{{window.opener&&"
+            f"window.opener.postMessage({msg_js},o);}}catch(e){{}}}});")
+
 def _oauth_error_page(msg):
     return f"""<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"/><title>فشل</title>
 <style>body{{margin:0;font-family:Arial;background:#0a1628;color:#e8edf5;display:flex;align-items:center;justify-content:center;min-height:100vh;}}</style></head>
 <body><div style="text-align:center;padding:40px;background:rgba(15,32,68,.92);border:1px solid rgba(255,77,109,.3);border-radius:16px;max-width:340px">
 <div style="font-size:56px">❌</div><h2 style="color:#ff4d6d">فشل الربط</h2>
 <p style="color:#8899bb;font-size:12px;word-break:break-all">{_esc(msg)}</p>
-</div><script>window.opener&&window.opener.postMessage({{type:"FB_AUTH_ERROR",message:{_js_str(msg)}}},"*");
+</div><script>{_post_to_opener_js('{type:"FB_AUTH_ERROR",message:' + _js_str(msg) + '}')}
 setTimeout(()=>window.close(),4000);</script></body></html>"""
 
 @app.route("/api/getOAuthState", methods=["GET"])
 @require_auth
 @require_owner
 def api_get_oauth_state():
+    nonce = secrets.token_urlsafe(32)
+    nh    = _nonce_hash(nonce)
+    exp   = int(time.time()) + _OAUTH_STATE_TTL
+    # خانة وحدة لكل تاجر: محاولة ربط جديدة تلغي القديمة
+    _fb_put(f"oauth_pending/{request.auth_uid}", {"nh": nh, "exp": exp})
     state = jwt.encode({
         "uid": request.auth_uid, "uname": request.auth_username, "typ": "oauth_state",
-        "exp": int(time.time()) + 600,
+        "nh": nh, "exp": exp,
     }, JWT_SECRET, algorithm=JWT_ALGO)
-    return ok_json({"state": state})
+    resp = ok_json({"state": state})
+    resp.set_cookie(_OAUTH_COOKIE, nonce, max_age=_OAUTH_STATE_TTL, path="/callback",
+                    secure=True, httponly=True, samesite="Lax")
+    return resp
 
 @app.route("/fb-status", methods=["GET"])
 @require_auth
