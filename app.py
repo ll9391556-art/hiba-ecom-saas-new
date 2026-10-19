@@ -3220,10 +3220,23 @@ def process_bg(sender_id, user_text, bot, send_fn,
             try: send_fn("عذراً، حدث خطأ مؤقت.")
             except Exception: pass
     _executor.submit(task)
+def _webhook_object(raw_body):
+    """للسجلات فقط: نوع المنتج اللي بعث الـ webhook (بلا أي محتوى آخر من الجسم)."""
+    try:
+        obj = json.loads(raw_body).get("object")
+    except Exception:
+        return "?"
+    return obj if obj in ("page", "instagram", "whatsapp_business_account") else "?"
+
 def verify_sig(raw_body, headers):
-    # 1. جلب السر وتطهيره تماماً
-    secret = os.environ.get("META_APP_SECRET", "").strip()
-    if not secret:
+    # 1. جلب الأسرار: سر تطبيق ميتا (فيسبوك/واتساب/إنستغرام عبر Facebook Login)
+    #    + سر إنستغرام المنفصل (Instagram API with Instagram Login يوقّع بيه وحدو)
+    keys = []
+    for name in ("META_APP_SECRET", "INSTAGRAM_APP_SECRET"):
+        k = os.environ.get(name, "").strip()
+        if k and k not in keys:
+            keys.append(k)
+    if not keys:
         logging.critical("🚨 META_APP_SECRET مفقود من متغيرات البيئة!")
         return False
     
@@ -3235,15 +3248,13 @@ def verify_sig(raw_body, headers):
     
     received_sig = sig_header[7:]
 
-    # 3. حساب التوقيع بدقة على البيانات الخام
-    calculated_sig = hmac.new(
-        secret.encode('utf-8'),
-        raw_body,
-        hashlib.sha256
-    ).hexdigest()
-
-    # 4. مقارنة زمن-ثابت — بلا تسجيل أي جزء من التوقيعات أو السر أو جسم الطلب
-    match = hmac.compare_digest(calculated_sig, received_sig)
+    # 3+4. حساب التوقيع على البيانات الخام لكل سر + مقارنة زمن-ثابت
+    #      — بلا تسجيل أي جزء من التوقيعات أو السر أو جسم الطلب
+    match = False
+    for k in keys:
+        calculated_sig = hmac.new(k.encode('utf-8'), raw_body, hashlib.sha256).hexdigest()
+        if hmac.compare_digest(calculated_sig, received_sig):
+            match = True
 
     if not match:
         logging.warning(f"⚠️ توقيع webhook غير مطابق | حجم البيانات: {len(raw_body)} بايت")
@@ -3282,10 +3293,9 @@ def webhook():
     raw_body = request.get_data() 
     
     if not verify_sig(raw_body, request.headers):
-        # إذا فشل التحقق، سنكتفي بطباعة التحذير ولن نوقف البوت حالياً 
-        # لكي نرى إذا كان سيرد، لكن يفضل تفعيلها بعد التأكد
-        logging.error("❌ فشل التحقق ولكن سنستمر للمعالجة (مؤقتاً)")
-        return "Forbidden", 403 # عطليه مؤقتاً لضمان عمل البوت
+        # fail-closed: الطلب يترفض وما يتعالجش — object يبيّن أنو منتج (page/instagram/whatsapp) فشل
+        logging.error(f"❌ رفض webhook: توقيع غير صالح (403) | object={_webhook_object(raw_body)}")
+        return "Forbidden", 403
     
     data = request.get_json(silent=True)
     if not data: return "Bad Request", 400

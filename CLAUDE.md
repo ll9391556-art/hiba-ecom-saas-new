@@ -23,7 +23,7 @@ There is no linter configured.
 Running the server:
 - Production: `gunicorn app:app --workers 4 --worker-class gthread --threads 4 --timeout 120 --bind 0.0.0.0:$PORT` (`Procfile`; the `Dockerfile` hard-codes port 7860).
 - `python app.py` fails with a circular-import error (blueprints do `from app import ...` while the main module is `__main__`). `flask --app app run` imports the module as `app` and should avoid this (not yet verified). gunicorn does not run on Windows.
-- Needs `FIREBASE_CREDENTIALS` (service-account JSON as a string), `JWT_SECRET`, `ENCRYPTION_KEY` (Fernet), `META_APP_SECRET`/`FB_APP_SECRET`, `VERIFY_TOKEN`, `ADMIN_API_KEY`. If `JWT_SECRET`/`ENCRYPTION_KEY` are missing, each worker generates its own random value, so tokens and encrypted credentials break across workers.
+- Needs `FIREBASE_CREDENTIALS` (service-account JSON as a string), `JWT_SECRET`, `ENCRYPTION_KEY` (Fernet), `META_APP_SECRET`/`FB_APP_SECRET`, `VERIFY_TOKEN`, `ADMIN_API_KEY`. Webhook signatures (`verify_sig`) are checked against `META_APP_SECRET` and, if set, `INSTAGRAM_APP_SECRET` (Instagram API with Instagram Login signs with its own secret); `FB_APP_SECRET` is only the OAuth `client_secret`. If `JWT_SECRET`/`ENCRYPTION_KEY` are missing, each worker generates its own random value, so tokens and encrypted credentials break across workers.
 
 Deployment: production runs Python 3.10 in Docker (`Dockerfile`), so keep code compatible with 3.10. There is no CI deploy workflow (the Hugging Face sync workflow was removed). A `Procfile` exists for Render; the `README.md` front matter and the Dockerfile's port 7860 are leftovers from Hugging Face Spaces.
 
