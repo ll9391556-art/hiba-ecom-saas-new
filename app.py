@@ -1588,6 +1588,7 @@ def api_add_city():
     d    = body.get("data") or {}
     name = str(d.get("name") or "").strip()
     if not name: return err_json("Missing fields")
+    if len(name) > 100: return err_json("اسم المدينة طويل جداً")
     _fb_put(f"data/{uid}/cities/{name}", {
         "name": name,
         "costShip": float(d.get("costShip",0)), "custShip": float(d.get("custShip",0)),
@@ -1678,6 +1679,26 @@ def api_get_store_settings():
     if not uid: return err_json("Missing userId")
     return ok_json(_fb_get(f"data/{uid}/storeSettings") or {})
 
+_STORE_TEXT_LIMITS = {"name": 120, "tagline": 300, "logo": 32, "lang": 8}
+_STORE_CURRENCIES  = ("DZD", "EUR", "USD")
+
+def _clean_store_setting(field, value, current):
+    """تحقق خفيف لإعدادات المتجر: نوع + طول فقط، بلا فلترة حروف (عربي/فرنسي/إيموجي يمرّو كما هم —
+    الحماية من XSS بالتهريب وقت العرض). قيمة مطابقة للمخزّنة حالياً تتقبل دائماً باش المتاجر
+    القديمة تقدر تعاود تحفظ."""
+    if current is not None and value == current:
+        return True, value
+    if field == "logoImage":
+        if value == "":
+            return True, ""
+        clean = _sanitize_image_url(value) if isinstance(value, str) else ""
+        return (bool(clean), clean)
+    if field == "currency":
+        return (value in _STORE_CURRENCIES, value)
+    if not isinstance(value, str) or len(value) > _STORE_TEXT_LIMITS[field]:
+        return False, None
+    return True, value
+
 @app.route("/api/updateStoreSettings", methods=["POST"])
 @require_auth
 @require_perm("store")
@@ -1685,12 +1706,16 @@ def api_update_store_settings():
     body = request.get_json(silent=True) or {}
     uid  = request.auth_uid
     d    = body.get("data") or {}
+    if not isinstance(d, dict): return err_json("Invalid data")
+    existing = _fb_get(f"data/{uid}/storeSettings")
     patch = {}
     for field, default in (("name","My Store"), ("tagline",""), ("logo","🛒"), ("logoImage",""), ("lang","AR"), ("currency","DZD")):
         if field in d:
-            patch[field] = d[field]
+            ok, value = _clean_store_setting(field, d[field], (existing or {}).get(field))
+            if not ok:
+                return err_json(f"قيمة غير صالحة للحقل: {field}")
+            patch[field] = value
     if patch:
-        existing = _fb_get(f"data/{uid}/storeSettings")
         if existing:
             _fb_patch(f"data/{uid}/storeSettings", patch)
         else:
@@ -1902,7 +1927,7 @@ def _build_landing_html(uid, page):
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>{name} — {store_name}</title>
+<title>{name} — {_esc(store_name)}</title>
 <meta name="description" content="{_esc(desc_meta)}"/>
 <meta property="og:title" content="{name}"/>
 <meta property="og:description" content="{_esc(desc_meta)}"/>
