@@ -1102,6 +1102,18 @@ def api_login():
 
     return err_json("Invalid credentials", 401)
 
+@app.route("/api/me", methods=["GET"])
+@require_auth
+def api_me():
+    """هوية الجلسة الحالية باش الواجهة تعاود تفتح اللوحة بعد reload من of_token — بلا أي سر
+    (ماشي كيما /api/login اللي يرجّع سجل users كامل). require_auth يرفض التوكن المنتهي أو
+    الغلط (401) والعضو المعطّل (403)، ويجيب صلاحيات العضو الحالية من قاعدة البيانات."""
+    me = {"Username": request.auth_username, "User_ID": request.auth_uid, "role": request.auth_role}
+    if request.auth_role == "member":
+        me.update(memberUsername=request.auth_member_username,
+                  memberName=request.auth_member_name, permissions=request.auth_perms)
+    return ok_json(me)
+
 # ── فريق العمل — Team Members (owner فقط) ──────────────────
 @app.route("/api/team/listMembers", methods=["GET"])
 @require_auth
