@@ -143,18 +143,13 @@ def issue_token(uid, username, role="owner", perms=None, member_username="", mem
 
 def decode_token(token, typ="session"):
     """يفك JWT ويتأكد من نوعه: "session" (تسجيل الدخول) أو "oauth_state" (ربط فيسبوك).
-    بلا هاد الفحص، state ديال OAuth كان يخدم كجلسة owner لمدة 10 دقائق."""
+    أي توكن بلا typ صالح، أو بنوع آخر، يترفض دائماً — بلا هاد الفحص، state ديال OAuth
+    كان يخدم كجلسة owner لمدة 10 دقائق."""
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGO])
     except Exception:
         return None
-    if payload.get("typ") == typ:
-        return payload
-    # مرحلة انتقالية: جلسات قبل إضافة typ (فيها role دائماً، والـ state القديم ما فيهش)
-    # تبقى صالحة حتى تنتهي (7 أيام كحد أقصى). تتنحّى هاد الحالة بعد ما يفوتو.
-    if typ == "session" and "typ" not in payload and "role" in payload:
-        return payload
-    return None
+    return payload if payload.get("typ") == typ else None
 
 def _extract_bearer(req):
     h = req.headers.get("Authorization", "")
