@@ -25,7 +25,7 @@ Running the server:
 - `python app.py` fails with a circular-import error (blueprints do `from app import ...` while the main module is `__main__`). `flask --app app run` imports the module as `app` and should avoid this (not yet verified). gunicorn does not run on Windows.
 - Needs `FIREBASE_CREDENTIALS` (service-account JSON as a string), `JWT_SECRET`, `ENCRYPTION_KEY` (Fernet), `META_APP_SECRET`/`FB_APP_SECRET`, `VERIFY_TOKEN`, `ADMIN_API_KEY`. If `JWT_SECRET`/`ENCRYPTION_KEY` are missing, each worker generates its own random value, so tokens and encrypted credentials break across workers.
 
-Deployment: `.github/workflows/sync_to_huggingface.yml` **force-pushes `main` to a Hugging Face Space on every push to `main`** (Docker SDK, configured by the `README.md` front matter). A `Procfile` also exists for Render.
+Deployment: production runs Python 3.10 in Docker (`Dockerfile`), so keep code compatible with 3.10. There is no CI deploy workflow (the Hugging Face sync workflow was removed). A `Procfile` exists for Render; the `README.md` front matter and the Dockerfile's port 7860 are leftovers from Hugging Face Spaces.
 
 ## Architecture
 
