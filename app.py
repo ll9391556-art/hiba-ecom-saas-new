@@ -2672,7 +2672,10 @@ def api_saas():
             return ok_json(_fb_get(payload["path"]))
         if action == "firebaseSet":
             if not _path_allowed(payload.get("path","")): return err_json("Forbidden path", 403)
-            _fb_put(payload["path"], payload.get("payload", payload.get("data")))
+            value = payload.get("payload", payload.get("data"))
+            # firebase-admin يرفض set(None) — قبل، _fb_put كان يفشل بصمت والرد يقول ok
+            if value is None: return err_json("set requires a value")
+            if not _fb_put(payload["path"], value): return err_json("write failed", 500)
             return ok_json(True)
         if action == "firebaseUpdate":
             if not _path_allowed(payload.get("path","")): return err_json("Forbidden path", 403)

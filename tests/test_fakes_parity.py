@@ -12,3 +12,9 @@ def test_transaction_returning_none_raises_like_sdk(db):
         fakes.FakeReference("x/y").transaction(lambda cur: None)
     assert db.get("x/y") == {"a": 1}  # ما تكتب والو
 
+
+def test_set_and_push_none_raise_like_sdk():
+    with pytest.raises(ValueError, match="Value must not be None."):
+        fakes.FakeReference("x/y").set(None)
+    with pytest.raises(ValueError, match="Value must not be None."):
+        fakes.FakeReference("x").push(None)
