@@ -2672,7 +2672,10 @@ def api_saas():
             return ok_json(_fb_get(payload["path"]))
         if action == "firebaseSet":
             if not _path_allowed(payload.get("path","")): return err_json("Forbidden path", 403)
-            _fb_put(payload["path"], payload.get("payload", payload.get("data")))
+            value = payload.get("payload", payload.get("data"))
+            # firebase-admin يرفض set(None) — قبل، _fb_put كان يفشل بصمت والرد يقول ok
+            if value is None: return err_json("set requires a value")
+            if not _fb_put(payload["path"], value): return err_json("write failed", 500)
             return ok_json(True)
         if action == "firebaseUpdate":
             if not _path_allowed(payload.get("path","")): return err_json("Forbidden path", 403)
@@ -2778,22 +2781,26 @@ _OAUTH_STATE_TTL = 600
 def _nonce_hash(nonce):
     return hashlib.sha256(str(nonce).encode("utf-8")).hexdigest()
 
+class _NonceRejected(Exception):
+    pass
+
 def _consume_oauth_nonce(uid, nh):
-    """يمسح oauth_pending/{uid} ذرّياً إذا كان مطابق وما انتهاش — يرجّع True مرة وحدة فقط."""
-    result = {"ok": False}
+    """يستهلك oauth_pending/{uid} ذرّياً إذا كان مطابق وما انتهاش — يرجّع True مرة وحدة فقط.
+    firebase-admin يرفض None فالـ transaction (ما يمسحش)، لذلك نكتبو علامة "مستعمل" بلا nh،
+    ومحاولة ربط جديدة تكتب فوقها. عند عدم التطابق نوقفو الـ transaction بلا ما نكتبو."""
     def _txn(cur):
-        result["ok"] = False
         if (isinstance(cur, dict) and int(cur.get("exp", 0) or 0) > time.time()
                 and hmac.compare_digest(str(cur.get("nh", "")).encode(), nh.encode())):
-            result["ok"] = True
-            return None
-        return cur
+            return {"used": int(time.time())}
+        raise _NonceRejected()
     try:
         _firebase_ref(f"oauth_pending/{uid}").transaction(_txn)
+        return True
+    except _NonceRejected:
+        return False
     except Exception as e:
         logging.error(f"OAuth nonce consume failed: {type(e).__name__}")
         return False
-    return result["ok"]
 
 @app.route("/callback", methods=["GET"])
 def fb_oauth_callback():
