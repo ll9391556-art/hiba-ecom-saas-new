@@ -107,6 +107,22 @@ def test_successful_connection_still_saves_tokens(app, client, db, graph, seed_o
     assert db.get("channel_index/IG1") == owner["username"]
 
 
+def test_error_param_is_not_reflected(client):
+    """SEC-003 — error= من الرابط ما يتعكسش داخل <script> ولا فالصفحة."""
+    r = client.get("/callback?error=</script><b>x")
+    body = r.get_data(as_text=True)
+    assert "</script><b>x" not in body
+    assert "<b>x" not in body
+    assert "FB_AUTH_ERROR" in body
+
+
+def test_js_str_is_safe_inside_script(app):
+    import json
+    out = app._js_str('</script>&"x"')
+    assert "<" not in out and ">" not in out and "&" not in out
+    assert json.loads(out) == '</script>&"x"'
+
+
 def test_invalid_state_shows_fixed_message(client, graph, caplog):
     graph.extend([(200, {"access_token": "s"}), (200, {"access_token": "l"}), (200, {"data": []})])
     r = client.get("/callback?code=x&state=not-a-jwt")

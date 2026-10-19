@@ -2730,7 +2730,7 @@ def fb_oauth_callback():
     code  = request.args.get("code")
     state = request.args.get("state")
     error = request.args.get("error")
-    if error: return _oauth_error_page(error)
+    if error: return _oauth_error_page("تم إلغاء الربط أو رفضه من فيسبوك")
     if not code or not state: return _oauth_error_page("Missing code or state")
     try:
         r1 = requests.get("https://graph.facebook.com/v19.0/oauth/access_token",
@@ -2804,11 +2804,15 @@ def fb_oauth_callback():
 <p style="color:#8899bb;font-size:13px">جاري إغلاق النافذة...</p>
 {('<div style="margin-top:16px;background:rgba(255,255,255,.04);border-radius:10px;padding:12px">' + ph + '</div>') if ph else ''}
 </div><script>try{{window.opener&&window.opener.postMessage({{type:"FB_AUTH_SUCCESS",
-fb_token:{json.dumps(fb_token)},ig_token:{json.dumps(ig_token)},
-fb_page_id:{json.dumps(fb_page_id)},ig_page_id:{json.dumps(ig_page_id)}}},"*");}}catch(e){{}}
+fb_token:{_js_str(fb_token)},ig_token:{_js_str(ig_token)},
+fb_page_id:{_js_str(fb_page_id)},ig_page_id:{_js_str(ig_page_id)}}},"*");}}catch(e){{}}
 setTimeout(()=>window.close(),2500);</script></body></html>"""
     except Exception as err:
         logging.error(f"OAuth error: {type(err).__name__}"); return _oauth_error_page(_OAUTH_FAIL_MSG)
+
+def _js_str(v):
+    """نص JSON آمن داخل <script> — json.dumps وحده ما يهرّبش </script>."""
+    return json.dumps(str(v)).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
 
 def _oauth_error_page(msg):
     return f"""<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"/><title>فشل</title>
@@ -2816,7 +2820,7 @@ def _oauth_error_page(msg):
 <body><div style="text-align:center;padding:40px;background:rgba(15,32,68,.92);border:1px solid rgba(255,77,109,.3);border-radius:16px;max-width:340px">
 <div style="font-size:56px">❌</div><h2 style="color:#ff4d6d">فشل الربط</h2>
 <p style="color:#8899bb;font-size:12px;word-break:break-all">{_esc(msg)}</p>
-</div><script>window.opener&&window.opener.postMessage({{type:"FB_AUTH_ERROR",message:{json.dumps(str(msg))}}},"*");
+</div><script>window.opener&&window.opener.postMessage({{type:"FB_AUTH_ERROR",message:{_js_str(msg)}}},"*");
 setTimeout(()=>window.close(),4000);</script></body></html>"""
 
 @app.route("/api/getOAuthState", methods=["GET"])
