@@ -2721,6 +2721,10 @@ def _bot_allowed_for(bot_settings):
     plan = str(bot_settings.get("plan", "starter")).lower()
     return PLANS.get(plan, {}).get("bot", False)
 
+# رسالة ثابتة لكل أخطاء الربط — نص الاستثناء (فيه URL كامل بـ client_secret/access_token)
+# ما يتعرضش للمستخدم ولا يتسجّل أبداً.
+_OAUTH_FAIL_MSG = "تعذّر إكمال الربط مع فيسبوك — حاول مرة أخرى"
+
 @app.route("/callback", methods=["GET"])
 def fb_oauth_callback():
     code  = request.args.get("code")
@@ -2732,18 +2736,24 @@ def fb_oauth_callback():
         r1 = requests.get("https://graph.facebook.com/v19.0/oauth/access_token",
             params={"client_id":FB_APP_ID,"client_secret":FB_APP_SECRET_OAUTH,
                     "redirect_uri":REDIRECT_URI,"code":code}, timeout=15)
-        r1.raise_for_status()
+        if not r1.ok:
+            logging.error(f"OAuth code exchange failed: HTTP {r1.status_code}")
+            return _oauth_error_page(_OAUTH_FAIL_MSG)
         short_token = r1.json().get("access_token")
         if not short_token: raise ValueError("No access_token")
         r2 = requests.get("https://graph.facebook.com/v19.0/oauth/access_token",
             params={"grant_type":"fb_exchange_token","client_id":FB_APP_ID,
                     "client_secret":FB_APP_SECRET_OAUTH,"fb_exchange_token":short_token}, timeout=15)
-        r2.raise_for_status()
+        if not r2.ok:
+            logging.error(f"OAuth long-lived token exchange failed: HTTP {r2.status_code}")
+            return _oauth_error_page(_OAUTH_FAIL_MSG)
         long_token = r2.json().get("access_token", short_token)
         r3 = requests.get("https://graph.facebook.com/v19.0/me/accounts",
             params={"access_token":long_token,"fields":"id,name,access_token,instagram_business_account"},
             timeout=15)
-        r3.raise_for_status()
+        if not r3.ok:
+            logging.error(f"OAuth /me/accounts failed: HTTP {r3.status_code}")
+            return _oauth_error_page(_OAUTH_FAIL_MSG)
         pages = r3.json().get("data",[]) or []
         logging.info(f"📘 FB /me/accounts pages received: {len(pages)}")
         fb_page_id = ig_page_id = ig_token = ""
@@ -2798,7 +2808,7 @@ fb_token:{json.dumps(fb_token)},ig_token:{json.dumps(ig_token)},
 fb_page_id:{json.dumps(fb_page_id)},ig_page_id:{json.dumps(ig_page_id)}}},"*");}}catch(e){{}}
 setTimeout(()=>window.close(),2500);</script></body></html>"""
     except Exception as err:
-        logging.error(f"OAuth error: {err}"); return _oauth_error_page(str(err))
+        logging.error(f"OAuth error: {type(err).__name__}"); return _oauth_error_page(_OAUTH_FAIL_MSG)
 
 def _oauth_error_page(msg):
     return f"""<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"/><title>فشل</title>
