@@ -130,7 +130,7 @@ def issue_token(uid, username, role="owner", perms=None, member_username="", mem
     """يولّد JWT لصاحب الحساب (owner) أو لعضو فريق (member)."""
     expiry_hours = JWT_EXPIRY_HOURS_MEMBER if role == "member" else JWT_EXPIRY_HOURS_OWNER
     payload = {
-        "uid": str(uid), "username": str(username), "role": role,
+        "uid": str(uid), "username": str(username), "role": role, "typ": "session",
         "iat": int(time.time()), "exp": int(time.time()) + expiry_hours * 3600,
     }
     if role == "member":
@@ -139,11 +139,20 @@ def issue_token(uid, username, role="owner", perms=None, member_username="", mem
         payload["memberName"]      = member_name or member_username
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGO)
 
-def decode_token(token):
+def decode_token(token, typ="session"):
+    """يفك JWT ويتأكد من نوعه: "session" (تسجيل الدخول) أو "oauth_state" (ربط فيسبوك).
+    بلا هاد الفحص، state ديال OAuth كان يخدم كجلسة owner لمدة 10 دقائق."""
     try:
-        return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGO])
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGO])
     except Exception:
         return None
+    if payload.get("typ") == typ:
+        return payload
+    # مرحلة انتقالية: جلسات قبل إضافة typ (فيها role دائماً، والـ state القديم ما فيهش)
+    # تبقى صالحة حتى تنتهي (7 أيام كحد أقصى). تتنحّى هاد الحالة بعد ما يفوتو.
+    if typ == "session" and "typ" not in payload and "role" in payload:
+        return payload
+    return None
 
 def _extract_bearer(req):
     h = req.headers.get("Authorization", "")
@@ -2762,6 +2771,13 @@ def fb_oauth_callback():
     error = request.args.get("error")
     if error: return _oauth_error_page("تم إلغاء الربط أو رفضه من فيسبوك")
     if not code or not state: return _oauth_error_page("Missing code or state")
+    # التحقق من state قبل أي نداء لفيسبوك — توكن جلسة (أو أي نوع آخر) ما يتقبلش هنا
+    sd    = decode_token(unquote(state), typ="oauth_state") or {}
+    uid   = str(sd.get("uid","") or "").strip()
+    uname = str(sd.get("uname","") or "").strip()
+    if not uid:
+        logging.error("OAuth state verification failed")
+        return _oauth_error_page(_OAUTH_FAIL_MSG)
     try:
         r1 = requests.get("https://graph.facebook.com/v19.0/oauth/access_token",
             params={"client_id":FB_APP_ID,"client_secret":FB_APP_SECRET_OAUTH,
@@ -2800,14 +2816,6 @@ def fb_oauth_callback():
                 pages_info.append({"type":"instagram","id":ig_page_id,"name":f"{page.get('name','')} (IG)"})
             else:
                 logging.warning(f"⚠️ Page '{page.get('name','')}' has NO instagram_business_account linked")
-        uid = uname = ""
-        try:
-            sd    = jwt.decode(unquote(state), JWT_SECRET, algorithms=[JWT_ALGO])
-            uid   = str(sd.get("uid","") or "").strip()
-            uname = str(sd.get("uname","") or "").strip()
-        except Exception as e:
-            logging.error(f"OAuth state verification failed: {e}")
-        if not uid: raise ValueError("UID missing or state invalid/expired")
         _fb_patch(f"data/{uid}/fbTokens", {
             "fb_access_token":fb_token,"fb_page_id":fb_page_id,
             "instgram_access_token":ig_token,"Page_ID_instgram":ig_page_id,
@@ -2858,7 +2866,7 @@ setTimeout(()=>window.close(),4000);</script></body></html>"""
 @require_owner
 def api_get_oauth_state():
     state = jwt.encode({
-        "uid": request.auth_uid, "uname": request.auth_username,
+        "uid": request.auth_uid, "uname": request.auth_username, "typ": "oauth_state",
         "exp": int(time.time()) + 600,
     }, JWT_SECRET, algorithm=JWT_ALGO)
     return ok_json({"state": state})

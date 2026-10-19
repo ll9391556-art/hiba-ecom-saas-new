@@ -47,8 +47,15 @@ def graph(monkeypatch, app):
 
 
 def _valid_state(app, owner):
-    return app.jwt.encode({"uid": owner["uid"], "uname": owner["username"],
+    return app.jwt.encode({"uid": owner["uid"], "uname": owner["username"], "typ": "oauth_state",
                            "exp": int(time.time()) + 600}, app.JWT_SECRET, algorithm=app.JWT_ALGO)
+
+
+@pytest.fixture
+def cb_url(app, seed_owner):
+    """رابط /callback بـ state صالح، باش اختبارات التسريب توصل فعلاً لنداءات فيسبوك."""
+    owner = seed_owner()
+    return lambda: f"/callback?code=x&state={_valid_state(app, owner)}"
 
 
 def _assert_no_leak(body, caplog, *extra):
@@ -57,35 +64,39 @@ def _assert_no_leak(body, caplog, *extra):
         assert needle not in caplog.text, f"{needle!r} leaked in logs"
 
 
-def test_code_exchange_400_does_not_leak_secret(client, graph, caplog):
+def test_code_exchange_400_does_not_leak_secret(client, graph, caplog, cb_url):
     caplog.set_level(logging.INFO)
     graph.append((400, {"error": {"message": "Invalid verification code format."}}))
-    r = client.get("/callback?code=x&state=y")
+    r = client.get(cb_url())
+    assert graph == []  # نداءات فيسبوك وصلت فعلاً
     _assert_no_leak(r.get_data(as_text=True), caplog)
     assert "FB_AUTH_ERROR" in r.get_data(as_text=True)
 
 
-def test_network_error_does_not_leak_secret(client, graph, caplog):
+def test_network_error_does_not_leak_secret(client, graph, caplog, cb_url):
     caplog.set_level(logging.INFO)
     graph.append(requests.ConnectionError(
         "HTTPSConnectionPool(host='graph.facebook.com', port=443): Max retries exceeded with url: "
         f"/v19.0/oauth/access_token?client_id=0&client_secret={SECRET}&code=x"))
-    r = client.get("/callback?code=x&state=y")
+    r = client.get(cb_url())
+    assert graph == []  # نداءات فيسبوك وصلت فعلاً
     _assert_no_leak(r.get_data(as_text=True), caplog)
 
 
-def test_long_lived_exchange_failure_does_not_leak_secret(client, graph, caplog):
+def test_long_lived_exchange_failure_does_not_leak_secret(client, graph, caplog, cb_url):
     caplog.set_level(logging.INFO)
     graph.extend([(200, {"access_token": "short-tok-123"}), (400, {})])
-    r = client.get("/callback?code=x&state=y")
+    r = client.get(cb_url())
+    assert graph == []  # نداءات فيسبوك وصلت فعلاً
     _assert_no_leak(r.get_data(as_text=True), caplog, "short-tok-123")
 
 
-def test_accounts_failure_does_not_leak_user_token(client, graph, caplog):
+def test_accounts_failure_does_not_leak_user_token(client, graph, caplog, cb_url):
     caplog.set_level(logging.INFO)
     graph.extend([(200, {"access_token": "short-tok-123"}),
                   (200, {"access_token": "long-tok-456"}), (400, {})])
-    r = client.get("/callback?code=x&state=y")
+    r = client.get(cb_url())
+    assert graph == []  # نداءات فيسبوك وصلت فعلاً
     _assert_no_leak(r.get_data(as_text=True), caplog, "long-tok-456")
 
 
