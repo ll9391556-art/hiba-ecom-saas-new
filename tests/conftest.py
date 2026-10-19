@@ -52,6 +52,7 @@ import app as app_module  # noqa: E402
 def _reset_state():
     """قاعدة بيانات نظيفة وكاشات الذاكرة فارغة قبل كل اختبار."""
     fakes.DB.reset()
+    fakes.READS.clear()
     fakes.BUCKETS.clear()
     fakes.GEMINI_CALLS.clear()
     fakes.GEMINI_RESPONDER["fn"] = None

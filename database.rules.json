@@ -1,0 +1,15 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "data": {
+      "$uid": {
+        "orders": { ".indexOn": ["createdAt", "updatedAt", "phoneDigits"] }
+      }
+    },
+    "conversations_meta": {
+      "$uid": { ".indexOn": ["lastTimestamp"] }
+    },
+    "support_tickets": { ".indexOn": ["uid"] }
+  }
+}

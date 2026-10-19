@@ -8,10 +8,21 @@ Fakes in-memory لـ firebase_admin و google.genai — تُحقن في sys.modu
 بتشغيل المكتبة الحقيقية داخل هذا المستودع.
 """
 import copy
+import json
+import pathlib
 import sys
 import types
 
 _INVALID_PATH_CHARACTERS = "[].?#$"
+RULES_PATH = pathlib.Path(__file__).resolve().parent.parent / "database.rules.json"
+
+# كل قراءة عبر FakeReference/FakeQuery تتسجّل هنا (conftest يفرغها قبل كل اختبار) —
+# باش الاختبارات تتأكد مثلاً أن مسار ما ما يقراش عقدة كاملة.
+READS = []
+
+
+class InvalidArgumentError(Exception):
+    """مثل firebase_admin.exceptions.InvalidArgumentError (HTTP 400 من REST API)."""
 
 
 class NetworkBlocked(RuntimeError):
@@ -103,14 +114,137 @@ class FakeDatabase:
 DB = FakeDatabase()
 
 
+def _load_rules():
+    try:
+        return json.loads(RULES_PATH.read_text(encoding="utf-8")).get("rules", {})
+    except FileNotFoundError:
+        return {}
+
+
+def _is_indexed(segments, child):
+    """هل database.rules.json فيه ".indexOn" لهاد الـ child فهاد المسار؟ ($wildcard يطابق أي مقطع)."""
+    node = _load_rules()
+    for seg in segments:
+        if not isinstance(node, dict):
+            return False
+        if seg in node:
+            node = node[seg]
+            continue
+        wild = next((k for k in node if k.startswith("$")), None)
+        if wild is None:
+            return False
+        node = node[wild]
+    idx = node.get(".indexOn", []) if isinstance(node, dict) else []
+    return child in ([idx] if isinstance(idx, str) else idx)
+
+
+def _value_order(v):
+    # ترتيب RTDB لقيم orderByChild: بلا قيمة، false، true، أرقام، نصوص، كائنات
+    if v is None:
+        return (0, 0)
+    if v is False:
+        return (1, 0)
+    if v is True:
+        return (2, 0)
+    if isinstance(v, (int, float)):
+        return (3, v)
+    if isinstance(v, str):
+        return (4, v)
+    return (5, 0)
+
+
+def _child_value(node, child_path):
+    for seg in child_path.split("/"):
+        if not isinstance(node, dict) or seg not in node:
+            return None
+        node = node[seg]
+    return node
+
+
+class FakeQuery:
+    """نفس واجهة firebase_admin.db.Query: order_by_* ثم start_at/end_at/equal_to/limit_to_*،
+    ثم get() اللي يرجّع dict مرتّب. order_by_child بلا .indexOn فالقواعد يرمي خطأ كيما REST."""
+
+    def __init__(self, ref, order_by):
+        self._ref = ref
+        self._order_by = order_by
+        self._bounds = {}
+        self._limit_first = self._limit_last = None
+
+    def start_at(self, value):
+        self._bounds["start_at"] = value
+        return self
+
+    def end_at(self, value):
+        self._bounds["end_at"] = value
+        return self
+
+    def equal_to(self, value):
+        self._bounds["equal_to"] = value
+        return self
+
+    def limit_to_first(self, n):
+        self._limit_first = int(n)
+        return self
+
+    def limit_to_last(self, n):
+        self._limit_last = int(n)
+        return self
+
+    def _order(self, key, value):
+        if self._order_by == "$key":
+            return _key_order(key)
+        return _value_order(_child_value(value, self._order_by))
+
+    def _bound(self, value):
+        return _key_order(str(value)) if self._order_by == "$key" else _value_order(value)
+
+    def get(self):
+        READS.append(("query", self._ref.path, self._order_by,
+                      dict(self._bounds, limit_first=self._limit_first, limit_last=self._limit_last)))
+        if self._order_by != "$key" and not _is_indexed(self._ref._segments, self._order_by):
+            raise InvalidArgumentError(
+                f'Index not defined, add ".indexOn": "{self._order_by}", for path "{self._ref.path}", to the rules')
+        data = DB.get(self._ref.path)
+        if not isinstance(data, dict):
+            return {}
+        items = sorted(data.items(), key=lambda kv: (self._order(*kv), _key_order(kv[0])))
+        for name, value in self._bounds.items():
+            b = self._bound(value)
+            if name == "start_at":
+                items = [kv for kv in items if self._order(*kv) >= b]
+            elif name == "end_at":
+                items = [kv for kv in items if self._order(*kv) <= b]
+            else:
+                items = [kv for kv in items if self._order(*kv) == b]
+        if self._limit_first is not None:
+            items = items[:self._limit_first]
+        if self._limit_last is not None:
+            items = items[-self._limit_last:] if self._limit_last else []
+        return dict(items)
+
+
 class FakeReference:
     def __init__(self, path=""):
         self._segments = _parse_path(path)
         self.path = "/" + "/".join(self._segments)
         self.key = self._segments[-1] if self._segments else None
 
-    def get(self):
-        return DB.get(self.path)
+    def get(self, etag=False, shallow=False):
+        READS.append(("get", self.path, {"shallow": True} if shallow else {}))
+        value = DB.get(self.path)
+        if shallow and isinstance(value, dict):
+            # نفس REST ?shallow=true: المفاتيح فقط (true للكائنات، والقيمة للبدائية)
+            return {k: (True if isinstance(v, dict) else v) for k, v in value.items()}
+        return value
+
+    def order_by_child(self, path):
+        if not isinstance(path, str) or not path or any(ch in path for ch in "$#[]."):
+            raise ValueError(f"Illegal child path: {path}")
+        return FakeQuery(self, path)
+
+    def order_by_key(self):
+        return FakeQuery(self, "$key")
 
     def set(self, value):
         if value is None:
