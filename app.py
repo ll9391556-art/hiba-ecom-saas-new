@@ -7,7 +7,6 @@ import requests
 import time
 import re
 import secrets
-import imghdr
 import threading
 import bcrypt
 import jwt
@@ -2353,13 +2352,26 @@ def api_woo_sync():
     return ok_json({"imported": imported, "checked": len(woo_orders)})
 
 
+def _detect_image_kind(head):
+    """يتعرّف على نوع الصورة من أول بايتات الملف (magic bytes) — بديل imghdr
+    اللي انحذف من Python 3.13."""
+    if head.startswith(b"\xff\xd8\xff"):
+        return "jpeg"
+    if head.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "png"
+    if head[:6] in (b"GIF87a", b"GIF89a"):
+        return "gif"
+    if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        return "webp"
+    return None
+
 @app.route("/api/uploadImage", methods=["POST"])
 @require_auth
 def api_upload_image():
     """رفع آمن عبر السيرفر. قبل التعديل كان التحقق يعتمد فقط على امتداد اسم الملف
     و content_type القادم من المتصفح (كلاهما قابل للتزوير الكامل من العميل)، ما يسمح
     برفع HTML/SVG يحوي جافاسكريبت باسم ملف يبدو كصورة. الآن نفحص أول بايتات الملف
-    فعلياً (magic bytes عبر imghdr) ونفرض content-type ثابت مطابق للمحتوى الحقيقي،
+    فعلياً (magic bytes عبر _detect_image_kind) ونفرض content-type ثابت مطابق للمحتوى الحقيقي،
     ونولّد اسم الملف بالكامل بدل الوثوق باسم العميل."""
     if "file" not in request.files:
         return err_json("No file provided")
@@ -2369,7 +2381,7 @@ def api_upload_image():
 
     head = file.stream.read(512)
     file.stream.seek(0)
-    kind = imghdr.what(None, head)
+    kind = _detect_image_kind(head)
     allowed_mime = {"jpeg": "image/jpeg", "png": "image/png", "gif": "image/gif", "webp": "image/webp"}
     if kind not in allowed_mime:
         return err_json("نوع الملف غير مدعوم — يجب أن يكون صورة حقيقية (jpg/png/gif/webp)")

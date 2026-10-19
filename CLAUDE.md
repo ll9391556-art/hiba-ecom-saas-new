@@ -71,7 +71,6 @@ Deployment: `.github/workflows/sync_to_huggingface.yml` **force-pushes `main` to
 
 - `tests/fakes.py` injects in-memory `firebase_admin` (db, storage, credentials) and `google.genai` modules into `sys.modules` before `app` is imported. The fake DB mirrors RTDB path rules (rejects `[].?#$`, drops empty segments, prunes empty dicts and `None`). Gemini calls fail unless a test sets `fakes.GEMINI_RESPONDER["fn"]`.
 - `tests/conftest.py` forces dummy env vars and blocks all sockets (`fakes.NetworkBlocked`). It resets the DB and the module-level caches before each test, and provides the `client`, `db`, `seed_owner()` and `seed_member(owner, perms=...)` fixtures, which return `headers` with a valid Bearer token.
-- `tests/fakes.py` also contains a temporary `imghdr` shim, because `app.py` still imports `imghdr`, which was removed in Python 3.13.
 
 ## Ongoing security work
 

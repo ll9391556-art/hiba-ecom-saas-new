@@ -210,36 +210,8 @@ class _Config(types.SimpleNamespace):
     pass
 
 
-def _imghdr_shim():
-    """بديل مؤقت لـ imghdr (حُذف من Python 3.13) — نفس منطق stdlib 3.12 للصيغ الأربع
-    التي يقبلها app.py فقط. مؤقت للمرحلة 0؛ يُحذف بعد إصلاح DEP-001."""
-    mod = types.ModuleType("imghdr")
-
-    def what(file, h=None):
-        if h is None:
-            with open(file, "rb") as f:
-                h = f.read(32)
-        if h[6:10] in (b"JFIF", b"Exif") or h[:4] == b"\xff\xd8\xff\xdb":
-            return "jpeg"
-        if h.startswith(b"\211PNG\r\n\032\n"):
-            return "png"
-        if h[:6] in (b"GIF87a", b"GIF89a"):
-            return "gif"
-        if h.startswith(b"RIFF") and h[8:12] == b"WEBP":
-            return "webp"
-        return None
-
-    mod.what = what
-    return mod
-
-
 def install():
     """يحقن الـ fakes في sys.modules. يُستدعى مرة واحدة من conftest قبل import app."""
-    try:
-        import imghdr  # noqa: F401
-    except ModuleNotFoundError:
-        sys.modules["imghdr"] = _imghdr_shim()
-
     fa = types.ModuleType("firebase_admin")
     fa._apps = {}
     fa.initialize_app = lambda cred=None, options=None, name="[DEFAULT]": fa._apps.setdefault(name, object())
