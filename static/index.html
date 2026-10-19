@@ -1489,24 +1489,46 @@ async function doLogin(){
   try{
     var r = await apiPost("/login", {username:u, password:p}, false);
     if(r.status==="ok"){
-      currentUser = r.data;
       authToken   = r.data.token || null;
-      currentRole = r.data.role || "owner";
       if(authToken) localStorage.setItem("of_token", authToken);
-      document.getElementById("loginPage").style.display="none";
-      document.getElementById("sideUser").textContent = u;
-      document.getElementById("topUser").textContent = u;
-      document.getElementById("s_user").value = u;
-      document.getElementById("s_uid").value = currentUser.User_ID||"";
-      loadUserPlan();
-      loadDashboard();
-      applyLang(currentLang);
-      startOrdersPolling();
+      enterDashboard(r.data, u);
     } else {
       showLoginErr(r.message||"Identifiants incorrects");
     }
   }catch(e){ showLoginErr("Erreur serveur"); }
   finally{ btn.disabled=false; btn.innerHTML='<span id="loginBtnTxt">'+t("login_btn")+'</span>'; }
+}
+
+// يفتح اللوحة لمستخدم معروف — بعد تسجيل الدخول، أو بعد reload عبر restoreSession()
+function enterDashboard(user, displayName){
+  currentUser = user;
+  currentRole = user.role || "owner";
+  var name = displayName || user.Username || "";
+  document.getElementById("loginPage").style.display="none";
+  document.getElementById("sideUser").textContent = name;
+  document.getElementById("topUser").textContent = name;
+  document.getElementById("s_user").value = name;
+  document.getElementById("s_uid").value = currentUser.User_ID||"";
+  loadUserPlan();
+  loadDashboard();
+  applyLang(currentLang);
+  startOrdersPolling();
+}
+
+// بعد reload: of_token محفوظ فـ localStorage — نتحقق منو عبر /api/me ونعاود نفتح اللوحة.
+// نخرّجو (ونمسحو التوكن) غير إلا السيرفر رفضو (401/403). خطأ شبكة أو 5xx: نخلّيو التوكن
+// ونبيّنو صفحة الدخول، والـ reload الجاي يعاود يجرّب.
+async function restoreSession(){
+  if(SHOP_UID || !authToken) return;
+  var lp = document.getElementById("loginPage");
+  lp.style.display = "none";
+  try{
+    var r = await fetch(API_URL+"/me", {headers: {"Authorization":"Bearer "+authToken}});
+    if(r.status===401 || r.status===403){ logout(); return; }
+    var d = await r.json();
+    if(r.ok && d.status==="ok" && d.data){ enterDashboard(d.data); return; }
+  }catch(e){}
+  lp.style.display = "flex";
 }
 
 function showLoginErr(m){
@@ -3683,6 +3705,7 @@ function toggleTheme(){
 // =========================================================
 applyTheme();
 applyLang(currentLang);
+restoreSession();
 
 // حماية من bfcache: لو المتصفح رجّع نسخة محفوظة من الصفحة (زر "رجوع")
 // بدون ?store= بالرابط، نتأكد السايدبار وMain ظاهرين بالشكل الصحيح
