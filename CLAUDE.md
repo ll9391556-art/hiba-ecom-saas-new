@@ -40,6 +40,7 @@ Deployment: production runs Python 3.10 in Docker (`Dockerfile`), so keep code c
 
 **Auth and tenancy.**
 - JWT HS256 in `Authorization: Bearer`. The frontend stores it in `localStorage.of_token`.
+- Every JWT carries `typ`: `"session"` (login) or `"oauth_state"` (Facebook connect); `decode_token(token, typ=...)` rejects the wrong type. Sessions issued before `typ` existed (they have `role`) are accepted until they expire — remove that fallback once they're gone.
 - Roles: `owner` (7-day token) or `member` (24h; `require_auth` re-checks `team_users` on every request).
 - Decorator order is `@require_auth` then `@require_perm("<key>")` (owners always pass) or `@require_owner`. `@require_admin` uses the `X-Admin-Key` header.
 - The tenant is always `request.auth_uid` from the token. Public storefront endpoints instead take a `userId` query or body param.
