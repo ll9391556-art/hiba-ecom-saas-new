@@ -103,8 +103,8 @@ async function loadCoupons(){
         '<td>'+val+'</td><td>'+used+'</td>'+
         '<td><span class="badge '+(c.active?"b-on":"b-off")+'">'+(c.active?"فعّالة":"موقوفة")+'</span></td>'+
         '<td>'+
-          '<button style="padding:5px 12px;font-size:11px" onclick="toggleCoupon(\''+esc(c.code)+'\','+(!c.active)+')">'+(c.active?"إيقاف":"تفعيل")+'</button> '+
-          '<button class="btn-danger" style="padding:5px 12px;font-size:11px" onclick="deleteCoupon(\''+esc(c.code)+'\')">حذف</button>'+
+          '<button style="padding:5px 12px;font-size:11px" data-code="'+esc(c.code)+'" onclick="toggleCoupon(this.dataset.code,'+(!c.active)+')">'+(c.active?"إيقاف":"تفعيل")+'</button> '+
+          '<button class="btn-danger" style="padding:5px 12px;font-size:11px" data-code="'+esc(c.code)+'" onclick="deleteCoupon(this.dataset.code)">حذف</button>'+
         '</td></tr>';
     }).join("")+'</tbody></table>';
 }

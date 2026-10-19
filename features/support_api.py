@@ -13,6 +13,7 @@
 """
 import os
 import time
+import html as html_lib
 import logging
 import requests
 from flask import Blueprint, request
@@ -75,14 +76,16 @@ def _send_via_smtp(subject, html_body):
 
 def _send_support_email(ticket, ticket_id):
     subject = f"[OrderFlow Support] {TICKET_TYPES.get(ticket['type'], ticket['type'])} — {ticket['username']}"
+    # كل قيمة تتهرّب قبل ما تدخل جسم الإيميل HTML — الرسالة والاسم يكتبهم التاجر
+    e = lambda v: html_lib.escape(str(v))
     html = f"""
     <div style="font-family:Arial;padding:16px">
-      <h3>تذكرة دعم جديدة #{ticket_id}</h3>
-      <p><strong>التاجر:</strong> {ticket['username']} (UID: {ticket['uid']})</p>
-      <p><strong>النوع:</strong> {TICKET_TYPES.get(ticket['type'], ticket['type'])}</p>
+      <h3>تذكرة دعم جديدة #{e(ticket_id)}</h3>
+      <p><strong>التاجر:</strong> {e(ticket['username'])} (UID: {e(ticket['uid'])})</p>
+      <p><strong>النوع:</strong> {e(TICKET_TYPES.get(ticket['type'], ticket['type']))}</p>
       <p><strong>الرسالة:</strong></p>
-      <p style="background:#f4f4f4;padding:12px;border-radius:8px">{ticket['message']}</p>
-      <p style="color:#888;font-size:12px">{ticket['created_at']}</p>
+      <p style="background:#f4f4f4;padding:12px;border-radius:8px">{e(ticket['message'])}</p>
+      <p style="color:#888;font-size:12px">{e(ticket['created_at'])}</p>
     </div>"""
     if _send_via_sendgrid(subject, html):
         return True

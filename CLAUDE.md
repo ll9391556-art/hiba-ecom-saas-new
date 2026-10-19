@@ -35,7 +35,7 @@ Deployment: production runs Python 3.10 in Docker (`Dockerfile`), so keep code c
 - `users/{username}` — owner account **and** bot settings in one node: `Password` (bcrypt), `User_ID`, `plan`, `source`, Gemini key, FB/IG/WhatsApp tokens and channel IDs. `uid_index/{uid}` → username.
 - `team_users/{memberUsername}` — team-member logins (`ownerUid`, `permissions`, `active`). It is mirrored in `data/{uid}/teamMembers`.
 - `data/{uid}/...` — per-tenant data: `orders`, `products`, `cities`, `coupons`, `storeSettings`, `landingPages`, `integrations` (secrets Fernet-encrypted), `usage/{YYYY-MM}`, `fbTokens`, `auditLog`, `ratings`, `trackingSettings`.
-- `channel_index/{pageId|phoneNumberId}` → username, used by the webhook to find the merchant. `conversations/{uid}/{sender}`, `conversations_meta/{uid}`, `ai_logs/{uid}`, `admin_chats/{uid}`, `support_tickets`. `chats/{sender_id}` (bot history) is **not** tenant-scoped.
+- `channel_index/{pageId|phoneNumberId}` → username, used by the webhook to find the merchant. `conversations/{uid}/{sender}`, `conversations_meta/{uid}`, `ai_logs/{uid}`, `admin_chats/{uid}`, `support_tickets`. Bot history is `chats/{merchant_uid}/{sender_id}`; legacy `chats/{sender_id}` nodes (shared across merchants, pre-SEC-005) are kept but never read. In-memory bot dedupe and rate-limit keys are `uid:sid`.
 - `_fb_get` returns `None` on errors as well as on "not found".
 
 **Auth and tenancy.**

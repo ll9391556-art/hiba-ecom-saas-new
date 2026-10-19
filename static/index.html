@@ -1200,13 +1200,13 @@ var TEAM_COUNT = 0;
 var TEAM_MAX = 6;
 var TEAM_PERM_KEYS = ["orders","products","customers","cities","store","bot","messages","integrations","landing"];
 var CURRENCY_SYMBOLS = {DZD:"دج", EUR:"€", USD:"$"};
-function curSym(){ return CURRENCY_SYMBOLS[merchantCurrency] || merchantCurrency; }
+function curSym(){ return CURRENCY_SYMBOLS[merchantCurrency] || esc(merchantCurrency); }
 
 function renderCurrencyButtons(){
   var box = document.getElementById("currencyButtons");
   if(!box) return;
   box.innerHTML = ["DZD","EUR","USD"].map(function(code){
-    return '<button class="lang-btn'+(code===merchantCurrency?" active":"")+'" onclick="setMerchantCurrency(\''+code+'\')">'+code+'</button>';
+    return '<button class="lang-btn'+(code===merchantCurrency?" active":"")+'" data-code="'+esc(code)+'" onclick="setMerchantCurrency(this.dataset.code)">'+esc(code)+'</button>';
   }).join("");
 }
 
@@ -1425,10 +1425,8 @@ function esc(s){
     return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
   });
 }
-// نسخة آمنة لإدراج نص داخل onclick='...' (بالإضافة لـ esc العادية)
-function escAttr(s){
-  return esc(s).replace(/\r?\n/g, " ");
-}
+// ما تدمجش قيم نصية داخل onclick="f('...')" — المتصفح يفك &#39; قبل ما يشغّل JS.
+// حط القيمة فـ data-* (مهرّبة بـ esc) واقراها بـ this.dataset.
 function applyLang(lang){
   currentLang = lang;
   localStorage.setItem("of_lang", lang);
@@ -1722,13 +1720,13 @@ async function loadDashboard(){
 
     var topTbl = document.getElementById("topProductsTbl");
     topTbl.innerHTML = (d.topProducts||[]).map(function(p){
-      return "<tr><td>"+p.name+"</td><td><strong>"+p.qty+"</strong></td></tr>";
+      return "<tr><td>"+esc(p.name)+"</td><td><strong>"+esc(p.qty)+"</strong></td></tr>";
     }).join("") || '<tr><td colspan="2" class="empty-state">—</td></tr>';
 
     var lowTbl = document.getElementById("lowStockTbl");
     lowTbl.innerHTML = (d.lowStock||[]).map(function(p){
       var cl = p.rem<=0?"br":"bn";
-      return "<tr><td>"+p.name+"</td><td>"+p.rem+"</td><td><span class='badge "+cl+"'>"+p.stat+"</span></td></tr>";
+      return "<tr><td>"+esc(p.name)+"</td><td>"+esc(p.rem)+"</td><td><span class='badge "+cl+"'>"+esc(p.stat)+"</span></td></tr>";
     }).join("") || '<tr><td colspan="3" class="empty-state">✅</td></tr>';
 
     renderStatusChart(d, cur);
@@ -1901,7 +1899,7 @@ function renderOrders(orders){
     var opts = ["Pending","Confirmed","Delivered","Refused","No Answer"].map(function(s){
       return '<option value="'+s+'"'+(o.status===s?" selected":"")+'>'+s+'</option>';
     }).join("");
-    var safeId = escAttr(o.id);
+    var safeId = esc(o.id);
     return '<tr>'+
       '<td>'+(i+1)+'</td>'+
       '<td style="font-size:11px">'+esc(o.date||"—")+'</td>'+
@@ -1912,7 +1910,7 @@ function renderOrders(orders){
       '<td>'+esc(o.city||"—")+'</td>'+
       '<td>'+
         '<span class="badge bn me-1">'+(o.deliveryType==="desk"?t("desk_short"):t("home_short"))+'</span>'+
-        '<select class="status-sel" onchange="updateOrderDelivery(\''+safeId+'\',this.value)">'+
+        '<select class="status-sel" data-id="'+safeId+'" onchange="updateOrderDelivery(this.dataset.id,this.value)">'+
           '<option value="home"'+(o.deliveryType!=="desk"?" selected":"")+'>'+t("home_delivery")+'</option>'+
           '<option value="desk"'+(o.deliveryType==="desk"?" selected":"")+'>'+t("desk_delivery")+'</option>'+
         '</select>'+
@@ -1924,9 +1922,9 @@ function renderOrders(orders){
       '<td style="font-size:11px;color:var(--muted)">'+esc(o.date_delivered||"—")+'</td>'+
           '<td>'+
         '<span class="badge '+stCls+' me-1">'+esc(o.status)+'</span>'+
-        '<select class="status-sel" onchange="updateStatus(\''+safeId+'\',this.value)" data-id="'+safeId+'">'+opts+'</select>'+
+        '<select class="status-sel" onchange="updateStatus(this.dataset.id,this.value)" data-id="'+safeId+'">'+opts+'</select>'+
       '</td>'+
-      '<td><button class="btn-outline btn-sm" onclick="printOrderSlip(\''+safeId+'\')" title="طباعة بون دو كوموند"><i class="bi bi-printer"></i></button></td>'+
+      '<td><button class="btn-outline btn-sm" data-id="'+safeId+'" onclick="printOrderSlip(this.dataset.id)" title="طباعة بون دو كوموند"><i class="bi bi-printer"></i></button></td>'+
     '</tr>';
   }).join("");
 }
@@ -2298,7 +2296,7 @@ function renderStoreLogoPreview(){
   var box = document.getElementById("ss_logo_preview");
   if(!box) return;
   box.innerHTML = currentStoreLogoImage
-    ? '<div class="thumb-item"><img src="'+currentStoreLogoImage+'"/><button class="rm" onclick="removeStoreLogoImage()">✕</button></div>'
+    ? '<div class="thumb-item"><img src="'+esc(currentStoreLogoImage)+'"/><button class="rm" onclick="removeStoreLogoImage()">✕</button></div>'
     : '';
 }
 
@@ -2610,9 +2608,8 @@ function renderConversationsList(list){
     var active = (c.senderId===CURRENT_CONV_SENDER) ? " active" : "";
     var dirIcon = c.lastDirection==="out" ? "↩️ " : "";
     var timeTxt = c.lastTimestamp ? new Date(c.lastTimestamp*1000).toLocaleString("fr-DZ",{hour:"2-digit",minute:"2-digit",day:"2-digit",month:"2-digit"}) : "";
-    var safeSid  = escAttr(c.senderId);
-    var safeName = escAttr(c.name||"");
-    return '<div class="conv-item'+active+'" onclick="openConversation(\''+safeSid+'\',\''+c.platform+'\',\''+safeName+'\')">'+
+    return '<div class="conv-item'+active+'" data-sid="'+esc(c.senderId)+'" data-platform="'+esc(c.platform)+'" data-name="'+esc(c.name||"")+'"'+
+      ' onclick="openConversation(this.dataset.sid,this.dataset.platform,this.dataset.name)">'+
       '<div class="conv-avatar">'+icon+'</div>'+
       '<div class="conv-info">'+
         '<div class="conv-name">'+esc(c.name||c.senderId)+'</div>'+
@@ -3226,8 +3223,8 @@ async function loadShopData(){
       var s = sr.data;
       SHOP_CURRENCY = s.currency || "DZD";
       document.getElementById("sh-logo").innerHTML = s.logoImage
-        ? '<img src="'+s.logoImage+'" style="width:100%;height:100%;object-fit:cover;border-radius:10px"/>'
-        : (s.logo||"🛒");
+        ? '<img src="'+esc(s.logoImage)+'" style="width:100%;height:100%;object-fit:cover;border-radius:10px"/>'
+        : esc(s.logo||"🛒");
       document.getElementById("sh-name").textContent = s.name||"Boutique";
       document.getElementById("sh-tag").textContent  = s.tagline||"Catalogue en ligne";
       var pageTitle = (s.name||"Boutique")+" — "+(s.tagline||"OrderFlow");
@@ -3238,7 +3235,7 @@ async function loadShopData(){
 
     var citySel = document.getElementById("sh-ccity");
     citySel.innerHTML = '<option value="">— Choisir la ville —</option>'+
-      SHOP_CITIES.map(function(c){ return '<option value="'+c.name+'" data-home-ship="'+(c.custShip||0)+'" data-desk-ship="'+(c.deskCust||0)+'">'+c.name+'</option>'; }).join("");
+      SHOP_CITIES.map(function(c){ return '<option value="'+esc(c.name)+'" data-home-ship="'+esc(c.custShip||0)+'" data-desk-ship="'+esc(c.deskCust||0)+'">'+esc(c.name)+'</option>'; }).join("");
     citySel.addEventListener("change", sh_updateTotal);
     document.getElementById("sh-delivery").addEventListener("change", sh_updateTotal);
 
@@ -3354,7 +3351,7 @@ async function submitProductRating(orderId, btnEl){
   }catch(e){ toast("خطأ، حاول مرة أخرى","err"); btnEl.disabled = false; }
 }
 
-function sh_cur(){ return CURRENCY_SYMBOLS_PUBLIC[SHOP_CURRENCY] || SHOP_CURRENCY; }
+function sh_cur(){ return CURRENCY_SYMBOLS_PUBLIC[SHOP_CURRENCY] || esc(SHOP_CURRENCY); }
 
 function starsHtml(avg, count){
   if(!count) return "";

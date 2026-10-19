@@ -282,8 +282,9 @@ _recent_bot_orders: dict   = {}
 _recent_bot_orders_lock    = threading.Lock()
 _DUPLICATE_ORDER_WINDOW    = 1800  # 30 دقيقة
 
-def _is_duplicate_bot_order(sender_id, phone, product):
-    key = f"{sender_id}"
+def _is_duplicate_bot_order(uid, sender_id, phone, product):
+    # المفتاح بالتاجر + الزبون: نفس رقم واتساب يقدر يطلب من تجار مختلفين
+    key = f"{uid}:{sender_id}"
     now = time.time()
     with _recent_bot_orders_lock:
         rec = _recent_bot_orders.get(key)
@@ -292,9 +293,9 @@ def _is_duplicate_bot_order(sender_id, phone, product):
             return True
     return False
 
-def _mark_bot_order(sender_id, phone, product):
+def _mark_bot_order(uid, sender_id, phone, product):
     with _recent_bot_orders_lock:
-        _recent_bot_orders[sender_id] = {"phone": phone, "product": product, "ts": time.time()}
+        _recent_bot_orders[f"{uid}:{sender_id}"] = {"phone": phone, "product": product, "ts": time.time()}
 
 _SELF_URL = os.environ.get("RENDER_EXTERNAL_URL", "").strip()
 
@@ -1587,6 +1588,7 @@ def api_add_city():
     d    = body.get("data") or {}
     name = str(d.get("name") or "").strip()
     if not name: return err_json("Missing fields")
+    if len(name) > 100: return err_json("اسم المدينة طويل جداً")
     _fb_put(f"data/{uid}/cities/{name}", {
         "name": name,
         "costShip": float(d.get("costShip",0)), "custShip": float(d.get("custShip",0)),
@@ -1677,6 +1679,26 @@ def api_get_store_settings():
     if not uid: return err_json("Missing userId")
     return ok_json(_fb_get(f"data/{uid}/storeSettings") or {})
 
+_STORE_TEXT_LIMITS = {"name": 120, "tagline": 300, "logo": 32, "lang": 8}
+_STORE_CURRENCIES  = ("DZD", "EUR", "USD")
+
+def _clean_store_setting(field, value, current):
+    """تحقق خفيف لإعدادات المتجر: نوع + طول فقط، بلا فلترة حروف (عربي/فرنسي/إيموجي يمرّو كما هم —
+    الحماية من XSS بالتهريب وقت العرض). قيمة مطابقة للمخزّنة حالياً تتقبل دائماً باش المتاجر
+    القديمة تقدر تعاود تحفظ."""
+    if current is not None and value == current:
+        return True, value
+    if field == "logoImage":
+        if value == "":
+            return True, ""
+        clean = _sanitize_image_url(value) if isinstance(value, str) else ""
+        return (bool(clean), clean)
+    if field == "currency":
+        return (value in _STORE_CURRENCIES, value)
+    if not isinstance(value, str) or len(value) > _STORE_TEXT_LIMITS[field]:
+        return False, None
+    return True, value
+
 @app.route("/api/updateStoreSettings", methods=["POST"])
 @require_auth
 @require_perm("store")
@@ -1684,12 +1706,16 @@ def api_update_store_settings():
     body = request.get_json(silent=True) or {}
     uid  = request.auth_uid
     d    = body.get("data") or {}
+    if not isinstance(d, dict): return err_json("Invalid data")
+    existing = _fb_get(f"data/{uid}/storeSettings")
     patch = {}
     for field, default in (("name","My Store"), ("tagline",""), ("logo","🛒"), ("logoImage",""), ("lang","AR"), ("currency","DZD")):
         if field in d:
-            patch[field] = d[field]
+            ok, value = _clean_store_setting(field, d[field], (existing or {}).get(field))
+            if not ok:
+                return err_json(f"قيمة غير صالحة للحقل: {field}")
+            patch[field] = value
     if patch:
-        existing = _fb_get(f"data/{uid}/storeSettings")
         if existing:
             _fb_patch(f"data/{uid}/storeSettings", patch)
         else:
@@ -1901,7 +1927,7 @@ def _build_landing_html(uid, page):
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>{name} — {store_name}</title>
+<title>{name} — {_esc(store_name)}</title>
 <meta name="description" content="{_esc(desc_meta)}"/>
 <meta property="og:title" content="{name}"/>
 <meta property="og:description" content="{_esc(desc_meta)}"/>
@@ -2949,17 +2975,21 @@ def _gemini_generate_with_fallback(api_key, contents, config, label=""):
                 sleep(1.5)
     raise RuntimeError(f"All Gemini models failed: {last_err}")
 
-def get_history(sender_id):
+# سجل البوت مربوط بالتاجر: chats/{merchant_uid}/{sender_id}. السجل القديم chats/{sender_id}
+# (مشترك بين التجار) يبقى فقاعدة البيانات بلا حذف، لكن ما يتقراش.
+def get_history(sender_id, merchant_uid):
+    if not merchant_uid: return []
     try:
-        data = _firebase_ref(f"chats/{sender_id}").get()
+        data = _firebase_ref(f"chats/{merchant_uid}/{sender_id}").get()
         if not data: return []
         hist = sorted(data.values(), key=lambda x: x.get("timestamp",0))
         return hist[-(MAX_HISTORY_TURNS*2):]
     except Exception: return []
 
-def save_history(sender_id, user_msg, bot_msg):
+def save_history(sender_id, merchant_uid, user_msg, bot_msg):
+    if not merchant_uid: return
     try:
-        ref = _firebase_ref(f"chats/{sender_id}")
+        ref = _firebase_ref(f"chats/{merchant_uid}/{sender_id}")
         now = time.time()
         ref.push({"role":"user","content":user_msg,"timestamp":now})
         ref.push({"role":"assistant","content":bot_msg,"timestamp":now+0.001})
@@ -3076,7 +3106,7 @@ def save_order_from_bot(order_data, bot_settings, sender_id=""):
         product = _find_field(order_data, "product", "product_name", "المنتج", "اسم المنتج")
         delivery_type = _normalize_delivery_type(_find_field(order_data, "delivery_type", "نوع التوصيل", "التوصيل"))
 
-        if sender_id and _is_duplicate_bot_order(sender_id, phone, product):
+        if sender_id and _is_duplicate_bot_order(uid, sender_id, phone, product):
             logging.info(f"⏭️ تجاهل طلب مكرر من البوت | sender={_mask_id(sender_id)} | product={product}")
             return False
 
@@ -3105,7 +3135,7 @@ def save_order_from_bot(order_data, bot_settings, sender_id=""):
         order["total"] = (order["unitPrice"]*order["qty"]) + order["shipping"]
         _fb_put(f"data/{uid}/orders/{order_id}", order)
         _increment_usage(uid, "orderCount")
-        if sender_id: _mark_bot_order(sender_id, phone, product)
+        if sender_id: _mark_bot_order(uid, sender_id, phone, product)
         logging.info(f"✅ Bot order saved: {order_id}")
         return True
     except Exception as e:
@@ -3136,10 +3166,11 @@ def ask_gemini(sender_id, user_message, bot_settings,
         except Exception: pass
     if not user_message.strip(): user_message = "[رسالة فارغة]"
     if len(user_message) > 1500: user_message = user_message[:1500]
+    merchant_uid = str(bot_settings.get("User_ID","") or "")
     try:
         instructions = bot_settings.get("AI_instructions","أنت مساعد مبيعات ذكي.")
         products     = get_products_text(bot_settings)
-        history_text = history_to_text(get_history(sender_id))
+        history_text = history_to_text(get_history(sender_id, merchant_uid))
         req_format = '{"product":"اسم المنتج","quantity":"الكمية","name":"اسم العميل","phone":"رقم الهاتف","city":"المدينة","delivery_type":"منزل أو مكتب الاستلام","address":"العنوان"}'
         system_text = f"""أنت مساعد مبيعات لمتجر إلكتروني. مهمتك مساعدة العملاء في الطلب.
 رد بنفس لغة العميل (عربي أو فرنسي).
@@ -3179,8 +3210,8 @@ def ask_gemini(sender_id, user_message, bot_settings,
                     clean_text = retry_text
                 except Exception: pass
                 order_data = None
-        save_history(sender_id, user_message, clean_text)
-        log_ai_message(sender_id, user_message, clean_text, merchant_uid=str(bot_settings.get("User_ID","")))
+        save_history(sender_id, merchant_uid, user_message, clean_text)
+        log_ai_message(sender_id, user_message, clean_text, merchant_uid=merchant_uid)
         return clean_text, order_data
     except Exception as e:
         logging.error(f"ask_gemini {_mask_id(sender_id)}: {e}")
@@ -3339,7 +3370,7 @@ def webhook():
                             log_text_wa = utxt or ("🎙️ [رسالة صوتية]" if isvoc else "🖼️ [صورة]" if isimg else "")
                             if merchant_uid_wa:
                                 _log_conversation(merchant_uid_wa, sid, "in", log_text_wa, "wa", page_id=phone_id)
-                            if is_rate_limited(sid,"wa"): continue
+                            if is_rate_limited(f"{merchant_uid_wa}:{sid}","wa"): continue
                             def wa_fn(reply,_sid=sid,_pid=phone_id,_tok=wa_tok): return send_whatsapp_message(_pid,_sid,reply,_tok)
                             process_bg(sid,utxt,bot,wa_fn,mdata,mime,isvoc,isimg,"wa",phone_id)
                 elif "messaging" in entry:
@@ -3402,7 +3433,7 @@ def webhook():
                         log_text_fb = utxt or ("🎙️ [رسالة صوتية]" if isvoc else "🖼️ [صورة]" if isimg else "")
                         if merchant_uid_fb:
                             _log_conversation(merchant_uid_fb, sid, "in", log_text_fb, platform_str, page_id=(send_pid or page_id))
-                        if is_rate_limited(sid,"fb"):
+                        if is_rate_limited(f"{merchant_uid_fb}:{sid}","fb"):
                             logging.info(f"⏭️ skipped: rate limited for sid={_mask_id(sid)}")
                             continue
                         def fb_fn(reply,_sid=sid,_tok=tok,_pid=send_pid): return send_facebook_message(_sid,reply,_tok,page_id=_pid)
