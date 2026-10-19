@@ -80,7 +80,8 @@ def test_valid_flow_saves_and_is_single_use(client, db, owner, graph):
     r = _callback(client, state)
     assert "FB_AUTH_SUCCESS" in r.get_data(as_text=True)
     assert db.get(f"data/{owner['uid']}/fbTokens")["fb_page_id"] == "PAGE1"
-    assert db.get(f"oauth_pending/{owner['uid']}") is None
+    pending = db.get(f"oauth_pending/{owner['uid']}")
+    assert "nh" not in pending and "used" in pending  # مستهلك: علامة بلا nh
     # replay: نفس state ونفس الكوكي (حتى لو المهاجم عاود حطّها)
     db.set(f"data/{owner['uid']}/fbTokens", None)
     client.set_cookie(COOKIE, "ignored", path="/callback")

@@ -138,7 +138,11 @@ class FakeReference:
         return child
 
     def transaction(self, transaction_update):
+        # نفس firebase-admin 6.5.0: transaction → set_if_unchanged اللي يرفض None
+        # (ما تقدرش تمسح عقدة برجوع None من دالة الـ transaction).
         new_val = transaction_update(DB.get(self.path))
+        if new_val is None:
+            raise ValueError("Value must not be none.")
         DB.set(self.path, new_val)
         return new_val
 
