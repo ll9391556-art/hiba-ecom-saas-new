@@ -12,6 +12,8 @@ window.addEventListener("pageshow", function(e){
     var sb = document.getElementById("sidebar"), mn = document.getElementById("main");
     if(sb) sb.style.display = "";
     if(mn) mn.style.display = "";
-    document.getElementById("shopApp").style.display = "none";
+    // المتجر ولّى صفحة خاصة (shop.html) — shopApp ما بقاش فاللوحة
+    var sa = document.getElementById("shopApp");
+    if(sa) sa.style.display = "none";
   }
 });

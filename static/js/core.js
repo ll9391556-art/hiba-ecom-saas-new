@@ -5,6 +5,8 @@ var API_URL    = "https://orderconfidence.com/api";
 var FB_BACKEND = "https://orderconfidence.com";
 var FB_ORIGIN  = new URL(FB_BACKEND).origin;  // صفحة /callback تبعث postMessage غير من هنا
 var FB_APP_ID_JS = "1484940433173462";
+// متجر عام (/?store=<uid>): shop.js يعمّرها؛ اللوحة (auth.js، main.js) كتقراها — لذلك هنا
+var SHOP_UID = null;
 // احتياطي: trackShopEvent تتعرّف فـ /static/pixel-loader.js (defer). إذا ما تحمّلش الملف،
 // السلة والدفع ما يطيحوش بـ ReferenceError — pixel-loader يستبدلها كي يتحمّل.
 window.trackShopEvent = window.trackShopEvent || function(){};

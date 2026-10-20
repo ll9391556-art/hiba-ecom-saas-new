@@ -1,7 +1,6 @@
 // =========================================================
 // PUBLIC SHOP — متجر عام (بدون مصادقة، عبر المسارات العامة فقط)
 // =========================================================
-var SHOP_UID = null;
 var SHOP_PRODUCTS = [];
 var SHOP_CITIES   = [];
 var SHOP_CART     = [];
@@ -20,7 +19,8 @@ var PDP_IMG_IDX   = 0;
 })();
 
 function initShop(){
-  document.getElementById("loginPage").style.display  = "none";
+  // shop.html ما فيهاش صفحة الدخول (كانت مخفية هنا ملي كان المتجر داخل index.html)
+  document.getElementById("loginPage") && (document.getElementById("loginPage").style.display = "none");
   document.getElementById("shopApp").style.display    = "block";
   document.getElementById("sidebar") && (document.getElementById("sidebar").style.display="none");
   document.getElementById("main")    && (document.getElementById("main").style.display="none");

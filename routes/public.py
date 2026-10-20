@@ -67,6 +67,9 @@ bp = Blueprint("public", __name__)
 # ── Frontend ──────────────────────────────────────────────
 @bp.route("/", methods=["GET"])
 def serve_index():
+    # المتجر العام (/?store=<uid>) صفحة خاصة بيه — بلا كود اللوحة (Phase 4 / F3)
+    if request.args.get("store"):
+        return send_from_directory("static", "shop.html")
     return send_from_directory("static", "index.html")
 
 
