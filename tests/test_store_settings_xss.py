@@ -3,10 +3,12 @@
 import pathlib
 import re
 
+from tests.frontend import dashboard_and_shop
+
 import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-INDEX = (ROOT / "static" / "index.html").read_text(encoding="utf-8")
+INDEX = dashboard_and_shop()  # HTML + /static/js/* (Phase 4 / F1)
 
 
 def _save(client, headers, **data):

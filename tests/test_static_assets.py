@@ -2,8 +2,10 @@
 """BUG-001 — pixel-loader.js لازم يتحمّل، و trackShopEvent ما تطيحش الصفحة لو ما تحمّلش."""
 import pathlib
 
+from tests.frontend import dashboard_and_shop
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-INDEX = (ROOT / "static" / "index.html").read_text(encoding="utf-8")
+INDEX = dashboard_and_shop()  # HTML + /static/js/* (Phase 4 / F1)
 
 
 def test_pixel_loader_is_served(client):

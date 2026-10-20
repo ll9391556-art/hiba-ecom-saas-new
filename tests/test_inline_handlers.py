@@ -4,8 +4,10 @@
 import pathlib
 import re
 
+from tests.frontend import dashboard_and_shop
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-PAGES = sorted((ROOT / "static").rglob("*.html"))
+PAGES = sorted((ROOT / "static").rglob("*.html")) + sorted((ROOT / "static").rglob("*.js"))  # + JS (F1)
 # on<event>="... \''+  أو  ...,\''+  — نص JS مبني بدمج قيمة بين علامتين '
 CONCAT_IN_HANDLER = re.compile(r"""on\w+=\\?"[^"]*\\''\s*\+""")
 
@@ -23,11 +25,11 @@ def test_no_string_values_concatenated_into_inline_handlers():
 
 
 def test_escAttr_helper_removed():
-    assert "escAttr" not in (ROOT / "static" / "index.html").read_text(encoding="utf-8")
+    assert "escAttr" not in dashboard_and_shop()
 
 
 def test_handlers_read_dataset():
-    src = (ROOT / "static" / "index.html").read_text(encoding="utf-8")
+    src = dashboard_and_shop()
     for call in ("updateOrderDelivery(this.dataset.id", "updateStatus(this.dataset.id",
                  "printOrderSlip(this.dataset.id",
                  "openConversation(this.dataset.sid,this.dataset.platform,this.dataset.name)"):
