@@ -3,4 +3,5 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
-CMD ["gunicorn", "--workers", "4", "--worker-class", "gthread", "--threads", "4", "--timeout", "120", "--bind", "0.0.0.0:7860", "app:app"]
+# البورت ($PORT) والـ workers/threads فـ gunicorn.conf.py
+CMD ["gunicorn", "app:app"]

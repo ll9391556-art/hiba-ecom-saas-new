@@ -116,8 +116,27 @@ if not ENCRYPTION_KEY:
 try:
     _fernet = Fernet(ENCRYPTION_KEY.encode())
 except Exception as e:
-    logging.error(f"ENCRYPTION_KEY غير صالح: {e} — تم توليد مفتاح بديل مؤقت")
+    logging.error(f"ENCRYPTION_KEY غير صالح: {type(e).__name__} — تم توليد مفتاح بديل مؤقت")
     _fernet = Fernet(Fernet.generate_key())
+
+# ── رفض الإقلاع فالإنتاج بلا أسرار ثابتة (ARC-001) ──
+# المفاتيح المؤقتة فوق مقبولة غير فالتطوير: فالإنتاج كل worker كان يولّد سر مختلف →
+# توكنات ترفض عشوائياً وبيانات الربط المشفّرة تولّي غير مقروءة. Render يضبط RENDER=true.
+_IS_PRODUCTION = (os.environ.get("RENDER", "").strip().lower() == "true"
+                  or os.environ.get("APP_ENV", "").strip().lower() == "production")
+_boot_problems = []
+if not os.environ.get("JWT_SECRET", "").strip():
+    _boot_problems.append("JWT_SECRET missing")
+_enc_env = os.environ.get("ENCRYPTION_KEY", "").strip()
+if not _enc_env:
+    _boot_problems.append("ENCRYPTION_KEY missing")
+else:
+    try:
+        Fernet(_enc_env.encode())
+    except Exception:
+        _boot_problems.append("ENCRYPTION_KEY invalid (must be a Fernet key: 44 chars, base64)")
+if _IS_PRODUCTION and _boot_problems:
+    raise RuntimeError("Refusing to start in production: " + "; ".join(_boot_problems))
 
 def _encrypt_secret(text):
     return _fernet.encrypt(str(text).encode()).decode()
@@ -304,19 +323,8 @@ def _mark_bot_order(uid, sender_id, phone, product):
     with _recent_bot_orders_lock:
         _recent_bot_orders[f"{uid}:{sender_id}"] = {"phone": phone, "product": product, "ts": time.time()}
 
-_SELF_URL = os.environ.get("RENDER_EXTERNAL_URL", "").strip()
-
-def _keepalive_loop():
-    sleep(60)
-    while True:
-        try:
-            requests.get(f"{_SELF_URL or 'http://localhost:10000'}/health", timeout=10)
-            logging.info("💓 Keepalive ping sent")
-        except Exception as e:
-            logging.warning(f"Keepalive failed: {e}")
-        sleep(600)
-
-threading.Thread(target=_keepalive_loop, daemon=True).start()
+# keepalive: انتقل لـ gunicorn.conf.py (when_ready) — ping وحيد من master gunicorn بدل
+# خيط فكل worker، وبلا fallback لـ localhost:10000 (كان بالبورت الغلط).
 
 def _cleanup_rate_limit():
     while True:
@@ -753,9 +761,33 @@ def _request_with_pinned_dns(method, url, resolved_ip, **kwargs):
 def serve_index():
     return send_from_directory("static", "index.html")
 
+@app.route("/healthz", methods=["GET"])
+def healthz():
+    """liveness فقط — ديما 200 بلا Firebase. هادا اللي يتحط فـ Render Health Check Path، باش
+    انقطاع قصير لـ Firebase ما يخليش Render يعاود يشغّل الخدمة ولا يفشّل deploy."""
+    return jsonify({"ok": True, "service": "OrderFlow"}), 200
+
+_health_cache = {}
+_HEALTH_TTL   = 30
+
 @app.route("/health", methods=["GET"])
 def health():
-    return jsonify({"ok": True, "service": "OrderFlow", "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S")}), 200
+    """فحص عميق: قراءة shallow صغيرة من Firebase (النتيجة محفوظة 30 ثانية). 503 إذا طاح."""
+    now = time.time()
+    cached = _health_cache.get("result")
+    if not cached or now - cached[0] >= _HEALTH_TTL:
+        try:
+            _fb_call(lambda: _firebase_ref("health").get(shallow=True))
+            firebase_ok = True
+        except Exception as e:
+            logging.warning(f"/health: Firebase check failed ({type(e).__name__})")
+            firebase_ok = False
+        cached = (now, firebase_ok)
+        _health_cache["result"] = cached
+    firebase_ok = cached[1]
+    body = {"ok": firebase_ok, "firebase": firebase_ok, "service": "OrderFlow",
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S")}
+    return jsonify(body), (200 if firebase_ok else 503)
 
 @app.route("/admin", methods=["GET"])
 def admin_page():
