@@ -12,7 +12,7 @@ from flask import Blueprint, request
 # استيراد الدوال والديكوريتورز الجاهزة من الملف الرئيسي — بلا إعادة كتابة
 from app import (
     require_auth, require_perm, _fb_get, _fb_put, _fb_patch, _fb_delete,
-    ok_json, err_json,
+    ok_json, err_json, _any_shared_limited,
 )
 
 discounts_bp = Blueprint("discounts", __name__)
@@ -132,6 +132,10 @@ def validate_coupon_public():
         subtotal = 0.0
     if not uid or not code:
         return err_json("بيانات ناقصة")
+    # تخمين أكواد الخصم: حد مشترك لكل IP فهاد المتجر + سقف للمتجر
+    client_ip = request.remote_addr or ""
+    if _any_shared_limited(("coupon_ip_store", f"{client_ip}|{uid}"), ("coupon_store", uid)):
+        return err_json("محاولات كثيرة جداً — حاول بعد قليل", 429)
 
     c = _fb_get(f"data/{uid}/coupons/{code}")
     if not c or not isinstance(c, dict):

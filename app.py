@@ -330,6 +330,10 @@ def _cleanup_rate_limit():
             to_del2 = [k for k, v in _recent_bot_orders.items() if v.get("ts", 0) < cutoff]
             for k in to_del2:
                 del _recent_bot_orders[k]
+        try:
+            _cleanup_shared_limits()
+        except Exception as e:
+            logging.warning(f"shared rate limit cleanup failed: {type(e).__name__}")
 
 threading.Thread(target=_cleanup_rate_limit, daemon=True).start()
 
@@ -444,6 +448,57 @@ def _mask_id(v):
     """للسجلات فقط: آخر 4 أحرف من معرّف الزبون (فواتساب = رقم هاتفه)."""
     s = str(v or "")
     return ("…" + s[-4:]) if len(s) > 4 else "…"
+
+# ── حدود معدل مشتركة بين كل الـ workers (SEC-008 / SEC-014 / SEC-020) ──
+# قبل: الحدود فالذاكرة لكل worker (4 workers = الحد ×4)، و addOrder كان محدود بـ ip:phone
+# كل 15 ثانية — اللي كان يرفض المنتج الثاني فسلة (طلب لكل منتج).
+# دابا: عدّاد بنافذة ثابتة فـ ratelimits/{bucket}/{window}/{hmac(key)} بـ transaction.
+# المفتاح مهشّر بسر السيرفر — لا IP ولا اسم مستخدم خام فقاعدة البيانات.
+# Firebase طاح → نمرّرو الطلب (fail-open) باش زبائن حقيقيين ما يتحبسوش.
+_RATE_LIMITS = {                 # bucket: (حد، النافذة بالثواني)
+    "order_ip_store":  (30, 600),    # 30 طلب / 10 دقائق لنفس IP فنفس المتجر (سلة كبيرة عدة مرات)
+    "order_store":     (300, 3600),  # 300 طلب / ساعة لكل متجر
+    "track_ip":        (20, 600),
+    "track_ip_store":  (10, 600),
+    "coupon_ip_store": (10, 600),    # تخمين أكواد الخصم
+    "coupon_store":    (200, 3600),
+    "login_ip":        (20, 600),
+    "login_user":      (10, 600),    # password spraying من IPs مختلفة على نفس الحساب
+}
+_RL_SALT = hashlib.sha256(("ratelimit:" + JWT_SECRET).encode("utf-8")).digest()
+
+def _rl_hash(key):
+    return hmac.new(_RL_SALT, str(key).encode("utf-8"), hashlib.sha256).hexdigest()[:32]
+
+def _shared_limited(bucket, key):
+    """True إذا تعدّى الحد (→ 429). كل محاولة تتحسب، حتى المرفوضة."""
+    limit, window_s = _RATE_LIMITS[bucket]
+    window_id = int(time.time() // window_s)
+    seen = {"n": 0}
+    def _txn(cur):
+        seen["n"] = _safe_int(cur) + 1
+        return seen["n"]
+    try:
+        _firebase_ref(f"ratelimits/{bucket}/{window_id}/{_rl_hash(key)}").transaction(_txn)
+    except Exception as e:
+        logging.warning(f"shared rate limit unavailable ({type(e).__name__}) — fail-open")
+        return False
+    return seen["n"] > limit
+
+def _any_shared_limited(*checks):
+    """checks = (bucket, key)... بالترتيب (الأضيق أولاً، مثلاً IP ثم المتجر). يوقف عند أول
+    حد متعدّى بلا ما يحسب الباقي — باش IP واحد مزعج ما يستهلكش سقف المتجر كامل ويحبس
+    الزبائن الحقيقيين."""
+    return any(_shared_limited(bucket, key) for bucket, key in checks)
+
+def _cleanup_shared_limits(now=None):
+    """يمسح النوافذ القديمة (يخلّي الحالية والسابقة). يتنادى من خيط التنظيف كل ساعة."""
+    now = time.time() if now is None else now
+    for bucket, (_, window_s) in _RATE_LIMITS.items():
+        current = int(now // window_s)
+        for w in (_fb_keys(f"ratelimits/{bucket}") or []):
+            if _safe_int(w, current) < current - 1:
+                _fb_delete(f"ratelimits/{bucket}/{w}")
 
 def ok_json(data):
     return jsonify({"status": "ok", "data": data})
@@ -1103,6 +1158,9 @@ def api_login():
 
     if not user or not pwd:
         return err_json("Missing credentials")
+    # حد مشترك بين الـ workers: لكل IP، ولكل اسم مستخدم مهما كان الـ IP (password spraying)
+    if _any_shared_limited(("login_ip", client_ip), ("login_user", user.lower())):
+        return err_json("محاولات دخول كثيرة جداً — حاول بعد 10 دقائق", 429)
 
     # 1) نحاول أولاً كصاحب حساب رئيسي (owner) — users/{key} عبر uname_index (بلا اعتبار
     #    الحروف الكبيرة). قبل: قراءة /users كاملة (توكنات كل التجار) فكل تسجيل دخول.
@@ -1642,9 +1700,10 @@ def api_add_order():
         return err_json("Invalid store", 404)
 
     # request.remote_addr مُصحَّح عبر ProxyFix (بروكسي موثوق واحد) بدل هيدر خام قابل للتزوير.
+    # حد مشترك بين الـ workers: لكل IP فهاد المتجر + سقف للمتجر كامل. سلة بعدة منتجات
+    # (طلب لكل منتج) تدوز — الحد القديم ip:phone كل 15 ثانية كان يرفض المنتج الثاني.
     client_ip = request.remote_addr or ""
-    phone_key = re.sub(r"\D", "", str(raw.get("phone", "")))
-    if is_rate_limited(f"{client_ip}:{phone_key}", "addorder", window=15):
+    if _any_shared_limited(("order_ip_store", f"{client_ip}|{uid}"), ("order_store", uid)):
         return err_json("محاولات كثيرة جداً — انتظر قليلاً وحاول من جديد", 429)
 
     if not _under_cap(uid, "orderCount", "orderCap"):
@@ -1853,6 +1912,9 @@ def api_track_order():
     uid   = request.args.get("userId", "").strip()
     phone = re.sub(r"\D", "", request.args.get("phone", ""))
     if not uid or not phone: return err_json("Missing userId or phone")
+    client_ip = request.remote_addr or ""
+    if _any_shared_limited(("track_ip", client_ip), ("track_ip_store", f"{client_ip}|{uid}")):
+        return err_json("محاولات كثيرة جداً — حاول بعد قليل", 429)
     # استعلام بالفهرس phoneDigits — قبل: تنزيل كل طلبات المتجر فكل طلب عام
     found = _fb_query(f"data/{uid}/orders", "phoneDigits", equal_to=phone)
     if found is None:
