@@ -21,11 +21,11 @@ py -3.14 -m venv .venv
 There is no linter configured.
 
 Running the server:
-- Production: `gunicorn app:app --workers 4 --worker-class gthread --threads 4 --timeout 120 --bind 0.0.0.0:$PORT` (`Procfile`; the `Dockerfile` hard-codes port 7860).
+- Production: `gunicorn app:app` (Dockerfile `CMD` and `Procfile`); all settings are in `gunicorn.conf.py`: bind `0.0.0.0:$PORT` (default 10000), `WEB_CONCURRENCY` workers (default 2), `GUNICORN_THREADS` threads (default 8), gthread, timeout 120, no preload. 2 workers fit Render's 512 MB; each worker is roughly 120-180 MB. The keepalive runs once, in the gunicorn master (`when_ready`), pinging `$RENDER_EXTERNAL_URL/healthz`.
 - `python app.py` fails with a circular-import error (blueprints do `from app import ...` while the main module is `__main__`). `flask --app app run` imports the module as `app` and should avoid this (not yet verified). gunicorn does not run on Windows.
-- Needs `FIREBASE_CREDENTIALS` (service-account JSON as a string), `JWT_SECRET`, `ENCRYPTION_KEY` (Fernet), `META_APP_SECRET`/`FB_APP_SECRET`, `VERIFY_TOKEN`, `ADMIN_API_KEY`. Webhook signatures (`verify_sig`) are checked against `META_APP_SECRET` and, if set, `INSTAGRAM_APP_SECRET` (Instagram API with Instagram Login signs with its own secret); `FB_APP_SECRET` is only the OAuth `client_secret`. If `JWT_SECRET`/`ENCRYPTION_KEY` are missing, each worker generates its own random value, so tokens and encrypted credentials break across workers.
+- Needs `FIREBASE_CREDENTIALS` (service-account JSON as a string), `JWT_SECRET`, `ENCRYPTION_KEY` (Fernet), `META_APP_SECRET`/`FB_APP_SECRET`, `VERIFY_TOKEN`, `ADMIN_API_KEY`. Webhook signatures (`verify_sig`) are checked against `META_APP_SECRET` and, if set, `INSTAGRAM_APP_SECRET` (Instagram API with Instagram Login signs with its own secret); `FB_APP_SECRET` is only the OAuth `client_secret`. In production (`RENDER=true` or `APP_ENV=production`) `import app` raises if `JWT_SECRET` or `ENCRYPTION_KEY` is missing or the key isn't a valid Fernet key; elsewhere it warns and uses a temporary per-process value. `/healthz` is liveness (always 200, use it as Render's Health Check Path); `/health` also checks Firebase (cached 30 s, 503 on failure).
 
-Deployment: production runs Python 3.10 in Docker (`Dockerfile`), so keep code compatible with 3.10. There is no CI deploy workflow (the Hugging Face sync workflow was removed). A `Procfile` exists for Render; the `README.md` front matter and the Dockerfile's port 7860 are leftovers from Hugging Face Spaces.
+Deployment: production runs Python 3.10 in Docker (`Dockerfile`), so keep code compatible with 3.10. There is no CI deploy workflow (the Hugging Face sync workflow was removed). A `Procfile` exists for non-Docker runs; the `README.md` front matter is a leftover from Hugging Face Spaces. In the Render dashboard, the Docker Command field must stay empty (it would override the Dockerfile `CMD`).
 
 ## Architecture
 
@@ -50,7 +50,7 @@ Deployment: production runs Python 3.10 in Docker (`Dockerfile`), so keep code c
 
 **Bot pipeline.** `/webhook` → `verify_sig` (HMAC) → `handle()` on `_executor` → `get_user_settings(channel_id)` → `process_bg` → `ask_gemini` (prompt asks for order JSON between `###JSON_START###` and `###JSON_END###`) → `extract_json` / `validate_order` → `save_order_from_bot`.
 
-**Per-process state.** Caches, rate limits and bot-order dedupe are module-level dicts, so they are per gunicorn worker. Daemon threads (keepalive, cleanup) start at import time.
+**Per-process state.** Caches, rate limits and bot-order dedupe are module-level dicts, so they are per gunicorn worker. Cleanup daemon threads start at import time in every worker; the keepalive does not (it lives in `gunicorn.conf.py`).
 
 **Frontend.**
 - `static/index.html` is one file that serves both the merchant dashboard and the public storefront (`/?store=<uid>`) on the same origin.

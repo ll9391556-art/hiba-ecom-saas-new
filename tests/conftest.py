@@ -24,7 +24,7 @@ _DUMMY_ENV = {
 for _k, _v in _DUMMY_ENV.items():
     os.environ[_k] = _v
 for _k in ("FIREBASE_CREDENTIALS", "RENDER_EXTERNAL_URL", "SENDGRID_API_KEY",
-           "SMTP_HOST", "SMTP_USER", "SMTP_PASS", "SUPPORT_EMAIL_TO"):
+           "SMTP_HOST", "SMTP_USER", "SMTP_PASS", "SUPPORT_EMAIL_TO", "RENDER", "APP_ENV"):
     os.environ.pop(_k, None)
 
 
@@ -57,7 +57,7 @@ def _reset_state():
     fakes.GEMINI_CALLS.clear()
     fakes.GEMINI_RESPONDER["fn"] = None
     for name in ("_store_products_cache", "_login_attempts", "last_msg_time",
-                 "_settings_cache", "_recent_bot_orders"):
+                 "_settings_cache", "_recent_bot_orders", "_health_cache"):
         getattr(app_module, name).clear()
     yield
 
