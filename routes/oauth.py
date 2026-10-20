@@ -38,6 +38,8 @@ from core.security import (
     require_owner,
 )
 
+from core.templates import render
+from markupsafe import Markup
 bp = Blueprint("oauth", __name__)
 
 
@@ -173,14 +175,10 @@ def _fb_oauth_callback_page():
         ph = "".join(f"<div style='display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12px'>"
                      f"<span>{'📷' if p['type']=='instagram' else '📘'}</span>"
                      f"<span>{_esc(p.get('name','—'))}</span></div>" for p in pages_info)
-        return f"""<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"/><title>تم الربط</title>
-<style>body{{margin:0;font-family:Arial;background:#0a1628;color:#e8edf5;display:flex;align-items:center;justify-content:center;min-height:100vh;}}</style></head>
-<body><div style="text-align:center;padding:40px;background:rgba(15,32,68,.92);border:1px solid rgba(0,214,143,.3);border-radius:16px;max-width:340px">
-<div style="font-size:56px">✅</div><h2 style="color:#00d68f">تم الربط بنجاح!</h2>
-<p style="color:#8899bb;font-size:13px">جاري إغلاق النافذة...</p>
-{('<div style="margin-top:16px;background:rgba(255,255,255,.04);border-radius:10px;padding:12px">' + ph + '</div>') if ph else ''}
-</div><script>{_post_to_opener_js('{type:"FB_AUTH_SUCCESS"}')}
-setTimeout(()=>window.close(),2500);</script></body></html>"""
+        return render("oauth_success.html",
+            pages_box=Markup('<div style="margin-top:16px;background:rgba(255,255,255,.04);border-radius:10px;padding:12px">' + ph + '</div>' if ph else ''),
+            opener_js=Markup(_post_to_opener_js('{type:"FB_AUTH_SUCCESS"}')),
+        )
     except Exception as err:
         logging.error(f"OAuth error: {type(err).__name__}"); return _oauth_error_page(_OAUTH_FAIL_MSG)
 
@@ -199,13 +197,10 @@ def _post_to_opener_js(msg_js):
 
 
 def _oauth_error_page(msg):
-    return f"""<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"/><title>فشل</title>
-<style>body{{margin:0;font-family:Arial;background:#0a1628;color:#e8edf5;display:flex;align-items:center;justify-content:center;min-height:100vh;}}</style></head>
-<body><div style="text-align:center;padding:40px;background:rgba(15,32,68,.92);border:1px solid rgba(255,77,109,.3);border-radius:16px;max-width:340px">
-<div style="font-size:56px">❌</div><h2 style="color:#ff4d6d">فشل الربط</h2>
-<p style="color:#8899bb;font-size:12px;word-break:break-all">{_esc(msg)}</p>
-</div><script>{_post_to_opener_js('{type:"FB_AUTH_ERROR",message:' + _js_str(msg) + '}')}
-setTimeout(()=>window.close(),4000);</script></body></html>"""
+    return render("oauth_error.html",
+        msg=msg,
+        opener_js=Markup(_post_to_opener_js('{type:"FB_AUTH_ERROR",message:' + _js_str(msg) + '}')),
+    )
 
 
 @bp.route("/api/getOAuthState", methods=["GET"])

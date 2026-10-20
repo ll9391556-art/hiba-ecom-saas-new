@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Robe — متجر &#34;أمينة&#34; &amp; &lt;b&gt;Co&lt;/b&gt; &lt;/script&gt;</title>
+<meta name="description" content=""/>
+<meta property="og:title" content="Robe"/>
+<meta property="og:description" content=""/>
+
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@700;800;900&family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --accent:#3b82f6; --accent2:#7dd3fc; --amber:#fbbf24; --good:#22c55e;
+  --bg:#070c18; --bg2:#0d1b2e; --text:#eef2fb; --muted:#94a3c4;
+  --glass:rgba(255,255,255,.05); --glass-bd:rgba(255,255,255,.10);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:var(--bg)}
+body{
+  font-family:'Tajawal',Arial,sans-serif;background:var(--bg);color:var(--text);
+  min-height:100vh;overflow-x:hidden;position:relative;
+}
+.lp-glow{position:fixed;border-radius:50%;filter:blur(70px);opacity:.35;z-index:0;pointer-events:none}
+.lp-glow-a{width:340px;height:340px;background:var(--accent);top:-120px;right:-90px}
+.lp-glow-b{width:300px;height:300px;background:var(--amber);bottom:10%;left:-110px;opacity:.18}
+.lp-page{position:relative;z-index:1;max-width:520px;margin:0 auto;padding-bottom:112px}
+
+.lp-urgency{display:flex;align-items:center;justify-content:center;gap:8px;
+  background:linear-gradient(90deg,#7f1d1d,#b91c1c 55%,#dc2626);color:#fff;text-align:center;
+  font-size:12.5px;font-weight:700;padding:10px 14px;letter-spacing:.2px}
+.lp-pulse-dot{width:7px;height:7px;border-radius:50%;background:#fff;flex:none;
+  animation:lpPulse 1.4s ease-in-out infinite}
+@keyframes lpPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(1.6)}}
+
+.lp-eyebrow{display:flex;justify-content:center;padding:18px 20px 0}
+.lp-eyebrow span{background:var(--glass);border:1px solid var(--glass-bd);backdrop-filter:blur(8px);
+  color:var(--accent2);font-size:11.5px;font-weight:700;padding:6px 14px;border-radius:999px;letter-spacing:.2px}
+
+.lp-stage{padding:22px 26px 46px;perspective:1400px}
+.lp-card-3d{
+  position:relative;border-radius:26px;overflow:hidden;
+  border:1px solid rgba(255,255,255,.12);
+  box-shadow:0 40px 70px -24px rgba(59,130,246,.55), 0 16px 30px -12px rgba(0,0,0,.65),
+    inset 0 1px 0 rgba(255,255,255,.08);
+  transform:rotateX(6deg) rotateY(-7deg);
+  animation:lpFloat 5.5s ease-in-out infinite;
+  background:var(--bg2);
+}
+@keyframes lpFloat{
+  0%,100%{transform:rotateX(6deg) rotateY(-7deg) translateY(0)}
+  50%{transform:rotateX(3deg) rotateY(-3deg) translateY(-10px)}
+}
+.lp-slider{position:relative;width:100%;height:360px;overflow:hidden;background:var(--bg2)}
+.lp-slide{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .5s ease}
+.lp-slide.active{opacity:1}
+.lp-slide img{width:100%;height:100%;object-fit:cover}
+.lp-noimg{font-size:80px;opacity:.3}
+
+.lp-gallery-pill{position:absolute;left:50%;bottom:-19px;transform:translateX(-50%);
+  display:flex;align-items:center;gap:10px;background:rgba(13,27,46,.85);border:1px solid var(--glass-bd);
+  backdrop-filter:blur(10px);border-radius:999px;padding:7px 14px;
+  box-shadow:0 10px 24px -8px rgba(0,0,0,.6);z-index:2}
+.lp-gallery-dots{display:flex;gap:5px}
+.lp-dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.25)}
+.lp-dot.active{background:var(--accent2)}
+.lp-gallery-count{font-size:10.5px;color:var(--muted);font-weight:700}
+
+.lp-body{padding:14px 22px 0}
+.lp-headline{font-family:'Cairo',sans-serif;font-weight:900;font-size:25px;line-height:1.42;
+  letter-spacing:-.01em;margin-bottom:8px;
+  background:linear-gradient(90deg,#ffffff,var(--accent2));-webkit-background-clip:text;
+  background-clip:text;-webkit-text-fill-color:transparent}
+.lp-sub{font-size:14.5px;color:var(--accent2);font-weight:700;margin-bottom:14px}
+.lp-body p{font-size:14px;color:var(--muted);line-height:1.85}
+
+.lp-guarantee{margin-top:18px;display:flex;align-items:center;gap:9px;
+  background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.3);color:var(--good);
+  border-radius:14px;padding:12px 15px;font-size:13px;font-weight:700;
+  box-shadow:0 10px 22px -14px rgba(34,197,94,.6)}
+.lp-guarantee-ico{font-size:16px;flex:none}
+
+.lp-section{padding:26px 22px 0}
+.lp-h2{font-family:'Cairo',sans-serif;font-size:16.5px;font-weight:800;margin-bottom:12px}
+
+.lp-benefits{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.lp-benefit{display:flex;align-items:flex-start;gap:8px;background:var(--glass);border:1px solid var(--glass-bd);
+  backdrop-filter:blur(10px);border-radius:14px;padding:12px 12px;font-size:12.8px;line-height:1.5;
+  box-shadow:0 12px 24px -18px rgba(0,0,0,.7)}
+.lp-benefit-ico{flex:none;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:900;color:#04101f;
+  background:linear-gradient(135deg,var(--accent2),var(--accent))}
+
+.lp-faq-item{background:var(--glass);border:1px solid var(--glass-bd);backdrop-filter:blur(10px);
+  border-radius:14px;padding:14px 16px;margin-bottom:9px;box-shadow:0 12px 24px -18px rgba(0,0,0,.7)}
+.lp-faq-item summary{cursor:pointer;font-size:13.5px;font-weight:700;list-style:none;
+  display:flex;align-items:center;justify-content:space-between;gap:10px}
+.lp-faq-item summary::-webkit-details-marker{display:none}
+.lp-faq-plus{flex:none;width:20px;height:20px;border-radius:50%;background:rgba(59,130,246,.18);
+  color:var(--accent2);position:relative}
+.lp-faq-plus::before,.lp-faq-plus::after{content:"";position:absolute;background:var(--accent2);
+  top:50%;left:50%;transform:translate(-50%,-50%)}
+.lp-faq-plus::before{width:9px;height:2px}
+.lp-faq-plus::after{width:2px;height:9px;transition:transform .2s ease}
+.lp-faq-item[open] .lp-faq-plus::after{transform:translate(-50%,-50%) rotate(90deg) scaleY(0)}
+.lp-faq-item p{margin-top:9px;font-size:12.8px;color:var(--muted);line-height:1.75}
+
+.lp-brand{text-align:center;padding:30px 10px 6px;font-size:11px;color:var(--muted);letter-spacing:.3px}
+
+.lp-cta-fixed{position:fixed;bottom:0;left:0;right:0;z-index:5;padding:14px 20px 18px;
+  background:linear-gradient(180deg,rgba(7,12,24,0),rgba(7,12,24,.92) 35%,var(--bg))}
+.lp-cta-inner{max-width:520px;margin:0 auto}
+.lp-cta-btn{display:block;width:100%;text-align:center;padding:15px;border-radius:14px;
+  font-weight:800;font-size:15.5px;text-decoration:none;color:#04101f;
+  background:linear-gradient(135deg,var(--accent2),var(--accent));
+  box-shadow:0 16px 34px -12px rgba(59,130,246,.75), inset 0 1px 0 rgba(255,255,255,.5);
+  animation:lpGlow 2.6s ease-in-out infinite}
+@keyframes lpGlow{
+  0%,100%{box-shadow:0 16px 34px -12px rgba(59,130,246,.75), inset 0 1px 0 rgba(255,255,255,.5)}
+  50%{box-shadow:0 16px 44px -8px rgba(59,130,246,1), inset 0 1px 0 rgba(255,255,255,.6)}
+}
+@media (prefers-reduced-motion: reduce){
+  .lp-card-3d,.lp-cta-btn,.lp-pulse-dot{animation:none}
+}
+</style>
+</head>
+<body>
+<div class="lp-glow lp-glow-a"></div>
+<div class="lp-glow lp-glow-b"></div>
+<div class="lp-page">
+  
+  <div class="lp-eyebrow"><span>🛍️ متجر &#34;أمينة&#34; &amp; &lt;b&gt;Co&lt;/b&gt; &lt;/script&gt;</span></div>
+  <div class="lp-stage">
+    <div class="lp-card-3d">
+      <div class="lp-slider" id="lpSlider"><div class="lp-slide active lp-noimg">📦</div></div>
+      
+    </div>
+  </div>
+  <div class="lp-body">
+    <h1 class="lp-headline">Robe</h1>
+    
+    <p></p>
+    
+  </div>
+  
+  
+  <div class="lp-brand">متجر &#34;أمينة&#34; &amp; &lt;b&gt;Co&lt;/b&gt; &lt;/script&gt; — Robe</div>
+</div>
+<div class="lp-cta-fixed"><div class="lp-cta-inner">
+  <a class="lp-cta-btn" href="/?store=1001">🛍️ اطلب الآن من المتجر</a>
+</div></div>
+<script>
+(function(){
+  var slides = document.querySelectorAll('.lp-slide');
+  var dots   = document.querySelectorAll('.lp-dot');
+  var countEl = document.querySelector('.lp-gallery-count');
+  var idx = 0;
+  function show(i){
+    slides.forEach(function(s,j){ s.classList.toggle('active', j===i); });
+    dots.forEach(function(d,j){ d.classList.toggle('active', j===i); });
+    if(countEl) countEl.textContent = (i+1) + '/' + slides.length;
+    idx = i;
+  }
+  dots.forEach(function(d){ d.addEventListener('click', function(){ show(parseInt(d.dataset.i)); }); });
+  if(slides.length>1){ setInterval(function(){ show((idx+1)%slides.length); }, 4000); }
+})();
+</script>
+</body>
+</html>
