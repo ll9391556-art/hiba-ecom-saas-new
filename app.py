@@ -1295,15 +1295,236 @@ def _with_index_fields(order_id, order):
     out["phoneDigits"] = _phone_digits(out.get("phone"))
     return out
 
-def _save_order(uid, order_id, order):
-    """كتابة كاملة لطلب: createdAt يبقى (أو يتحسب لطلب قديم)، updatedAt وphoneDigits يتحدّثو."""
-    return _fb_put(f"data/{uid}/orders/{order_id}", _with_index_fields(order_id, order))
+def _save_order(uid, order_id, order, before=None):
+    """كتابة كاملة لطلب: createdAt يبقى (أو يتحسب لطلب قديم)، updatedAt وphoneDigits يتحدّثو.
+    before = الطلب قبل التعديل (None لطلب جديد) — باش المجاميع تتحدّث بالفرق."""
+    after = _with_index_fields(order_id, order)
+    ok = _fb_put(f"data/{uid}/orders/{order_id}", after)
+    if ok:
+        _apply_order_change(uid, before, after)
+    return ok
+
+# حقول تأثر على المجاميع — patch فيه وحدة منها يقرا الطلب قبل باش يحسب الفرق
+_AGG_ORDER_FIELDS = ("status", "profit", "qty", "product", "phone", "name", "city", "createdAt")
 
 def _patch_order(uid, order_id, patch):
     patch = dict(patch, updatedAt=_now_ms())
     if "phone" in patch:
         patch["phoneDigits"] = _phone_digits(patch["phone"])
-    return _fb_patch(f"data/{uid}/orders/{order_id}", patch)
+    path = f"data/{uid}/orders/{order_id}"
+    before = _fb_get(path) if any(k in patch for k in _AGG_ORDER_FIELDS) else None
+    ok = _fb_patch(path, patch)
+    if ok and isinstance(before, dict):
+        _apply_order_change(uid, before, {**before, **patch})
+    return ok
+
+# ── المجاميع الجارية (Phase 3 / branch 5) ─────────────────
+# بدل تنزيل كل الطلبات فـ getDashboard/getCustomers/المتجر العام:
+# - data/{uid}/stats: total/confirmed/delivered/refused، profitCents (سنتيمات صحيحة باش
+#   الجمع يكون مضبوط بأي ترتيب)، sales/{key}={name,qty} للطلبات Confirmed/Delivered،
+#   ratings/{key}={name,sum,count}. يتحدّث بالفرق (قبل/بعد) فـ transaction مع كل كتابة طلب.
+# - data/{uid}/customers/{phoneDigits}: يتعاود حسابه كامل لهاد الرقم فقط (استعلام phoneDigits).
+# - المخزون (sold/available/stat) يتحسب وقت القراءة من products + stats.sales.
+# _compute_stats/_compute_customers هي "الحساب الكامل" المرجعي — recalc كيستعملهم، والفرق
+# مبني بنفس الدوال، فالنتيجة متطابقة.
+_SOLD_STATUSES = ("Confirmed", "Delivered")
+_STAT_COUNTERS = ("total", "confirmed", "delivered", "refused", "profitCents")
+
+def _safe_int(v, default=0):
+    try:
+        return int(float(v))
+    except (TypeError, ValueError):
+        return default
+
+def _cents(v):
+    try:
+        return int(round(float(v) * 100))
+    except (TypeError, ValueError):
+        return 0
+
+def _agg_key(name):
+    """اسم منتج كمفتاح RTDB. أسماء فيها . $ # [ ] / (طلب عام بنص حر) تتحوّل لـ hash، والاسم
+    الأصلي يبقى داخل القيمة."""
+    s = str(name if name is not None else "")
+    if (s and len(s.encode("utf-8")) <= 700 and not any(c in s for c in ".$#[]/")
+            and all(ord(c) >= 32 and ord(c) != 127 for c in s)):
+        return s
+    return "~" + hashlib.sha1(s.encode("utf-8")).hexdigest()[:20]
+
+def _order_contrib(o):
+    if not isinstance(o, dict):
+        return None
+    st = o.get("status", "")
+    c = {"total": 1, "confirmed": 0, "delivered": 0, "refused": 0, "profitCents": 0, "sales": {}}
+    if st in _SOLD_STATUSES:
+        name = str(o.get("product", "") or "")
+        c["confirmed"]   = 1
+        c["delivered"]   = 1 if st == "Delivered" else 0
+        c["profitCents"] = _cents(o.get("profit", 0))
+        c["sales"][_agg_key(name)] = (name, _safe_int(o.get("qty", 1), 1))
+    elif st == "Refused":
+        c["refused"]     = 1
+        c["profitCents"] = _cents(o.get("profit", 0))
+    return c
+
+def _stats_delta(before, after):
+    d, sales = {k: 0 for k in _STAT_COUNTERS}, {}
+    for sign, o in ((-1, before), (1, after)):
+        c = _order_contrib(o)
+        if not c:
+            continue
+        for k in _STAT_COUNTERS:
+            d[k] += sign * c[k]
+        for key, (name, qty) in c["sales"].items():
+            n, q = sales.get(key, (name, 0))
+            sales[key] = (n, q + sign * qty)
+    sales = {k: v for k, v in sales.items() if v[1]}
+    if not any(d.values()) and not sales:
+        return None
+    d["sales"] = sales
+    return d
+
+def _add_to_stats(stats, delta):
+    stats = dict(stats) if isinstance(stats, dict) else {}
+    for k in _STAT_COUNTERS:
+        stats[k] = _safe_int(stats.get(k, 0)) + delta.get(k, 0)
+    sales = dict(stats.get("sales") or {})
+    for key, (name, q) in delta.get("sales", {}).items():
+        entry = sales.get(key) if isinstance(sales.get(key), dict) else {"name": name, "qty": 0}
+        qty = _safe_int(entry.get("qty", 0)) + q
+        if qty:
+            sales[key] = {"name": entry.get("name", name), "qty": qty}
+        else:
+            sales.pop(key, None)
+    if sales:
+        stats["sales"] = sales
+    else:
+        stats.pop("sales", None)  # RTDB ما يخزّنش {} — نفس الشكل فالحساب والتخزين
+    return stats
+
+def _compute_stats(orders, ratings):
+    """الحساب الكامل المرجعي لـ data/{uid}/stats (recalc / backfill)."""
+    stats = {}
+    for o in (orders or {}).values():
+        delta = _stats_delta(None, o)
+        if delta:
+            stats = _add_to_stats(stats, delta)
+    stats = _add_to_stats(stats, {})  # العدادات موجودة حتى بلا طلبات
+    rmap = {}
+    for product, rs in (ratings or {}).items():
+        vals = [_safe_int(r.get("rating", 0)) for r in (rs or {}).values() if isinstance(r, dict)] \
+            if isinstance(rs, dict) else []
+        if vals:
+            rmap[_agg_key(product)] = {"name": product, "sum": sum(vals), "count": len(vals)}
+    if rmap:
+        stats["ratings"] = rmap
+    return stats
+
+def _customer_from_orders(items):
+    """items = [(order_id, order)] لنفس الرقم. الاسم/المدينة من أقدم طلب (createdAt ثم المعرّف)."""
+    rows = sorted(((k, o) for k, o in items if isinstance(o, dict)),
+                  key=lambda kv: (_safe_int(kv[1].get("createdAt"), 0), str(kv[0])))
+    if not rows:
+        return None
+    first = rows[0][1]
+    st = [o.get("status", "") for _, o in rows]
+    return {"name": first.get("name", ""), "phone": first.get("phone", ""), "city": first.get("city", ""),
+            "totalOrders": len(rows),
+            "stats": {"confirmed": st.count("Confirmed"), "refused": st.count("Refused"),
+                      "delivered": st.count("Delivered")}}
+
+def _compute_customers(orders):
+    """الحساب الكامل المرجعي لـ data/{uid}/customers."""
+    groups = {}
+    for k, o in (orders or {}).items():
+        if isinstance(o, dict):
+            ph = _phone_digits(o.get("phone"))
+            if ph:
+                groups.setdefault(ph, []).append((k, o))
+    return {ph: _customer_from_orders(items) for ph, items in groups.items()}
+
+def _refresh_customer(uid, digits):
+    found = _fb_query(f"data/{uid}/orders", "phoneDigits", equal_to=digits)
+    if found is None:
+        logging.error(f"customer refresh failed for {_mask_id(digits)} — شغّل /api/recalcStats")
+        return
+    cust = _customer_from_orders(found.items())
+    if cust:
+        _fb_put(f"data/{uid}/customers/{digits}", cust)
+    else:
+        _fb_delete(f"data/{uid}/customers/{digits}")
+
+def _invalidate_store_cache(uid):
+    with _store_products_cache_lock:
+        _store_products_cache.pop(str(uid), None)
+
+_CUSTOMER_FIELDS = ("status", "phone", "name", "city", "createdAt")
+
+def _apply_order_change(uid, before, after):
+    """يحدّث المجاميع بعد كتابة طلب (before=None: طلب جديد، after=None: طلب محذوف)."""
+    delta = _stats_delta(before, after)
+    if delta:
+        try:
+            _firebase_ref(f"data/{uid}/stats").transaction(lambda cur: _add_to_stats(cur, delta))
+        except Exception as e:
+            logging.error(f"stats update failed ({type(e).__name__}) — شغّل /api/recalcStats")
+    b = before if isinstance(before, dict) else {}
+    a = after if isinstance(after, dict) else {}
+    if not b or not a or any(b.get(f) != a.get(f) for f in _CUSTOMER_FIELDS):
+        for ph in sorted({_phone_digits(b.get("phone")), _phone_digits(a.get("phone"))} - {""}):
+            _refresh_customer(uid, ph)
+    _invalidate_store_cache(uid)
+
+def _add_rating_to_stats(uid, product, rating):
+    key = _agg_key(product)
+    def _txn(cur):
+        cur = dict(cur) if isinstance(cur, dict) else {}
+        ratings = dict(cur.get("ratings") or {})
+        r = ratings.get(key) if isinstance(ratings.get(key), dict) else {"name": product, "sum": 0, "count": 0}
+        ratings[key] = {"name": r.get("name", product), "sum": _safe_int(r.get("sum")) + int(rating),
+                        "count": _safe_int(r.get("count")) + 1}
+        cur["ratings"] = ratings
+        return cur
+    try:
+        _firebase_ref(f"data/{uid}/stats").transaction(_txn)
+    except Exception as e:
+        logging.error(f"rating stats update failed ({type(e).__name__}) — شغّل /api/recalcStats")
+    _invalidate_store_cache(uid)
+
+def _get_stats(uid):
+    s = _fb_get(f"data/{uid}/stats")
+    return s if isinstance(s, dict) else {}
+
+def _sold_by_name(stats):
+    return {e.get("name", ""): _safe_int(e.get("qty"))
+            for e in (stats.get("sales") or {}).values() if isinstance(e, dict)}
+
+def _stock_fields(product, sold):
+    init      = _safe_int(product.get("init", 0))
+    available = max(0, init - sold)
+    stat      = ("Out of Stock" if available <= 0
+                 else "Low Stock" if available <= LOW_STOCK_THRESHOLD else "In Stock")
+    return {"sold": sold, "available": available, "stat": stat}
+
+def _recompute_aggregates(uid):
+    """recalc كامل لتاجر واحد (قراءة كل الطلبات مرة). ما يكتب والو إذا القراءة فشلات —
+    باش خطأ شبكة ما يصفّرش المجاميع."""
+    try:
+        orders  = _fb_call(lambda: _firebase_ref(f"data/{uid}/orders").get()) or {}
+        ratings = _fb_call(lambda: _firebase_ref(f"data/{uid}/ratings").get()) or {}
+    except Exception as e:
+        logging.error(f"recompute read failed for {uid}: {type(e).__name__}")
+        return None
+    orders  = orders if isinstance(orders, dict) else {}
+    ratings = ratings if isinstance(ratings, dict) else {}
+    stats, customers = _compute_stats(orders, ratings), _compute_customers(orders)
+    if not _fb_put(f"data/{uid}/stats", stats):
+        return None
+    ok = _fb_put(f"data/{uid}/customers", customers) if customers else _fb_delete(f"data/{uid}/customers")
+    if not ok:
+        return None
+    _invalidate_store_cache(uid)
+    return {"orders": len(orders), "customers": len(customers)}
 
 _ORDERS_PAGE_MAX         = 500
 _ORDERS_CURSOR_MARGIN_MS = 30_000  # تداخل آمن: كتابة بطيئة (retry) ما تضيعش من الـ polling
@@ -1485,6 +1706,7 @@ def api_update_status():
     if not oid or not status: return err_json("Missing fields")
     order = _fb_get(f"data/{uid}/orders/{oid}")
     if not order: return err_json("Order not found", 404)
+    before = dict(order)
     order["status"] = status
     profit = 0
     now    = time.strftime("%Y-%m-%d %H:%M")
@@ -1498,10 +1720,8 @@ def api_update_status():
         c_data = _fb_get(f"data/{uid}/cities/{order.get('city')}")
         if p_data and c_data:
             profit = _calc_order_profit(p_data, c_data, order.get("qty", 1), delivery_type, status, order.get("profit", 0))
-            if status == "Confirmed":
-                _update_product_stock(uid, order.get("product", ""))
     order["profit"] = profit
-    _save_order(uid, oid, order)
+    _save_order(uid, oid, order, before=before)
     from features.assistant_api import log_audit_entry
     log_audit_entry(uid, request.auth_member_username or "owner",
                      "تغيير حالة طلب", f"الطلب {oid} → {status}")
@@ -1519,6 +1739,7 @@ def api_update_order_delivery():
         return err_json("Missing or invalid fields")
     order = _fb_get(f"data/{uid}/orders/{oid}")
     if not order: return err_json("Order not found", 404)
+    before = dict(order)
     order["deliveryType"] = dtype
     p_data = _fb_get(f"data/{uid}/products/{order.get('product')}")
     c_data = _fb_get(f"data/{uid}/cities/{order.get('city')}")
@@ -1526,24 +1747,8 @@ def api_update_order_delivery():
         ship_cust, _ = _ship_values(c_data, dtype)
         order["total"]  = (float(p_data.get("sell", 0)) * int(order.get("qty", 1))) + ship_cust
         order["profit"] = _calc_order_profit(p_data, c_data, order.get("qty", 1), dtype, order.get("status",""), order.get("profit", 0))
-    _save_order(uid, oid, order)
+    _save_order(uid, oid, order, before=before)
     return ok_json(True)
-
-def _update_product_stock(uid, product_name):
-    try:
-        p_data = _fb_get(f"data/{uid}/products/{product_name}")
-        if not p_data: return
-        orders = _fb_get(f"data/{uid}/orders") or {}
-        sold   = sum(int(o.get("qty", 0)) for o in orders.values()
-                     if isinstance(o, dict) and o.get("product") == product_name
-                     and o.get("status") in ("Confirmed", "Delivered"))
-        init      = int(p_data.get("init", 0))
-        available = max(0, init - sold)
-        stat      = ("Out of Stock" if available <= 0
-                     else "Low Stock" if available <= LOW_STOCK_THRESHOLD else "In Stock")
-        _fb_patch(f"data/{uid}/products/{product_name}", {"sold": sold, "available": available, "stat": stat})
-    except Exception as e:
-        logging.error(f"_update_product_stock: {e}")
 
 # ── Products ──────────────────────────────────────────────
 @app.route("/api/getProducts", methods=["GET"])
@@ -1551,33 +1756,31 @@ def _update_product_stock(uid, product_name):
 @require_perm("products")
 def api_get_products():
     uid = request.auth_uid
-    return ok_json(_fb_list(f"data/{uid}/products"))
+    # sold/available/stat من stats.sales (بدل القيم المخزّنة اللي كانت تتحدّث غير عند Confirmed)
+    sold = _sold_by_name(_get_stats(uid))
+    products = []
+    for p in _fb_list(f"data/{uid}/products"):
+        if isinstance(p, dict):
+            p = {**p, **_stock_fields(p, sold.get(p.get("name", ""), 0))}
+        products.append(p)
+    return ok_json(products)
 
 def _compute_store_products(uid):
     products_raw = _fb_get(f"data/{uid}/products") or {}
-    orders_raw   = _fb_get(f"data/{uid}/orders")   or {}
-    ratings_raw  = _fb_get(f"data/{uid}/ratings")  or {}
-    sales = {}
-    for o in orders_raw.values():
-        if isinstance(o, dict) and o.get("status") in ("Confirmed", "Delivered"):
-            name = o.get("product", "")
-            sales[name] = sales.get(name, 0) + int(o.get("qty", 0))
+    stats        = _get_stats(uid)
+    sales        = _sold_by_name(stats)
+    ratings      = stats.get("ratings") or {}
     result = []
     for p in products_raw.values():
         if not isinstance(p, dict) or not p.get("name"): continue
-        init      = int(p.get("init", 0))
-        sold      = sales.get(p["name"], 0)
-        available = max(0, init - sold)
-        stat      = ("Out of Stock" if available <= 0
-                     else "Low Stock" if available <= LOW_STOCK_THRESHOLD else "In Stock")
+        stock     = _stock_fields(p, sales.get(p["name"], 0))
+        sold, available, stat = stock["sold"], stock["available"], stock["stat"]
         images = p.get("images") or ([p["image"]] if p.get("image") else [])
-        prod_ratings = ratings_raw.get(p["name"]) if isinstance(ratings_raw, dict) else None
+        r = ratings.get(_agg_key(p["name"])) if isinstance(ratings, dict) else None
         avg_rating = rating_count = 0
-        if isinstance(prod_ratings, dict) and prod_ratings:
-            vals = [float(r.get("rating", 0)) for r in prod_ratings.values() if isinstance(r, dict)]
-            if vals:
-                rating_count = len(vals)
-                avg_rating   = round(sum(vals) / rating_count, 1)
+        if isinstance(r, dict) and _safe_int(r.get("count")):
+            rating_count = _safe_int(r.get("count"))
+            avg_rating   = round(_safe_int(r.get("sum")) / rating_count, 1)
         result.append({"name": p.get("name",""), "category": p.get("category",""),
                         "size": p.get("size",""), "colors": p.get("colors",""),
                         "sell": float(p.get("sell",0)), "available": available, "stat": stat, "sold": sold,
@@ -1693,6 +1896,7 @@ def api_submit_rating():
         "orderId": order_id,
     })
     _patch_order(uid, order_id, {"rated": True})
+    _add_rating_to_stats(uid, product, rating)
     return ok_json(True)
 
 @app.route("/api/getProductRatings", methods=["GET"])
@@ -1770,66 +1974,47 @@ def api_delete_city():
 @require_auth
 @require_perm("customers")
 def api_get_customers():
+    """من data/{uid}/customers (مجموع لكل رقم) — بدل تنزيل كل الطلبات."""
     uid = request.auth_uid
-    orders_raw = _fb_get(f"data/{uid}/orders") or {}
-    cmap = {}
-    for o in orders_raw.values():
-        if not isinstance(o, dict): continue
-        ph = re.sub(r"\D", "", str(o.get("phone") or ""))
-        if not ph: continue
-        if ph not in cmap:
-            cmap[ph] = {"name": o.get("name",""), "phone": o.get("phone",""),
-                        "city": o.get("city",""), "totalOrders": 0,
-                        "stats": {"confirmed":0,"refused":0,"delivered":0}}
-        cmap[ph]["totalOrders"] += 1
-        st = o.get("status","")
-        if st == "Confirmed": cmap[ph]["stats"]["confirmed"] += 1
-        if st == "Refused":   cmap[ph]["stats"]["refused"]   += 1
-        if st == "Delivered": cmap[ph]["stats"]["delivered"] += 1
+    raw = _fb_get(f"data/{uid}/customers") or {}
     result = []
-    for ph, c in cmap.items():
-        ref = c["stats"]["refused"]
-        con = c["stats"]["confirmed"] + c["stats"]["delivered"]
+    for ph, c in (raw.items() if isinstance(raw, dict) else []):
+        if not isinstance(c, dict): continue
+        stats = {"confirmed": 0, "refused": 0, "delivered": 0, **(c.get("stats") or {})}
+        ref = stats["refused"]
+        con = stats["confirmed"] + stats["delivered"]
         rating = "Bad" if ref >= BAD_CUSTOMER_THRESHOLD else "Good" if con >= 3 and ref == 0 else "Neutral"
-        result.append({**c, "type": rating})
+        result.append({"name": c.get("name", ""), "phone": c.get("phone", ""), "city": c.get("city", ""),
+                       "totalOrders": c.get("totalOrders", 0), "stats": stats, "type": rating})
     return ok_json(result)
 
 # ── Dashboard ─────────────────────────────────────────────
 @app.route("/api/getDashboard", methods=["GET"])
 @require_auth
 def api_get_dashboard():
+    """من data/{uid}/stats + المنتجات — بدل تنزيل كل الطلبات فكل فتحة للوحة."""
     uid = request.auth_uid
-    orders_raw   = _fb_get(f"data/{uid}/orders")   or {}
+    stats        = _get_stats(uid)
     products_raw = _fb_get(f"data/{uid}/products") or {}
-    tot = conf = ref = delivered = 0
-    profit = 0.0
-    sales  = {}
-    for o in orders_raw.values():
-        if not isinstance(o, dict): continue
-        tot += 1
-        st = o.get("status","")
-        if st in ("Confirmed","Delivered"):
-            conf += 1
-            profit += float(o.get("profit",0))
-            prod = o.get("product","")
-            sales[prod] = sales.get(prod,0) + int(o.get("qty",1))
-            if st == "Delivered": delivered += 1
-        elif st == "Refused":
-            ref += 1
-            profit += float(o.get("profit",0))
-    top_products = sorted([{"name":k,"qty":v} for k,v in sales.items()],
-                          key=lambda x: x["qty"], reverse=True)[:5]
+    tot       = _safe_int(stats.get("total"))
+    conf      = _safe_int(stats.get("confirmed"))
+    ref       = _safe_int(stats.get("refused"))
+    delivered = _safe_int(stats.get("delivered"))
+    profit    = _safe_int(stats.get("profitCents")) / 100
+    sales     = _sold_by_name(stats)
+    top_products = sorted([{"name": k, "qty": v} for k, v in sales.items()],
+                          key=lambda x: (-x["qty"], x["name"]))[:5]
     low_stock = []
     for p in products_raw.values():
         if not isinstance(p, dict): continue
-        remaining = int(p.get("init",0)) - sales.get(p.get("name",""),0)
+        remaining = _safe_int(p.get("init", 0)) - sales.get(p.get("name", ""), 0)
         if remaining <= LOW_STOCK_THRESHOLD:
-            low_stock.append({"name":p.get("name",""),"rem":remaining,
-                               "stat":"Out of Stock" if remaining<=0 else "Low Stock"})
-    return ok_json({"totalOrders":tot,"confirmed":conf,"refused":ref,"delivered":delivered,
-                    "totalProfit":round(profit,2),"confirmRate":round(conf/tot*100) if tot else 0,
-                    "refuseRate":round(ref/tot*100) if tot else 0,
-                    "topProducts":top_products,"lowStock":low_stock})
+            low_stock.append({"name": p.get("name", ""), "rem": remaining,
+                              "stat": "Out of Stock" if remaining <= 0 else "Low Stock"})
+    return ok_json({"totalOrders": tot, "confirmed": conf, "refused": ref, "delivered": delivered,
+                    "totalProfit": round(profit, 2), "confirmRate": round(conf/tot*100) if tot else 0,
+                    "refuseRate": round(ref/tot*100) if tot else 0,
+                    "topProducts": top_products, "lowStock": low_stock})
 
 # ── Store Settings ────────────────────────────────────────
 @app.route("/api/getStoreSettings", methods=["GET"])
@@ -2819,7 +3004,29 @@ def api_admin_rebuild_indexes():
     orders_res = _rebuild_order_fields()
     if isinstance(orders_res, tuple):
         return orders_res
-    return ok_json({"orders": orders_res, "users": users_res})
+    # المجاميع الجارية (stats/customers) لكل تاجر — من بعد حقول الطلبات
+    agg_ok, agg_failed = 0, []
+    for uid in (_fb_keys("data") or []):
+        if _recompute_aggregates(uid) is None:
+            agg_failed.append(uid)
+        else:
+            agg_ok += 1
+    return ok_json({"orders": orders_res, "users": users_res,
+                    "aggregates": {"merchants": agg_ok, "failed": agg_failed}})
+
+@app.route("/api/recalcStats", methods=["POST"])
+@require_auth
+@require_owner
+def api_recalc_stats():
+    """إصلاح يدوي للمجاميع (إذا انقطع شي حاجة بين كتابة طلب وتحديث المجموع): حساب كامل
+    من كل الطلبات. مرة فـ 10 دقائق لكل تاجر — قراءة كاملة غالية."""
+    uid = request.auth_uid
+    if _login_rate_limited(f"recalc:{uid}", max_attempts=1, window=600):
+        return err_json("تمت إعادة الحساب مؤخراً — حاول بعد 10 دقائق", 429)
+    res = _recompute_aggregates(uid)
+    if res is None:
+        return err_json("Firebase unavailable", 503)
+    return ok_json(res)
 
 def _rebuild_user_indexes():
     # _fb_get يرجّع None للـ "ما كاينش" وللخطأ معاً — نتأكدو أولاً أن Firebase يجاوب
@@ -2937,17 +3144,16 @@ def api_saas():
     action  = str(payload.get("action") or "").strip()
     if not action: return err_json("missing_action")
     def _path_allowed(path):
-        path = str(path or "")
-        data_prefix = f"data/{auth_uid}/"
-        if path.startswith(data_prefix):
-            rest = path[len(data_prefix):]
-            first_segment = rest.split("/", 1)[0]
-            blocked_segments = {"usage", "integrations", "landingPages", "teamMembers"}
-            if first_segment in blocked_segments:
-                return False
-            return True
-        ai_logs_prefix = f"ai_logs/{auth_uid}"
-        return path == ai_logs_prefix or path.startswith(ai_logs_prefix + "/")
+        # المقاطع الفارغة تتحذف كيما يدير Firebase — قبل: "data/{uid}//usage" كان يدوز
+        # الفحص (SEC-010)، و"data/{uid}/" كان يسمح بالكتابة فوق شجرة التاجر كاملة.
+        # orders/stats/customers/ratings ممنوعين: المجاميع الجارية تتحدّث غير من المسارات
+        # المخصصة، وكتابة مباشرة كانت تخليهم غالطين.
+        segs = [s for s in str(path or "").split("/") if s]
+        blocked_segments = {"usage", "integrations", "landingPages", "teamMembers",
+                            "orders", "stats", "customers", "ratings"}
+        if len(segs) >= 3 and segs[0] == "data" and segs[1] == str(auth_uid):
+            return segs[2] not in blocked_segments
+        return len(segs) >= 2 and segs[0] == "ai_logs" and segs[1] == str(auth_uid)
 
     if action in ("firebaseGet", "firebaseSet", "firebaseUpdate", "firebasePush") and auth_role == "member":
         return err_json("غير مسموح لعضو الفريق باستعمال هذا المسار", 403)
@@ -3391,7 +3597,8 @@ def get_products_text(bot_settings):
         uid      = bot_settings.get("User_ID")
         products = _fb_get(f"data/{uid}/products") if uid else None
         if products and isinstance(products, dict):
-            lines = [f"- {p.get('name','?')}: {p.get('sell','?')} | stock:{p.get('available','?')} | {p.get('category','')}".strip()
+            sold = _sold_by_name(_get_stats(uid))
+            lines = [f"- {p.get('name','?')}: {p.get('sell','?')} | stock:{_stock_fields(p, sold.get(p.get('name',''), 0))['available']} | {p.get('category','')}".strip()
                      for p in products.values() if isinstance(p,dict)]
             if lines: return "\n".join(lines)
     except Exception: pass
