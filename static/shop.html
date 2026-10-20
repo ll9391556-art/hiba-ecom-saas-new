@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="fr" dir="ltr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>OrderFlow</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script defer src="/static/pixel-loader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+<link rel="stylesheet" href="/static/css/app.css"/>
+</head>
+<body>
+
+<div id="shopApp">
+  <header class="shop-header">
+    <div class="shop-header-inner">
+      <div class="shop-brand">
+        <div class="shop-brand-icon" id="sh-logo">🛒</div>
+        <div>
+          <div class="shop-brand-name" id="sh-name">Boutique</div>
+          <div class="shop-brand-tag" id="sh-tag">Catalogue en ligne</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span class="shop-track-link" data-on-click="toggleTrackPanel()">📦 Suivre ma commande</span>
+        <input id="sh-search" style="background:var(--card2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:7px 12px;font-size:13px;width:200px" placeholder="🔍 Rechercher..."/>
+        <button data-on-click="openCart()" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-weight:700;font-size:13px;cursor:pointer;position:relative">
+          🛍️ <span id="sh-cart-label">Panier</span>
+          <span id="sh-cart-count" style="display:none;position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;font-size:10px;font-weight:900;width:18px;height:18px;border-radius:50%;display:none;align-items:center;justify-content:center">0</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div class="shop-body">
+    <div id="track-panel" class="track-panel">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <input id="track-phone" class="form-control" style="flex:1;min-width:160px" placeholder="رقم الهاتف / Téléphone" type="tel"/>
+        <button class="btn-primary btn-sm" data-on-click="sh_trackOrder()">بحث</button>
+      </div>
+      <div id="track-results"></div>
+    </div>
+
+    <div id="sh-step-grid">
+      <div class="shop-toolbar" id="sh-toolbar" style="display:none">
+        <div id="sh-categories" style="display:flex;gap:8px;flex-wrap:wrap;flex:1"></div>
+        <select id="sh-sort" class="shop-sort" data-on-change="sh_renderGrid(document.getElementById('sh-search').value)">
+          <option value="default">الترتيب الافتراضي</option>
+          <option value="price_asc">السعر: الأقل أولاً</option>
+          <option value="price_desc">السعر: الأعلى أولاً</option>
+          <option value="newest">الأحدث</option>
+          <option value="bestselling">الأكثر طلباً</option>
+        </select>
+      </div>
+      <div id="sh-grid" class="shop-grid"></div>
+      <div id="sh-loading" style="text-align:center;padding:60px;color:var(--muted)">
+        <span class="spinner" style="width:32px;height:32px;border-width:3px"></span>
+      </div>
+      <div id="sh-empty" style="display:none;text-align:center;padding:60px;color:var(--muted)">
+        <div style="font-size:48px;margin-bottom:12px">📦</div>
+        <div style="font-weight:700">Aucun produit disponible</div>
+      </div>
+    </div>
+
+    <div id="sh-step-checkout" style="display:none;max-width:500px;margin:0 auto">
+      <div style="cursor:pointer;color:var(--accent);font-size:13px;font-weight:700;margin-bottom:16px" data-on-click="sh_goStep('grid')">← Retour</div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px">
+        <h4 style="margin-bottom:20px">📋 Finaliser la commande</h4>
+        <div id="sh-checkout-items" style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)"></div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span style="color:var(--muted)">Sous-total</span><span id="sh-subtotal">—</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:12px"><span style="color:var(--muted)">Livraison</span><span id="sh-ship-cost">—</span></div>
+        <div style="display:flex;justify-content:space-between;font-weight:800;font-size:16px;margin-bottom:20px"><span>Total</span><span id="sh-total" style="color:var(--green)">—</span></div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <input id="sh-cname" class="form-control" placeholder="Nom complet *"/>
+          <input id="sh-cphone" class="form-control" placeholder="Téléphone *" type="tel"/>
+          <input id="sh-cphone2" class="form-control" placeholder="Téléphone 2"/>
+          <select id="sh-ccity" class="form-select"><option value="">— Choisir la ville —</option></select>
+          <select id="sh-delivery" class="form-select">
+            <option value="" disabled selected>— اختر نوع التوصيل * —</option>
+            <option value="home">🏠 توصيل للمنزل</option>
+            <option value="desk">🏢 توصيل لمكتب الاستلام</option>
+          </select>
+          <input id="sh-caddr" class="form-control" placeholder="Adresse de livraison"/>
+        </div>
+        <button data-on-click="sh_submitOrder()" style="width:100%;margin-top:16px;background:var(--green);color:#fff;border:none;border-radius:8px;padding:12px;font-weight:700;font-size:14px;cursor:pointer">
+          ✅ Confirmer la commande
+        </button>
+      </div>
+    </div>
+
+    <div id="sh-step-success" style="display:none;text-align:center;padding:60px 20px">
+      <div style="font-size:64px;margin-bottom:16px">🎉</div>
+      <h3 style="margin-bottom:8px">Commande enregistrée!</h3>
+      <p style="color:var(--muted);margin-bottom:8px">Nous vous contacterons bientôt pour confirmer.</p>
+      <p style="font-size:13px;color:var(--muted)">Réf: <strong id="sh-order-ref" style="color:var(--text)">—</strong></p>
+      <button data-on-click="sh_goStep('grid')" style="margin-top:20px;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px 24px;font-weight:700;cursor:pointer">
+        🛍️ Continuer les achats
+      </button>
+    </div>
+  </div>
+  <div class="shop-footer">Propulsé par <strong>OrderFlow</strong></div>
+</div>
+
+<div class="cart-overlay" id="cartOverlay" data-on-click="closeCart()"></div>
+<div class="cart-drawer" id="cartDrawer">
+  <div class="cart-head">
+    <h5 style="margin:0">🛍️ Panier</h5>
+    <button data-on-click="closeCart()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer">✕</button>
+  </div>
+  <div class="cart-items" id="cartItems">
+    <div style="text-align:center;padding:40px;color:var(--muted)">Panier vide</div>
+  </div>
+  <div class="cart-footer">
+    <div style="display:flex;justify-content:space-between;font-weight:800;font-size:15px;margin-bottom:12px">
+      <span>Total</span><span id="cartTotal" style="color:var(--green)">0</span>
+    </div>
+    <button data-on-click="goCheckout()" style="width:100%;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:12px;font-weight:700;font-size:14px;cursor:pointer">
+      🚀 Commander
+    </button>
+  </div>
+</div>
+
+<div class="pdp-overlay" id="pdpOverlay" data-on-click="if(event.target===this) closePdp()">
+  <div class="pdp-box">
+    <button class="pdp-close" data-on-click="closePdp()">✕</button>
+    <div class="pdp-img-wrap" id="pdp-img-wrap">
+      <button class="pdp-nav prev" data-on-click="pdp_nav(-1)">‹</button>
+      <img id="pdp-img" src="" style="display:none"/>
+      <span id="pdp-img-fallback">📦</span>
+      <button class="pdp-nav next" data-on-click="pdp_nav(1)">›</button>
+    </div>
+    <div class="pdp-dots" id="pdp-dots"></div>
+    <div class="pdp-body">
+      <div class="shop-card-cat" id="pdp-cat"></div>
+      <h3 id="pdp-name" style="margin:6px 0"></h3>
+      <div id="pdp-stars"></div>
+      <div class="shop-price" id="pdp-price" style="font-size:22px;margin:10px 0"></div>
+      <p id="pdp-desc" style="color:var(--muted);font-size:13px;margin-bottom:14px"></p>
+      <span class="badge" id="pdp-stat"></span>
+      <div id="pdp-urgency" style="font-size:12px;color:var(--red);font-weight:700;margin-top:6px;display:none"></div>
+      <button class="shop-add-btn" id="pdp-add-btn" style="width:100%;padding:12px;margin-top:14px;font-size:14px" data-on-click="pdp_addToCart()">🛒 Ajouter au panier</button>
+      <div style="margin-top:18px">
+        <div style="cursor:pointer;color:var(--accent);font-size:13px;font-weight:700" data-on-click="pdp_toggleReviews()">⭐ عرض التقييمات</div>
+        <div id="pdp-reviews" style="display:none;margin-top:10px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toastWrap"></div>
+<script src="/static/js/core.js"></script>
+<script src="/static/js/actions.js"></script>
+<script src="/static/js/api.js"></script>
+<script src="/static/js/shop.js"></script>
+<script src="/static/js/theme.js"></script>
+<script src="/static/js/shop-main.js"></script>
+</body>
+</html>

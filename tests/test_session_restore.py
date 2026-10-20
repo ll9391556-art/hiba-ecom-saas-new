@@ -4,10 +4,12 @@ import pathlib
 import re
 import time
 
+from tests.frontend import dashboard_and_shop
+
 from tests.conftest import auth
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-INDEX = (ROOT / "static" / "index.html").read_text(encoding="utf-8")
+INDEX = dashboard_and_shop()  # HTML + /static/js/* (Phase 4 / F1)
 SECRET_KEYS = ("Password", "Gemini_api_key", "fb_access_token", "instgram_access_token", "whtsapp_token")
 
 

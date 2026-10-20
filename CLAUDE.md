@@ -59,11 +59,14 @@ Deployment: production runs Python 3.10 in Docker (`Dockerfile`), so keep code c
 
 **Per-process state.** Caches, rate limits and bot-order dedupe are module-level dicts, so they are per gunicorn worker. Cleanup daemon threads start at import time in every worker; the keepalive does not (it lives in `gunicorn.conf.py`).
 
-**Frontend.**
-- `static/index.html` is one file that serves both the merchant dashboard and the public storefront (`/?store=<uid>`) on the same origin.
-- It and `static/features/*.html` hard-code `API_URL = "https://orderconfidence.com/api"`, so a locally opened frontend talks to production.
+**Frontend** (no build step; plain classic `<script>` tags sharing one global scope, loaded in order).
+- `/` serves `static/index.html` (merchant dashboard); `/?store=<uid>` serves `static/shop.html` (public storefront). Same origin, so a storefront XSS can still read `localStorage.of_token`.
+- CSS: `static/css/app.css`. JS: `static/js/` — shared `core.js` (config, i18n, `esc`, toast, `SHOP_UID`, event delegation) → `actions.js` → `api.js`; dashboard adds `auth`, `dashboard`, `orders`, `catalog`, `store`, `messaging`, `settings`, `ui`, `theme`, `main`; the storefront adds `shop`, `theme`, `shop-main`. `static/features/*.html` load `core.js` + `api.js` and keep their own page script. The order is pinned by `tests/test_frontend_layout.py`; a later file's functions don't exist yet while an earlier file runs its load-time code.
+- `core.js` still hard-codes `API_URL = "https://orderconfidence.com/api"`, so a locally opened frontend talks to production.
+- No inline event handlers. Write `data-on-click="fn(this.dataset.id)"` (also `change`, `input`, `keydown`, `error`) and add the same text as a key in `static/js/actions.js` (or the page's `registerActions({...})` for feature pages): `"fn(this.dataset.id)": function(event){ fn(this.dataset.id); }`. `this` is the element; `event.stopPropagation()` stops parent handlers, as inline handlers did. Tests fail on any `onclick=` and on any `data-on-*` text without a table entry. Pass values through `data-*` attributes (escaped with `esc()`), never by concatenating them into the handler text.
 - API responses use the envelope `{status: "ok", data}` or `{status: "error", message}` (`ok_json` / `err_json`).
-- Escape anything inserted with `innerHTML` using `esc()`. Prefer `data-*` attributes over interpolating values into `onclick='...'`.
+- Escape anything inserted with `innerHTML` using `esc()`.
+- Static tests read pages through `tests/frontend.py` (`page_source`, `dashboard_and_shop`), which inlines the local scripts in load order.
 
 ## UI/UX and media rules
 
@@ -72,7 +75,7 @@ Deployment: production runs Python 3.10 in Docker (`Dockerfile`), so keep code c
 - **Loading the libraries:** Flask serves only `static/`, so `node_modules/` is not reachable from the browser and there is no bundler. Load the versions pinned in `package-lock.json` (gsap 3.15.0, lenis 1.3.27) the same way Chart.js is loaded in `index.html`: an exact-version jsDelivr URL (`gsap@3.15.0/dist/gsap.min.js`, `gsap@3.15.0/dist/ScrollTrigger.min.js`, `lenis@1.3.27/dist/lenis.min.js` plus `lenis.css`) with an SRI `integrity` hash. Alternatively, copy those `dist` files into `static/`.
 - **Where pages are built:**
   - Public landing pages (`/lp/<id>`) are rendered server-side by `_build_landing_html` (`services/landing.py`) with `templates/landing.html`. It's a Jinja template: write CSS/JS braces normally, but `{{`, `{%` and `{#` start Jinja syntax; dynamic text goes in as `{{ var }}` (autoescaped), pre-built HTML snippets as `Markup`.
-  - The storefront and dashboard share `static/index.html`.
+  - The storefront is `static/shop.html` + `static/js/shop.js`; the dashboard is `static/index.html` + its `static/js/*.js`.
   - Keep the existing `@media (prefers-reduced-motion: reduce)` handling for any new animation.
 - **Media tools:** media creation and editing goes through Python tools (FFmpeg, MoviePy, Whisper). None of them are installed or listed in `requirements.txt` yet. Adding them changes the deployed image (Whisper pulls in PyTorch), so confirm with the owner before adding them to production requirements. Heavy processing should not run inside the gunicorn request cycle (120 s timeout).
 

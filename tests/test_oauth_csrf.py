@@ -148,7 +148,8 @@ def test_get_state_cors_allows_credentials_for_allowed_origin(client, owner):
 
 
 def test_frontend_checks_origin_and_reloads_from_server():
-    src = (ROOT / "static" / "index.html").read_text(encoding="utf-8")
+    from tests.frontend import dashboard_and_shop
+    src = dashboard_and_shop()
     fn = src[src.index("async function connectFacebook"):]
     fn = fn[:fn.index("\nasync function ")]
     assert "ev.origin!==FB_ORIGIN" in fn.replace(" ", "")

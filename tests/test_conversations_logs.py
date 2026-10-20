@@ -4,12 +4,14 @@
 import json
 import pathlib
 
+from tests.frontend import dashboard_and_shop
+
 import pytest
 
 from tests import fakes
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-INDEX = (ROOT / "static" / "index.html").read_text(encoding="utf-8")
+INDEX = dashboard_and_shop()  # HTML + /static/js/* (Phase 4 / F1)
 ADMIN = {"X-Admin-Key": "dummy-admin-key"}
 T0 = 1_700_000_000.0  # ثواني (time.time) كيما _log_conversation
 
@@ -178,4 +180,5 @@ def test_frontend_conversation_polls_are_incremental_and_pause_when_hidden():
     for poller in ("startConvListPolling", "startConvPolling"):
         assert "document.hidden" in _fn(poller)
     assert "pollConversationMessages" in _fn("startConvPolling")
-    assert 'onclick="loadOlderConversations()"' in INDEX and 'onclick="loadOlderMessages()"' in INDEX
+    # F5: الأزرار كتستعمل data-on-click (نفس نص الـ handler)
+    assert 'data-on-click="loadOlderConversations()"' in INDEX and 'data-on-click="loadOlderMessages()"' in INDEX
