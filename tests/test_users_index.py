@@ -81,7 +81,7 @@ def test_delete_member_removes_team_index(client, db, seed_owner):
 
 # ── عدّاد lifetime ───────────────────────────────────────
 def test_lifetime_counter_and_cap(client, db, app, monkeypatch):
-    monkeypatch.setattr(app, "LIFETIME_MAX_SLOTS", 2)
+    monkeypatch.setattr("routes.admin.LIFETIME_MAX_SLOTS", 2)
     assert _create_client(client, "a1", plan="lifetime").status_code == 200
     assert _create_client(client, "a2", plan="starter").status_code == 200
     assert db.get("counters/lifetimeAccounts") == 1
