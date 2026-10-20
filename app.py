@@ -394,6 +394,14 @@ def _fb_query(path, order_by, *, equal_to=None, start_at=None, end_at=None, limi
     except Exception as e:
         logging.error(f"_fb_query({path}, {order_by}): {e}"); return None
 
+def _fb_keys(path):
+    """مفاتيح الأبناء فقط (REST ?shallow=true) بلا تنزيل المحتوى. None عند الخطأ."""
+    try:
+        data = _fb_call(lambda: _firebase_ref(path).get(shallow=True))
+    except Exception as e:
+        logging.error(f"_fb_keys({path}): {e}"); return None
+    return list(data.keys()) if isinstance(data, dict) else []
+
 def _fb_put(path, data):
     try:
         _fb_call(lambda: _firebase_ref(path).set(data))
@@ -1242,6 +1250,43 @@ def planHas_server(uid, feature):
     return bool(PLANS.get(plan, {}).get(feature, False))
 
 # ── Orders ────────────────────────────────────────────────
+# حقول مفهرسة فـ database.rules.json (data/$uid/orders .indexOn): كل كتابة طلب تمر من
+# _save_order / _patch_order باش ما تتنساش، وإلا الاستعلامات (trackOrder...) ما تلقاش الطلب.
+def _now_ms():
+    return int(time.time() * 1000)
+
+def _order_created_ms(order_id, order):
+    """createdAt لطلب قديم بلاه: من المعرّف ORD-<ms>، ولا من حقل date، ولا دابا."""
+    m = re.fullmatch(r"ORD-(\d{12,14})", str(order_id or ""))
+    if m:
+        return int(m.group(1))
+    try:
+        return int(time.mktime(time.strptime(str(order.get("date") or "")[:16], "%Y-%m-%d %H:%M")) * 1000)
+    except Exception:
+        return _now_ms()
+
+def _phone_digits(phone):
+    return re.sub(r"\D", "", str(phone or ""))
+
+def _with_index_fields(order_id, order):
+    out = dict(order)
+    created = out.get("createdAt")
+    if not isinstance(created, (int, float)) or isinstance(created, bool):
+        out["createdAt"] = _order_created_ms(order_id, out)
+    out["updatedAt"]   = _now_ms()
+    out["phoneDigits"] = _phone_digits(out.get("phone"))
+    return out
+
+def _save_order(uid, order_id, order):
+    """كتابة كاملة لطلب: createdAt يبقى (أو يتحسب لطلب قديم)، updatedAt وphoneDigits يتحدّثو."""
+    return _fb_put(f"data/{uid}/orders/{order_id}", _with_index_fields(order_id, order))
+
+def _patch_order(uid, order_id, patch):
+    patch = dict(patch, updatedAt=_now_ms())
+    if "phone" in patch:
+        patch["phoneDigits"] = _phone_digits(patch["phone"])
+    return _fb_patch(f"data/{uid}/orders/{order_id}", patch)
+
 @app.route("/api/getOrders", methods=["GET"])
 @require_auth
 @require_perm("orders")
@@ -1362,7 +1407,7 @@ def api_add_order():
             d.pop("couponCode", None)
             d.pop("discountApplied", None)
 
-    _fb_put(f"data/{uid}/orders/{order_id}", d)
+    _save_order(uid, order_id, d)
     _increment_usage(uid, "orderCount")
     if applied_coupon:
         _increment_coupon_usage(uid, applied_coupon)
@@ -1395,7 +1440,7 @@ def api_update_status():
             if status == "Confirmed":
                 _update_product_stock(uid, order.get("product", ""))
     order["profit"] = profit
-    _fb_put(f"data/{uid}/orders/{oid}", order)
+    _save_order(uid, oid, order)
     from features.assistant_api import log_audit_entry
     log_audit_entry(uid, request.auth_member_username or "owner",
                      "تغيير حالة طلب", f"الطلب {oid} → {status}")
@@ -1420,7 +1465,7 @@ def api_update_order_delivery():
         ship_cust, _ = _ship_values(c_data, dtype)
         order["total"]  = (float(p_data.get("sell", 0)) * int(order.get("qty", 1))) + ship_cust
         order["profit"] = _calc_order_profit(p_data, c_data, order.get("qty", 1), dtype, order.get("status",""), order.get("profit", 0))
-    _fb_put(f"data/{uid}/orders/{oid}", order)
+    _save_order(uid, oid, order)
     return ok_json(True)
 
 def _update_product_stock(uid, product_name):
@@ -1544,11 +1589,14 @@ def api_track_order():
     uid   = request.args.get("userId", "").strip()
     phone = re.sub(r"\D", "", request.args.get("phone", ""))
     if not uid or not phone: return err_json("Missing userId or phone")
-    orders_raw = _fb_get(f"data/{uid}/orders") or {}
+    # استعلام بالفهرس phoneDigits — قبل: تنزيل كل طلبات المتجر فكل طلب عام
+    found = _fb_query(f"data/{uid}/orders", "phoneDigits", equal_to=phone)
+    if found is None:
+        return err_json("تعذّر البحث حالياً — حاول بعد قليل", 503)
     result = []
-    for o in orders_raw.values():
+    for o in found.values():
         if not isinstance(o, dict): continue
-        if re.sub(r"\D", "", str(o.get("phone", ""))) == phone:
+        if o.get("phoneDigits") == phone:
             result.append({"id": o.get("id",""), "product": o.get("product",""),
                             "qty": o.get("qty",1), "status": o.get("status",""),
                             "date": o.get("date",""), "total": o.get("total",0),
@@ -1583,7 +1631,7 @@ def api_submit_rating():
         "rating": rating, "comment": comment, "date": time.strftime("%Y-%m-%d %H:%M"),
         "orderId": order_id,
     })
-    _fb_patch(f"data/{uid}/orders/{order_id}", {"rated": True})
+    _patch_order(uid, order_id, {"rated": True})
     return ok_json(True)
 
 @app.route("/api/getProductRatings", methods=["GET"])
@@ -2399,16 +2447,18 @@ def api_woo_sync():
     except Exception:
         woo_orders = []
 
-    existing_orders   = _fb_get(f"data/{uid}/orders") or {}
-    existing_woo_ids  = {str(o.get("wooOrderId")) for o in existing_orders.values()
-                          if isinstance(o, dict) and o.get("wooOrderId")}
+    # مفاتيح الطلبات فقط (shallow) — طلبات Woo مفتاحها دائماً ORD-WOO-<id>
+    existing_keys = _fb_keys(f"data/{uid}/orders")
+    if existing_keys is None:
+        return err_json("تعذّر قراءة الطلبات الحالية — حاول بعد قليل", 503)
+    existing_keys = set(existing_keys)
     imported = 0
     for wo in woo_orders:
         if not _under_cap(uid, "orderCount", "orderCap"):
             logging.warning(f"⏭️ توقفت مزامنة WooCommerce — تجاوز سقف الطلبات الشهري | uid={uid}")
             break
         woo_id = str(wo.get("id", ""))
-        if not woo_id or woo_id in existing_woo_ids: continue
+        if not woo_id or f"ORD-WOO-{woo_id}" in existing_keys: continue
         billing     = wo.get("billing", {}) or {}
         line_items  = wo.get("line_items", []) or []
         product     = line_items[0].get("name", "") if line_items else ""
@@ -2425,7 +2475,7 @@ def api_woo_sync():
             "city": billing.get("city", ""), "address": billing.get("address_1", ""),
             "unitPrice": 0, "shipping": 0, "total": float(wo.get("total", 0) or 0),
         }
-        _fb_put(f"data/{uid}/orders/{order_id}", new_order)
+        _save_order(uid, order_id, new_order)
         _increment_usage(uid, "orderCount")
         imported += 1
     _fb_patch(f"data/{uid}/integrations/woocommerce", {"lastSync": time.strftime("%Y-%m-%d %H:%M")})
@@ -2650,6 +2700,45 @@ def api_admin_create_client():
     })
     return ok_json({"username": username, "userId": new_uid,
                      "storeLink": f"{request.url_root.rstrip('/')}/?store={new_uid}"})
+
+@app.route("/api/admin/rebuildIndexes", methods=["POST"])
+@require_admin
+def api_admin_rebuild_indexes():
+    """تعبئة لمرة وحدة بعد deploy: يزيد createdAt/updatedAt/phoneDigits للطلبات القديمة
+    (اللي تكتبت قبل _save_order). idempotent: الطلبات الصحيحة ما تتكتبش، وباقي الحقول
+    ما تتمسّش. كتابة وحدة (update متعدد المسارات) لكل تاجر."""
+    uids = _fb_keys("data")
+    if uids is None:
+        return err_json("Firebase unavailable", 503)
+    now = _now_ms()
+    merchants = checked = updated = 0
+    for uid in uids:
+        orders = _fb_get(f"data/{uid}/orders")
+        if not isinstance(orders, dict):
+            continue
+        merchants += 1
+        patch = {}
+        for oid, o in orders.items():
+            if not isinstance(o, dict):
+                continue
+            checked += 1
+            fix = {}
+            created = o.get("createdAt")
+            if not isinstance(created, (int, float)) or isinstance(created, bool):
+                fix["createdAt"] = _order_created_ms(oid, o)
+            updated_at = o.get("updatedAt")
+            if not isinstance(updated_at, (int, float)) or isinstance(updated_at, bool):
+                fix["updatedAt"] = now
+            digits = _phone_digits(o.get("phone"))
+            if o.get("phoneDigits") != digits:
+                fix["phoneDigits"] = digits
+            if fix:
+                updated += 1
+                patch.update({f"{oid}/{k}": v for k, v in fix.items()})
+        if patch and not _fb_patch(f"data/{uid}/orders", patch):
+            return err_json(f"write failed for merchant {uid}", 500)
+    logging.info(f"🔧 rebuildIndexes: orders merchants={merchants} checked={checked} updated={updated}")
+    return ok_json({"orders": {"merchants": merchants, "checked": checked, "updated": updated}})
 
 @app.route("/api/admin/listClients", methods=["GET"])
 @require_admin
@@ -3243,7 +3332,7 @@ def save_order_from_bot(order_data, bot_settings, sender_id=""):
             ship_cust, _ = _ship_values(c_data, delivery_type)
             order["shipping"] = ship_cust
         order["total"] = (order["unitPrice"]*order["qty"]) + order["shipping"]
-        _fb_put(f"data/{uid}/orders/{order_id}", order)
+        _save_order(uid, order_id, order)
         _increment_usage(uid, "orderCount")
         if sender_id: _mark_bot_order(uid, sender_id, phone, product)
         logging.info(f"✅ Bot order saved: {order_id}")
