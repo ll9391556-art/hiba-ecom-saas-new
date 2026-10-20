@@ -2832,19 +2832,48 @@ def _save_bot_settings(username, uid, patch):
 @require_auth
 @require_perm("messages")
 def api_get_conversations():
+    """قبل: كل conversations_meta/{uid} فكل نداء (الواجهة كل 10 ثواني). دابا (lastTimestamp مفهرس):
+    - بلا معاملات: آخر `limit` محادثة (افتراضياً 50).
+    - before=<lastTimestamp>: الصفحة الأقدم.
+    - since=<cursor>: غير المحادثات اللي تحرّكت (reset=true إذا كثار بزاف).
+    data الأحدث أولاً، مع cursor (وقت السيرفر بالثواني ناقص 30) وhasMore."""
     uid = request.auth_uid
-    raw = _fb_get(f"conversations_meta/{uid}") or {}
+    path = f"conversations_meta/{uid}"
+    try:
+        limit  = max(1, min(int(request.args.get("limit") or 50), 200))
+        since  = _opt_float_arg("since")
+        before = _opt_float_arg("before")
+    except ValueError:
+        return err_json("Invalid paging parameters")
+    started = time.time()
+    if since is not None:
+        cap, found = 200, _fb_query(path, "lastTimestamp", start_at=since, limit_last=201)
+    else:
+        cap = limit
+        found = _fb_query(path, "lastTimestamp", end_at=before, limit_last=limit + 2)
+    if found is None:
+        return err_json("تعذّر تحميل المحادثات — حاول بعد قليل", 503)
     result = []
-    if isinstance(raw, dict):
-        for sender_id, m in raw.items():
-            if not isinstance(m, dict): continue
-            result.append({
-                "senderId": sender_id, "platform": m.get("platform",""),
-                "lastMessage": m.get("lastMessage",""), "lastTimestamp": m.get("lastTimestamp",0),
-                "lastDirection": m.get("lastDirection",""), "name": m.get("name","") or sender_id,
-            })
-    result.sort(key=lambda x: x.get("lastTimestamp",0), reverse=True)
-    return ok_json(result)
+    for sender_id, m in found.items():
+        if not isinstance(m, dict): continue
+        if before is not None and (m.get("lastTimestamp") or 0) >= before: continue
+        result.append({
+            "senderId": sender_id, "platform": m.get("platform",""),
+            "lastMessage": m.get("lastMessage",""), "lastTimestamp": m.get("lastTimestamp",0),
+            "lastDirection": m.get("lastDirection",""), "name": m.get("name","") or sender_id,
+        })
+    has_more = len(result) > cap
+    if has_more:
+        result = result[-cap:]  # تصاعدي → نخلّيو الأحدث
+    result.sort(key=lambda x: x.get("lastTimestamp",0) or 0, reverse=True)
+    body = {"status": "ok", "data": result, "hasMore": has_more, "cursor": started - 30}
+    if since is not None and has_more:
+        body["reset"] = True
+    return jsonify(body)
+
+def _opt_float_arg(name):
+    v = str(request.args.get(name, "") or "").strip()
+    return float(v) if v else None   # ValueError على قيمة غير رقمية
 
 @app.route("/api/getConversationMessages", methods=["GET"])
 @require_auth
@@ -2853,15 +2882,30 @@ def api_get_conversation_messages():
     uid = request.auth_uid
     sender_id = request.args.get("senderId","").strip()
     if not sender_id: return err_json("Missing senderId")
-    raw = _fb_get(f"conversations/{uid}/{sender_id}") or {}
+    # مفاتيح push مرتّبة زمنياً → order_by_key بلا فهرس. after/before = مفتاح رسالة
+    try:
+        limit = max(1, min(int(request.args.get("limit") or 100), 300))
+    except ValueError:
+        return err_json("Invalid paging parameters")
+    after  = request.args.get("after", "").strip() or None
+    before = request.args.get("before", "").strip() or None
+    path = f"conversations/{uid}/{sender_id}"
+    if after:
+        found = _fb_query(path, "$key", start_at=after, limit_last=301)
+    else:
+        found = _fb_query(path, "$key", end_at=before, limit_last=limit + 2)
+    if found is None:
+        return err_json("تعذّر تحميل الرسائل — حاول بعد قليل", 503)
     items = []
-    if isinstance(raw, dict):
-        for k, v in raw.items():
-            if isinstance(v, dict):
-                row = dict(v); row["id"] = k
-                items.append(row)
-    items.sort(key=lambda x: x.get("timestamp", 0))
-    return ok_json(items)
+    for k, v in found.items():
+        if k in (after, before) or not isinstance(v, dict):
+            continue
+        row = dict(v); row["id"] = k
+        items.append(row)
+    has_more = False
+    if not after and len(items) > limit:
+        items, has_more = items[-limit:], True
+    return jsonify({"status": "ok", "data": items, "hasMore": has_more})
 
 @app.route("/api/sendMessage", methods=["POST"])
 @require_auth
@@ -3011,8 +3055,36 @@ def api_admin_rebuild_indexes():
             agg_failed.append(uid)
         else:
             agg_ok += 1
+    logs_res = _migrate_bot_logs()
+    if logs_res is None:
+        return err_json("Firebase unavailable", 503)
     return ok_json({"orders": orders_res, "users": users_res,
-                    "aggregates": {"merchants": agg_ok, "failed": agg_failed}})
+                    "aggregates": {"merchants": agg_ok, "failed": agg_failed}, "botLogs": logs_res})
+
+def _migrate_bot_logs():
+    """ينسخ ai_logs/{uid}/{sender}/{push} القديم إلى bot_logs/{uid}/legacy_{sender}_{push}.
+    مفاتيح ثابتة → تقدر تعاودها بلا تكرار. القديم ما يتمسحش."""
+    uids = _fb_keys("data")
+    if uids is None:
+        return None
+    merchants = copied = 0
+    for uid in uids:
+        legacy = _fb_get(f"ai_logs/{uid}")
+        if not isinstance(legacy, dict):
+            continue
+        patch = {}
+        for sender, rows in legacy.items():
+            if not isinstance(rows, dict):
+                continue
+            for key, row in rows.items():
+                if isinstance(row, dict):
+                    patch[f"legacy_{sender}_{key}"] = {**row, "sender_id": row.get("sender_id") or sender}
+        if patch:
+            if not _fb_patch(f"bot_logs/{uid}", patch):
+                return None
+            merchants += 1
+            copied += len(patch)
+    return {"merchants": merchants, "copied": copied}
 
 @app.route("/api/recalcStats", methods=["POST"])
 @require_auth
@@ -3181,23 +3253,13 @@ def api_saas():
             if not _path_allowed(payload.get("path","")): return err_json("Forbidden path", 403)
             return ok_json({"key": _fb_push(payload["path"], payload.get("payload", payload.get("data")))})
         if action == "getBotLogs":
-            limit   = max(1, min(int(payload.get("limit") or 200), 500))
-            raw     = _fb_get(f"ai_logs/{auth_uid}") or {}
-            items   = []
-            if isinstance(raw, dict):
-                for sender_id, msgs in raw.items():
-                    if isinstance(msgs, dict):
-                        for key, val in msgs.items():
-                            if isinstance(val, dict):
-                                row = dict(val)
-                                row["id"] = key
-                                row["sender_id"] = sender_id
-                                items.append(row)
-                    elif isinstance(msgs, dict):
-                        msgs["id"] = sender_id
-                        items.append(msgs)
-            items.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
-            return ok_json(items[:limit])
+            limit = max(1, min(int(payload.get("limit") or 200), 500))
+            found = _fb_query(f"bot_logs/{auth_uid}", "timestamp", limit_last=limit)
+            if found is None:
+                return err_json("تعذّر تحميل السجل — حاول بعد قليل", 503)
+            items = [dict(v, id=k) for k, v in found.items() if isinstance(v, dict)]
+            items.sort(key=lambda x: x.get("timestamp", 0) or 0, reverse=True)
+            return ok_json(items)
         if action == "updateBotSettings":
             if not auth_username: return err_json("missing_username")
             data = payload.get("payload", payload.get("data")) or {}
@@ -3556,8 +3618,10 @@ def history_to_text(history):
     return "\n".join(lines)
 
 def log_ai_message(sender_id, user_msg, bot_msg, platform="FB", merchant_uid=""):
+    # bot_logs/{uid}/{push} مسطّح (timestamp مفهرس) باش getBotLogs يقرا غير آخر N.
+    # قبل: ai_logs/{uid}/{sender}/{push} — ما يتقراش غير كامل. القديم يتنسخ بـ rebuildIndexes.
     try:
-        path = f"ai_logs/{merchant_uid}/{sender_id}" if merchant_uid else f"ai_logs/{sender_id}"
+        path = f"bot_logs/{merchant_uid}" if merchant_uid else f"ai_logs/{sender_id}"
         _firebase_ref(path).push({
             "user_message":user_msg,"bot_reply":bot_msg,"platform":platform,
             "timestamp":time.time(),"date":time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -3583,12 +3647,9 @@ def _log_conversation(uid, sender_id, direction, text, platform, via="", page_id
         }
         if page_id: meta_patch["pageId"] = page_id
         if name: meta_patch["name"] = name
-        existing_meta = _fb_get(f"conversations_meta/{uid}/{sender_id}")
-        if existing_meta:
-            _fb_patch(f"conversations_meta/{uid}/{sender_id}", meta_patch)
-        else:
-            meta_patch.setdefault("name", name or sender_id)
-            _fb_put(f"conversations_meta/{uid}/{sender_id}", meta_patch)
+        # update ينشئ العقدة إذا ما كانتش — بلا قراءة قبل الكتابة فكل رسالة (الواجهة تبيّن
+        # senderId إذا الاسم غايب)
+        _fb_patch(f"conversations_meta/{uid}/{sender_id}", meta_patch)
     except Exception as e:
         logging.error(f"_log_conversation: {e}")
 

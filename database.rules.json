@@ -10,6 +10,9 @@
     "conversations_meta": {
       "$uid": { ".indexOn": ["lastTimestamp"] }
     },
-    "support_tickets": { ".indexOn": ["uid"] }
+    "support_tickets": { ".indexOn": ["uid"] },
+    "bot_logs": {
+      "$uid": { ".indexOn": ["timestamp"] }
+    }
   }
 }

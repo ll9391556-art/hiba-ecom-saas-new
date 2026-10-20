@@ -17,7 +17,7 @@ import html as html_lib
 import logging
 import requests
 from flask import Blueprint, request
-from app import require_auth, _fb_push, _fb_get, _fb_patch, ok_json, err_json
+from app import require_auth, _fb_push, _fb_get, _fb_patch, _fb_query, ok_json, err_json
 
 support_bp = Blueprint("support", __name__)
 
@@ -123,11 +123,13 @@ def submit_support_ticket():
 @require_auth
 def my_tickets():
     uid = request.auth_uid
-    raw = _fb_get("support_tickets") or {}
+    # استعلام بالفهرس uid — قبل: تنزيل تذاكر كل التجار
+    raw = _fb_query("support_tickets", "uid", equal_to=str(uid))
+    if raw is None:
+        return err_json("تعذّر تحميل التذاكر — حاول بعد قليل", 503)
     items = []
-    if isinstance(raw, dict):
-        for tid, t in raw.items():
-            if isinstance(t, dict) and str(t.get("uid")) == str(uid):
-                items.append({**t, "id": tid})
+    for tid, t in raw.items():
+        if isinstance(t, dict) and str(t.get("uid")) == str(uid):
+            items.append({**t, "id": tid})
     items.sort(key=lambda x: x.get("created_at", ""), reverse=True)
     return ok_json(items)

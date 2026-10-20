@@ -14,6 +14,7 @@ from google.genai import types
 from app import (
     require_auth, require_owner, require_perm, _fb_get, _fb_push, _fb_list, _fb_put, _fb_patch, _patch_order,
     _gemini_generate_with_fallback, _usage_month_key, ok_json, err_json,
+    _fb_query, _get_stats, _sold_by_name, _stock_fields, _safe_int,
     _encrypt_secret, _decrypt_secret, _validate_and_pin_store_url, _request_with_pinned_dns,
 )
 
@@ -31,20 +32,27 @@ def log_audit_entry(uid, actor, action, details=""):
         logging.error(f"log_audit_entry: {e}")
 
 
-def _build_business_summary(orders, products, team, usage, audit_log):
-    orders = orders if isinstance(orders, dict) else {}
+def _latest(path, n):
+    """آخر n عناصر (مفاتيح push مرتّبة زمنياً) — الأحدث أولاً. بدل تنزيل العقدة كاملة."""
+    found = _fb_query(path, "$key", limit_last=n) or {}
+    return [v for v in reversed(list(found.values())) if isinstance(v, dict)]
+
+
+def _build_business_summary(stats, products, team, usage, audit_entries):
+    """من data/{uid}/stats (المجاميع الجارية) بدل كل الطلبات، والمخزون محسوب من stats.sales."""
+    stats = stats if isinstance(stats, dict) else {}
     products = products if isinstance(products, dict) else {}
-    total = len(orders)
-    confirmed = sum(1 for o in orders.values() if isinstance(o, dict) and o.get("status") in ("Confirmed", "Delivered"))
-    refused = sum(1 for o in orders.values() if isinstance(o, dict) and o.get("status") == "Refused")
-    profit = sum(float(o.get("profit", 0) or 0) for o in orders.values() if isinstance(o, dict))
-    low_stock = [p.get("name") for p in products.values() if isinstance(p, dict) and int(p.get("available", 0) or 0) <= 5]
+    total = _safe_int(stats.get("total"))
+    confirmed = _safe_int(stats.get("confirmed"))
+    refused = _safe_int(stats.get("refused"))
+    profit = _safe_int(stats.get("profitCents")) / 100
+    sold = _sold_by_name(stats)
+    low_stock = [p.get("name") for p in products.values()
+                 if isinstance(p, dict) and _stock_fields(p, sold.get(p.get("name", ""), 0))["available"] <= 5]
     team_count = len([1 for v in (team or {}).values() if isinstance(v, dict)])
 
-    recent_errors = []
-    if isinstance(audit_log, dict):
-        entries = sorted(audit_log.values(), key=lambda x: x.get("timestamp", 0), reverse=True)[:15]
-        recent_errors = [f"{e.get('actor','?')}: {e.get('action','')} — {e.get('details','')}" for e in entries]
+    recent_errors = [f"{e.get('actor','?')}: {e.get('action','')} — {e.get('details','')}"
+                     for e in (audit_entries or [])[:15]]
 
     return f"""
 - إجمالي الطلبات: {total}
@@ -75,14 +83,8 @@ def ask_admin_assistant():
     if not api_key:
         return err_json("لازم تضبطي مفتاح Gemini API من إعدادات البوت أولاً")
 
-    orders = _fb_get(f"data/{uid}/orders") or {}
-    products = _fb_get(f"data/{uid}/products") or {}
-    team = _fb_get(f"data/{uid}/teamMembers") or {}
-    usage = _fb_get(f"data/{uid}/usage/{_usage_month_key()}") or {}
-    audit_log = _fb_get(f"data/{uid}/auditLog") or {}
-
-    summary = _build_business_summary(orders, products, team, usage, audit_log)
-    history_raw = _fb_list(f"admin_chats/{uid}")[:6]
+    summary = _summary_for(uid)
+    history_raw = _latest(f"admin_chats/{uid}", 6)
     history_text = "\n".join(
         f"{'التاجر' if h.get('role')=='user' else 'المساعد'}: {h.get('content','')}"
         for h in reversed(history_raw)
@@ -119,7 +121,7 @@ def ask_admin_assistant():
 @require_owner
 def assistant_history():
     uid = request.auth_uid
-    items = _fb_list(f"admin_chats/{uid}")[:40]
+    items = _latest(f"admin_chats/{uid}", 40)
     return ok_json(list(reversed(items)))
 
 
@@ -129,13 +131,15 @@ def assistant_history():
 def weekly_report():
     """تقرير جاهز بدون سؤال — يُستدعى مرة وحدة وقت فتح صفحة المساعد."""
     uid = request.auth_uid
-    orders = _fb_get(f"data/{uid}/orders") or {}
-    products = _fb_get(f"data/{uid}/products") or {}
-    team = _fb_get(f"data/{uid}/teamMembers") or {}
-    usage = _fb_get(f"data/{uid}/usage/{_usage_month_key()}") or {}
-    audit_log = _fb_get(f"data/{uid}/auditLog") or {}
-    summary = _build_business_summary(orders, products, team, usage, audit_log)
-    return ok_json({"summary": summary})
+    return ok_json({"summary": _summary_for(uid)})
+
+
+def _summary_for(uid):
+    return _build_business_summary(
+        _get_stats(uid), _fb_get(f"data/{uid}/products") or {},
+        _fb_get(f"data/{uid}/teamMembers") or {},
+        _fb_get(f"data/{uid}/usage/{_usage_month_key()}") or {},
+        _latest(f"data/{uid}/auditLog", 15))
 
 
 @assistant_bp.route("/api/assistant/auditLog", methods=["GET"])
@@ -144,8 +148,7 @@ def weekly_report():
 def get_audit_log():
     uid = request.auth_uid
     limit = min(int(request.args.get("limit", 100) or 100), 300)
-    items = _fb_list(f"data/{uid}/auditLog")[:limit]
-    return ok_json(items)
+    return ok_json(_latest(f"data/{uid}/auditLog", limit))
 
 
 # ── تكلفة إعلانات ميتا الممولة ──────────────────────────────────────

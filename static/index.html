@@ -1550,6 +1550,8 @@ function logout(){
   TEAM_MEMBERS = [];
   // طلبات الحساب السابق ما يبقاوش فالذاكرة (الـ polling يدمج، ما يعوّضش)
   allOrders = []; ORDERS_BY_ID = {}; ORDERS_CURSOR = null; ORDERS_OLDEST = null; ORDERS_HAS_MORE = false;
+  CONV_MAP = {}; CONV_CURSOR = null; CONV_OLDEST = null; CONV_HAS_MORE = false;
+  CONV_MSGS = []; CONV_MSGS_SENDER = null; CONV_LAST_KEY = null; CONV_FIRST_KEY = null; CURRENT_CONV_SENDER = null;
   localStorage.removeItem("of_token");
   stopOrdersPolling();
   stopConvListPolling();
@@ -2675,10 +2677,43 @@ function loadMessagesSection(){
   startConvListPolling();
 }
 
+// القائمة: آخر 50 محادثة، "تحميل الأقدم"، والـ polling يجيب غير اللي تحرّكو من بعد CONV_CURSOR
+var CONV_MAP = {}, CONV_CURSOR = null, CONV_OLDEST = null, CONV_HAS_MORE = false;
+
+function _convOldest(list){
+  var ts = (list||[]).map(function(c){ return c.lastTimestamp||0; });
+  if(!ts.length) return;
+  CONV_OLDEST = Math.min.apply(null, ts.concat(CONV_OLDEST===null?[]:[CONV_OLDEST]));
+}
+
+function _renderConvMap(){
+  var list = Object.keys(CONV_MAP).map(function(k){ return CONV_MAP[k]; })
+    .sort(function(a,b){ return (b.lastTimestamp||0)-(a.lastTimestamp||0); });
+  renderConversationsList(list);
+}
+
 async function loadConversations(){
   try{
-    var r = await apiGet("/getConversations", {});
-    if(r.status==="ok") renderConversationsList(r.data||[]);
+    var r = await apiGet("/getConversations", CONV_CURSOR===null ? {} : {since: CONV_CURSOR});
+    if(r.status!=="ok") return;
+    if(r.reset){ CONV_CURSOR = null; CONV_MAP = {}; CONV_OLDEST = null; return loadConversations(); }
+    var first = CONV_CURSOR===null;
+    if(first){ CONV_MAP = {}; CONV_OLDEST = null; CONV_HAS_MORE = !!r.hasMore; _convOldest(r.data); }
+    (r.data||[]).forEach(function(c){ CONV_MAP[c.senderId] = c; });
+    CONV_CURSOR = r.cursor;
+    if(first || (r.data||[]).length) _renderConvMap();
+  }catch(e){ console.error(e); }
+}
+
+async function loadOlderConversations(){
+  if(!CONV_HAS_MORE || CONV_OLDEST===null) return;
+  try{
+    var r = await apiGet("/getConversations", {before: CONV_OLDEST});
+    if(r.status!=="ok") return;
+    CONV_HAS_MORE = !!r.hasMore;
+    _convOldest(r.data);
+    (r.data||[]).forEach(function(c){ if(!CONV_MAP[c.senderId]) CONV_MAP[c.senderId] = c; });
+    _renderConvMap();
   }catch(e){ console.error(e); }
 }
 
@@ -2702,7 +2737,9 @@ function renderConversationsList(list){
       '</div>'+
       '<div class="conv-time">'+esc(timeTxt)+'</div>'+
     '</div>';
-  }).join("");
+  }).join("") + (CONV_HAS_MORE
+    ? '<div style="text-align:center;padding:10px"><button class="btn-outline btn-sm" onclick="loadOlderConversations()">⬇️ المزيد / Plus</button></div>'
+    : '');
 }
 function openConversation(senderId, platform, name){
   CURRENT_CONV_SENDER   = senderId;
@@ -2712,6 +2749,7 @@ function openConversation(senderId, platform, name){
   document.getElementById("convChatName").textContent = name || senderId;
   var icon = platform==="wa" ? "📱 WhatsApp" : platform==="ig" ? "📷 Instagram" : "📘 Facebook";
   document.getElementById("convChatPlatform").textContent = icon;
+  CONV_MSGS = []; CONV_MSGS_SENDER = null; CONV_LAST_KEY = null; CONV_FIRST_KEY = null;
   loadConversationMessages(senderId);
   startConvPolling();
   loadConversations();
@@ -2726,26 +2764,68 @@ function backToConvList(){
   document.getElementById("convRightWrap").classList.remove("show-mobile");
 }
 
-async function loadConversationMessages(senderId){
-  var box = document.getElementById("convMessages");
-  box.innerHTML = '<div style="text-align:center;padding:30px"><span class="spinner"></span></div>';
-  try{
-    var r = await apiGet("/getConversationMessages", {senderId: senderId});
-    if(r.status==="ok") renderConversationMessages(r.data||[]);
-    else box.innerHTML = '<div class="empty-state">'+(r.message||"Erreur")+'</div>';
-  }catch(e){ box.innerHTML = '<div class="empty-state">Erreur</div>'; }
+// الرسائل: آخر 100، "رسائل أقدم"، والـ polling يجيب غير اللي من بعد CONV_LAST_KEY (مفتاح push)
+var CONV_MSGS = [], CONV_MSGS_SENDER = null, CONV_LAST_KEY = null, CONV_FIRST_KEY = null, CONV_MSGS_HAS_MORE = false;
+
+function _setMsgKeys(){
+  CONV_FIRST_KEY = CONV_MSGS.length ? CONV_MSGS[0].id : null;
+  CONV_LAST_KEY  = CONV_MSGS.length ? CONV_MSGS[CONV_MSGS.length-1].id : null;
 }
 
-function renderConversationMessages(items){
+async function loadConversationMessages(senderId, quiet){
+  var box = document.getElementById("convMessages");
+  if(!quiet) box.innerHTML = '<div style="text-align:center;padding:30px"><span class="spinner"></span></div>';
+  try{
+    var r = await apiGet("/getConversationMessages", {senderId: senderId});
+    if(senderId!==CURRENT_CONV_SENDER) return;
+    if(r.status==="ok"){
+      CONV_MSGS = r.data||[]; CONV_MSGS_SENDER = senderId; CONV_MSGS_HAS_MORE = !!r.hasMore;
+      _setMsgKeys();
+      renderConversationMessages(CONV_MSGS);
+    }
+    else if(!quiet) box.innerHTML = '<div class="empty-state">'+esc(r.message||"Erreur")+'</div>';
+  }catch(e){ if(!quiet) box.innerHTML = '<div class="empty-state">Erreur</div>'; }
+}
+
+async function pollConversationMessages(){
+  var sender = CURRENT_CONV_SENDER;
+  if(!sender) return;
+  if(CONV_MSGS_SENDER!==sender || CONV_LAST_KEY===null){ loadConversationMessages(sender, true); return; }
+  try{
+    var r = await apiGet("/getConversationMessages", {senderId: sender, after: CONV_LAST_KEY});
+    if(r.status!=="ok" || sender!==CURRENT_CONV_SENDER || !(r.data||[]).length) return;
+    var seen = {}; CONV_MSGS.forEach(function(m){ seen[m.id] = 1; });
+    CONV_MSGS = CONV_MSGS.concat(r.data.filter(function(m){ return !seen[m.id]; }));
+    _setMsgKeys();
+    renderConversationMessages(CONV_MSGS);
+  }catch(e){}
+}
+
+async function loadOlderMessages(){
+  var sender = CURRENT_CONV_SENDER;
+  if(!sender || !CONV_MSGS_HAS_MORE || CONV_FIRST_KEY===null) return;
+  try{
+    var r = await apiGet("/getConversationMessages", {senderId: sender, before: CONV_FIRST_KEY});
+    if(r.status!=="ok" || sender!==CURRENT_CONV_SENDER) return;
+    CONV_MSGS = (r.data||[]).concat(CONV_MSGS); CONV_MSGS_HAS_MORE = !!r.hasMore;
+    _setMsgKeys();
+    renderConversationMessages(CONV_MSGS, true);
+  }catch(e){}
+}
+
+function renderConversationMessages(items, keepScroll){
   var box = document.getElementById("convMessages");
   if(!items.length){ box.innerHTML='<div class="empty-state"><i class="bi bi-chat"></i></div>'; return; }
-  box.innerHTML = items.map(function(m){
+  var prevHeight = box.scrollHeight, prevTop = box.scrollTop;
+  box.innerHTML = (CONV_MSGS_HAS_MORE
+    ? '<div style="text-align:center;padding:6px"><button class="btn-outline btn-sm" onclick="loadOlderMessages()">⬆️ رسائل أقدم / Plus</button></div>'
+    : '') + items.map(function(m){
     var cls = m.direction==="out" ? "msg-out" : "msg-in";
     var viaBadge = m.via==="manual" ? " 👤" : m.via==="bot" ? " 🤖" : "";
     var safeText = esc(m.text||"");
     return '<div class="msg-bubble-wrap '+cls+'"><div class="msg-bubble">'+safeText+'<div class="msg-meta">'+esc(m.date||"")+viaBadge+'</div></div></div>';
   }).join("");
-  box.scrollTop = box.scrollHeight;
+  box.scrollTop = keepScroll ? (box.scrollHeight - prevHeight + prevTop) : box.scrollHeight;
 }
 
 async function sendCustomerMessage(){
@@ -2758,7 +2838,7 @@ async function sendCustomerMessage(){
     var r = await apiPost("/sendMessage", {senderId: CURRENT_CONV_SENDER, text: text});
     if(r.status==="ok"){
       input.value = "";
-      loadConversationMessages(CURRENT_CONV_SENDER);
+      pollConversationMessages();
       loadConversations();
     } else { toast("❌ "+r.message,"err"); }
   }catch(e){ toast("Erreur réseau","err"); }
@@ -2768,6 +2848,7 @@ async function sendCustomerMessage(){
 function startConvListPolling(){
   stopConvListPolling();
   _convListPollTimer = setInterval(function(){
+    if(document.hidden) return;
     var activeSec = document.querySelector(".section.active");
     if(!activeSec || activeSec.id!=="sec_messages") return;
     loadConversations();
@@ -2780,11 +2861,20 @@ function stopConvListPolling(){
 function startConvPolling(){
   stopConvPolling();
   _convPollTimer = setInterval(function(){
+    if(document.hidden) return;
     var activeSec = document.querySelector(".section.active");
     if(!activeSec || activeSec.id!=="sec_messages" || !CURRENT_CONV_SENDER) return;
-    loadConversationMessages(CURRENT_CONV_SENDER);
+    pollConversationMessages();
   }, 6000);
 }
+// رجوع للتبويب: تحديث فوري للمحادثات المفتوحة
+document.addEventListener("visibilitychange", function(){
+  if(document.hidden) return;
+  var activeSec = document.querySelector(".section.active");
+  if(!activeSec || activeSec.id!=="sec_messages") return;
+  if(_convListPollTimer) loadConversations();
+  if(_convPollTimer && CURRENT_CONV_SENDER) pollConversationMessages();
+});
 function stopConvPolling(){
   if(_convPollTimer){ clearInterval(_convPollTimer); _convPollTimer=null; }
 }
