@@ -79,7 +79,7 @@ def scenario(client, db, shop, app, monkeypatch):
     """طلبات بأرقام ومنتجات مختلفة، وتنقلات حالة فيها رجوع (Confirmed→Refused...)."""
     uid = shop["uid"]
     ticks = iter(range(1_700_000_000_000, 1_800_000_000_000, 1000))
-    monkeypatch.setattr(app, "_now_ms", lambda: next(ticks))
+    monkeypatch.setattr("services.orders._now_ms", lambda: next(ticks))
     monkeypatch.setattr(app, "is_rate_limited", lambda *a, **k: False)
     a1 = _order(client, uid, "0555 11 11 11", "Sac", 2, "Amina")
     a2 = _order(client, uid, "0555111111", "Montre", 1, "Amina B")
@@ -207,7 +207,7 @@ def test_recalc_does_not_wipe_totals_when_read_fails(client, app, db, shop, scen
     real_get = fakes.FakeReference.get
     monkeypatch.setattr(fakes.FakeReference, "get", lambda self, *a, **k: (_ for _ in ()).throw(UnavailableError())
                         if self.path.endswith("/orders") else real_get(self, *a, **k))
-    monkeypatch.setattr(app, "sleep", lambda s: None)
+    monkeypatch.setattr("core.db.sleep", lambda s: None)  # retry يعيش فـ core.db
     assert client.post("/api/recalcStats", headers=shop["headers"]).status_code == 503
     assert db.get(f"data/{uid}/stats") == stats
 

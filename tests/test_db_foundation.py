@@ -98,7 +98,7 @@ class UnavailableError(Exception):
 @pytest.fixture
 def no_sleep(app, monkeypatch):
     slept = []
-    monkeypatch.setattr(app, "sleep", lambda s: slept.append(s))
+    monkeypatch.setattr("core.db.sleep", lambda s: slept.append(s))  # retry يعيش فـ core.db
     return slept
 
 

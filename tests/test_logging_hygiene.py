@@ -92,7 +92,7 @@ def test_process_bg_does_not_log_message_text_or_sender(app, caplog, monkeypatch
         def submit(self, fn, *a, **kw):
             fn(*a, **kw)
 
-    monkeypatch.setattr(app, "_executor", SyncExecutor())
+    monkeypatch.setattr("services.bot._executor", SyncExecutor())
     sent = []
     bot = {"Gemini_api_key": "dummy-gemini-key", "User_ID": owner["uid"], "plan": "pro"}
     app.process_bg(SENDER, f"رقمي {PHONE} وعنواني {ADDRESS}", bot,

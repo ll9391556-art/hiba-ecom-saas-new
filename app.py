@@ -30,6 +30,165 @@ from google.genai import types
 from time import sleep
 from markupsafe import escape as _esc
 
+# Phase 4: الطبقات المشتركة فـ core/ — app.py يعاود يصدّر نفس الأسماء، باش features/*
+# والاختبارات (`from app import ...`) يبقاو خدامين بلا تبديل.
+from core.db import (_FB_TRANSIENT_ERRORS, _fb_is_transient, _fb_call, _fb_get, _fb_query, _fb_keys,
+                     _fb_put, _fb_patch, _fb_delete, _fb_push, _fb_list, _firebase_ref)
+from core.http import ok_json, err_json, _opt_int_arg, _opt_float_arg
+from core.audit import log_audit_entry
+# Phase 4 / A4: services/ — منطق الأعمال (الطلبات والمجاميع، الحسابات، الكوبونات)
+import services.orders as _orders_svc  # _now_ms: الاختبارات تعدّلو فـ services.orders
+from services.orders import (
+    _store_products_cache,
+    _store_products_cache_lock,
+    _STORE_CACHE_TTL,
+    _order_created_ms,
+    _phone_digits,
+    _with_index_fields,
+    _save_order,
+    _AGG_ORDER_FIELDS,
+    _patch_order,
+    _SOLD_STATUSES,
+    _STAT_COUNTERS,
+    _agg_key,
+    _order_contrib,
+    _stats_delta,
+    _add_to_stats,
+    _compute_stats,
+    _customer_from_orders,
+    _compute_customers,
+    _refresh_customer,
+    _invalidate_store_cache,
+    _CUSTOMER_FIELDS,
+    _apply_order_change,
+    _add_rating_to_stats,
+    _get_stats,
+    _sold_by_name,
+    _stock_fields,
+    _recompute_aggregates,
+    _ship_values,
+    _calc_order_profit,
+    _rebuild_order_fields,
+)
+from services.users import (
+    _settings_cache,
+    _settings_cache_lock,
+    _CACHE_TTL,
+    _NEG_CACHE_TTL,
+    _count_team_members,
+    _usage_month_key,
+    _get_usage,
+    _increment_usage,
+    _plan_cap,
+    _under_cap,
+    _get_user_record,
+    get_user_plan,
+    _LIFETIME_PLANS,
+    _uname_key,
+    _username_taken,
+    _count_lifetime_accounts,
+    _LifetimeFull,
+    _adjust_lifetime_counter,
+    _PROTECTED_USER_FIELDS,
+    _sanitize_bot_settings_patch,
+    planHas_server,
+    _CHANNEL_FIELDS,
+    _channel_ids,
+    _save_bot_settings,
+    _rebuild_user_indexes,
+)
+from services.coupons import (
+    _validate_and_apply_coupon,
+    _increment_coupon_usage,
+)
+# Phase 4 / A5: البوت فـ services/bot.py (الاختبارات تعوّض _executor/get_user_settings/process_bg هناك)
+from services.bot import (
+    _executor,
+    last_msg_time,
+    _rate_limit_lock,
+    _recent_bot_orders,
+    _recent_bot_orders_lock,
+    _DUPLICATE_ORDER_WINDOW,
+    _is_duplicate_bot_order,
+    _mark_bot_order,
+    _cleanup_rate_limit,
+    is_rate_limited,
+    _migrate_bot_logs,
+    get_user_settings,
+    _bot_allowed_for,
+    meta_post,
+    send_facebook_message,
+    send_whatsapp_message,
+    get_media_url,
+    download_media,
+    _gemini_generate_with_fallback,
+    get_history,
+    save_history,
+    history_to_text,
+    log_ai_message,
+    _log_conversation,
+    get_products_text,
+    extract_json,
+    _find_field,
+    _normalize_delivery_type,
+    validate_order,
+    save_order_from_bot,
+    ask_gemini,
+    process_bg,
+    _webhook_object,
+    verify_sig,
+    _STICKERS,
+    _sticker_i,
+    _sticker_lk,
+    sticker_reply,
+    handle_webhook_payload,
+    submit_webhook,
+)
+from core.util import _safe_int, _cents, _mask_id
+from core.security import (
+    _encrypt_secret, _decrypt_secret, issue_token, decode_token, _extract_bearer,
+    require_auth, require_perm, require_admin, require_owner,
+    _is_bcrypt_hash, _hash_password, _verify_password,
+    _login_attempts, _login_lock, _login_rate_limited, _cleanup_login_attempts,
+    _RATE_LIMITS, _RL_SALT, _rl_hash, _shared_limited, _any_shared_limited, _cleanup_shared_limits,
+    _clean_perms, _resolve_safe_public_ip, _validate_and_pin_store_url,
+    _PinnedHTTPSConnection, _make_pinned_https_adapter, _request_with_pinned_dns,
+)
+from core.config import (
+    _TRUSTED_PROXY_HOPS,
+    _fernet,
+    _ALLOWED_ORIGINS,
+    MAX_PAYLOAD_SIZE,
+    MAX_HISTORY_TURNS,
+    LOW_STOCK_THRESHOLD,
+    BAD_CUSTOMER_THRESHOLD,
+    _JSON_START,
+    _JSON_END,
+    _GEMINI_MODELS,
+    VERIFY_TOKEN,
+    META_APP_SECRET,
+    FB_DB_URL,
+    FB_APP_ID,
+    FB_APP_SECRET_OAUTH,
+    REDIRECT_URI,
+    FB_STORAGE_BUCKET,
+    JWT_SECRET,
+    JWT_ALGO,
+    JWT_EXPIRY_HOURS_OWNER,
+    JWT_EXPIRY_HOURS_MEMBER,
+    ADMIN_API_KEY,
+    ENCRYPTION_KEY,
+    _IS_PRODUCTION,
+    _boot_problems,
+    _enc_env,
+    PLANS,
+    CURRENCY_SYMBOLS_PY,
+    BOT_LAUNCHED,
+    MAX_TEAM_MEMBERS,
+    TEAM_PERM_KEYS,
+    LIFETIME_MAX_SLOTS,
+)
+
 app = Flask(__name__, static_folder="static")
 
 # ── ثقة بروكسي عكسي (X-Forwarded-For) ──────────────────────
@@ -40,308 +199,23 @@ app = Flask(__name__, static_folder="static")
 # ADMIN_API_KEY brute-force، وrate limiting على /api/addOrder. الآن: نستعمل ProxyFix
 # لجعل Flask يثق فقط بأول قيمة قادمة من بروكسي واحد موثوق (منصة الاستضافة نفسها)
 # ونعتمد على request.remote_addr المُصحَّح فكل مكان بدل الهيدر الخام.
-_TRUSTED_PROXY_HOPS = int(os.environ.get("TRUSTED_PROXY_HOPS", "1"))
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=_TRUSTED_PROXY_HOPS, x_proto=1, x_host=0, x_port=0, x_prefix=0)
 
 # ── CORS ──────────────────────────────────────────────────
 # قبل: origins="*" على كل المسارات (بما فيها /admin و/api/admin/*).
 # الآن: مقيّد بقائمة من متغير بيئة ALLOWED_ORIGINS (مفصولة بفواصل)، بقيمة افتراضية
 # تقتصر على دومين المنتج فقط بدل فتحه للعالم كله.
-_ALLOWED_ORIGINS = [o.strip() for o in os.environ.get(
-    "ALLOWED_ORIGINS", "https://orderconfidence.com"
-).split(",") if o.strip()]
 # /api/getOAuthState وحدو يقبل credentials: يحط كوكي nonce ديال ربط فيسبوك (SEC-004).
 CORS(app, resources={r"/api/getOAuthState": {"origins": _ALLOWED_ORIGINS, "supports_credentials": True},
                      r"/*": {"origins": _ALLOWED_ORIGINS}}, supports_credentials=False)
-_store_products_cache = {}
-_store_products_cache_lock = threading.Lock()
-_STORE_CACHE_TTL = 30  # ثواني — توازن بين حداثة المخزون وتخفيف الحمل
-logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s", force=True)
 
-_executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="bot_worker")
-
-MAX_PAYLOAD_SIZE       = 2 * 1024 * 1024
-MAX_HISTORY_TURNS      = 10
-LOW_STOCK_THRESHOLD    = 5
-BAD_CUSTOMER_THRESHOLD = 3
-_JSON_START            = "###JSON_START###"
-_JSON_END              = "###JSON_END###"
-
-_GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite"]
-
-# ── Meta webhook verify token ──────────────────────────────
-# قبل: قيمة افتراضية ثابتة بالكود ("HEBA_SAAS_2026") معروفة لأي شخص يقرأ المصدر.
-# الآن: إجباري من البيئة، بلا قيمة افتراضية.
-VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN", "").strip()
-if not VERIFY_TOKEN:
-    logging.critical("🚨 VERIFY_TOKEN غير مضبوط بالبيئة — أي محاولة تحقق GET من ميتا على /webhook سترفض حتى تضبطه.")
-
-META_APP_SECRET = (os.environ.get("META_APP_SECRET") or os.environ.get("FB_APP_SECRET") or "").strip()
-if not META_APP_SECRET:
-    logging.critical("🚨 META_APP_SECRET غير مضبوط — /webhook سيرفض كل الطلبات POST حتى يُضبط (fail-closed).")
-FB_DB_URL           = os.environ.get("FB_DB_URL",    "https://saas-order-default-rtdb.europe-west1.firebasedatabase.app").strip()
-FB_APP_ID           = os.environ.get("FB_APP_ID",    "1484940433173462").strip()
-FB_APP_SECRET_OAUTH = os.environ.get("FB_APP_SECRET","").strip()
-REDIRECT_URI        = os.environ.get("REDIRECT_URI", "https://orderconfidence.com/callback").strip()
-FB_STORAGE_BUCKET   = os.environ.get("FB_STORAGE_BUCKET", "saas-order.firebasestorage.app").strip()
-
-# ── Auth (JWT) ────────────────────────────────────────────
-# قبل: عند غياب JWT_SECRET كان يُستعمل نص ثابت مكتوب بالكود
-# ("INSECURE_DEV_SECRET_CHANGE_ME_NOW") — أي شخص يقرأ هذا الملف يقدر يزوّر
-# جلسة owner كاملة لأي حساب. الآن: سر عشوائي قوي يُولَّد وقت التشغيل بدل قيمة معروفة.
-JWT_SECRET = os.environ.get("JWT_SECRET", "").strip()
-if not JWT_SECRET:
-    JWT_SECRET = secrets.token_hex(32)
-    logging.critical("🚨 JWT_SECRET غير مضبوط بالبيئة — تم توليد سر عشوائي مؤقت لهذه الجلسة فقط "
-                      "(كل التوكنات الحالية ستُبطَل عند إعادة التشغيل القادمة). "
-                      "اضبط JWT_SECRET بقيمة ثابتة بالإنتاج فوراً!")
-JWT_ALGO         = "HS256"
-# صلاحية الجلسة: تختلف حسب الدور — عضو الفريق 24 ساعة (نافذة أضيق لو تاجر
-# طرد موظف)، صاحب الحساب 7 أيام (بلا حاجة يعاود الدخول يوميًا لحسابه الخاص).
-# ملاحظة: بفضل التحقق الحي من team_users فـ require_auth، حتى لو التوكن ماشي
-# منتهي، عضو معطّل/محذوف يُرفض فورًا بلا انتظار — هاذي المدة طبقة دفاع إضافية فقط.
-JWT_EXPIRY_HOURS_OWNER  = 24 * 7   # 7 أيام
-JWT_EXPIRY_HOURS_MEMBER = 24       # 24 ساعة
-
-ADMIN_API_KEY = os.environ.get("ADMIN_API_KEY", "").strip()
-if not ADMIN_API_KEY:
-    logging.warning("⚠️ ADMIN_API_KEY غير مضبوط — مسارات الإدارة (تغيير الخطط) سترفض كل الطلبات حتى يُضبط.")
-
-# ── تشفير مفاتيح API لمتاجر العملاء الخارجية (WooCommerce/Shopify) ─────
-ENCRYPTION_KEY = os.environ.get("ENCRYPTION_KEY", "").strip()
-if not ENCRYPTION_KEY:
-    ENCRYPTION_KEY = Fernet.generate_key().decode()
-    logging.warning("⚠️ ENCRYPTION_KEY غير مضبوط — تم توليد مفتاح مؤقت (سيُفقد عند إعادة التشغيل، "
-                     "وستنقطع كل الاتصالات الخارجية المحفوظة). اضبط ENCRYPTION_KEY ثابت فالإنتاج فوراً.")
-try:
-    _fernet = Fernet(ENCRYPTION_KEY.encode())
-except Exception as e:
-    logging.error(f"ENCRYPTION_KEY غير صالح: {type(e).__name__} — تم توليد مفتاح بديل مؤقت")
-    _fernet = Fernet(Fernet.generate_key())
-
-# ── رفض الإقلاع فالإنتاج بلا أسرار ثابتة (ARC-001) ──
-# المفاتيح المؤقتة فوق مقبولة غير فالتطوير: فالإنتاج كل worker كان يولّد سر مختلف →
-# توكنات ترفض عشوائياً وبيانات الربط المشفّرة تولّي غير مقروءة. Render يضبط RENDER=true.
-_IS_PRODUCTION = (os.environ.get("RENDER", "").strip().lower() == "true"
-                  or os.environ.get("APP_ENV", "").strip().lower() == "production")
-_boot_problems = []
-if not os.environ.get("JWT_SECRET", "").strip():
-    _boot_problems.append("JWT_SECRET missing")
-_enc_env = os.environ.get("ENCRYPTION_KEY", "").strip()
-if not _enc_env:
-    _boot_problems.append("ENCRYPTION_KEY missing")
-else:
-    try:
-        Fernet(_enc_env.encode())
-    except Exception:
-        _boot_problems.append("ENCRYPTION_KEY invalid (must be a Fernet key: 44 chars, base64)")
-if _IS_PRODUCTION and _boot_problems:
-    raise RuntimeError("Refusing to start in production: " + "; ".join(_boot_problems))
-
-def _encrypt_secret(text):
-    return _fernet.encrypt(str(text).encode()).decode()
-
-def _decrypt_secret(token):
-    try:
-        return _fernet.decrypt(str(token).encode()).decode()
-    except (InvalidToken, Exception):
-        return None
-
-def issue_token(uid, username, role="owner", perms=None, member_username="", member_name=""):
-    """يولّد JWT لصاحب الحساب (owner) أو لعضو فريق (member)."""
-    expiry_hours = JWT_EXPIRY_HOURS_MEMBER if role == "member" else JWT_EXPIRY_HOURS_OWNER
-    payload = {
-        "uid": str(uid), "username": str(username), "role": role, "typ": "session",
-        "iat": int(time.time()), "exp": int(time.time()) + expiry_hours * 3600,
-    }
-    if role == "member":
-        payload["perms"]           = perms or {}
-        payload["memberUsername"]  = member_username
-        payload["memberName"]      = member_name or member_username
-    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGO)
-
-def decode_token(token, typ="session"):
-    """يفك JWT ويتأكد من نوعه: "session" (تسجيل الدخول) أو "oauth_state" (ربط فيسبوك).
-    أي توكن بلا typ صالح، أو بنوع آخر، يترفض دائماً — بلا هاد الفحص، state ديال OAuth
-    كان يخدم كجلسة owner لمدة 10 دقائق."""
-    try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGO])
-    except Exception:
-        return None
-    return payload if payload.get("typ") == typ else None
-
-def _extract_bearer(req):
-    h = req.headers.get("Authorization", "")
-    return h.split(" ", 1)[1].strip() if h.lower().startswith("bearer ") else ""
-
-def require_auth(f):
-    @wraps(f)
-    def wrapper(*args, **kwargs):
-        token = _extract_bearer(request)
-        payload = decode_token(token) if token else None
-        if not payload or not payload.get("uid"):
-            return err_json("Unauthorized — يرجى تسجيل الدخول من جديد", 401)
-
-        role = payload.get("role", "owner")
-
-        # ── تحديث فوري لحالة/صلاحيات عضو الفريق من قاعدة البيانات ──
-        # قبل: active/permissions كانا يُقرآن فقط من داخل الـ JWT نفسه (لقطة
-        # لحظة تسجيل الدخول)، فإذا التاجر عطّل العضو أو غيّر صلاحياته أو حذفه
-        # نهائياً، التوكن القديم يبقى صالح بنفس الصلاحيات القديمة لمدة تصل
-        # لـ 7 أيام (JWT_EXPIRY_HOURS) — نافذة خطيرة لموظف مطرود مثلاً.
-        # الآن: كل طلب من عضو فريق يتحقق فوراً من team_users/{username} —
-        # إذا العضو محذوف أو معطّل، التوكن يُرفض فوراً بلا انتظار انتهاء صلاحيته.
-        if role == "member":
-            member_username = payload.get("memberUsername", "")
-            member = _fb_get(f"team_users/{member_username}") if member_username else None
-            if not member or not isinstance(member, dict):
-                return err_json("هذا الحساب لم يعد موجوداً — يرجى تسجيل الدخول من جديد", 401)
-            if not member.get("active", True):
-                return err_json("هذا الحساب معطّل حالياً — تواصل مع صاحب المتجر", 403)
-            # التأكد أن العضو ما زال تابعاً لنفس صاحب الحساب (uid) الموجود بالتوكن —
-            # حماية إضافية لو انحذف الحساب الأصلي وانخلق يوزرنيم بنفس الاسم لاحقاً.
-            if str(member.get("ownerUid", "")) != str(payload["uid"]):
-                return err_json("Unauthorized", 401)
-            request.auth_perms = _clean_perms(member.get("permissions"))
-            request.auth_member_name = member.get("name", member_username)
-        else:
-            request.auth_perms = {}
-            request.auth_member_name = ""
-
-        request.auth_uid             = payload["uid"]
-        request.auth_username        = payload.get("username", "")
-        request.auth_role            = role
-        request.auth_member_username = payload.get("memberUsername", "")
-        return f(*args, **kwargs)
-    return wrapper
-
-def require_perm(perm):
-    def decorator(f):
-        @wraps(f)
-        def wrapper(*args, **kwargs):
-            if getattr(request, "auth_role", "owner") != "member":
-                return f(*args, **kwargs)
-            if not (getattr(request, "auth_perms", {}) or {}).get(perm):
-                return err_json("ليس لديك صلاحية الوصول لهذا القسم", 403)
-            return f(*args, **kwargs)
-        return wrapper
-    return decorator
-
-def require_admin(f):
-    @wraps(f)
-    def wrapper(*args, **kwargs):
-        key = request.headers.get("X-Admin-Key", "").strip()
-        # request.remote_addr مُصحَّح الآن عبر ProxyFix (بروكسي موثوق واحد) بدل الوثوق
-        # بهيدر X-Forwarded-For الخام القادم من العميل مباشرة.
-        client_ip = request.remote_addr or ""
-        if _login_rate_limited(f"admin:{client_ip}", max_attempts=10, window=300):
-            return err_json("محاولات كثيرة جداً — حاول لاحقاً", 429)
-        # مقارنة زمن-ثابت (constant-time) بدل != العادية، لمنع هجوم قياس التوقيت (timing attack)
-        if not ADMIN_API_KEY or not hmac.compare_digest(key, ADMIN_API_KEY):
-            return err_json("Forbidden", 403)
-        return f(*args, **kwargs)
-    return wrapper
-
-def require_owner(f):
-    @wraps(f)
-    def wrapper(*args, **kwargs):
-        if getattr(request, "auth_role", "owner") != "owner":
-            return err_json("هذه الميزة متاحة فقط لصاحب الحساب", 403)
-        return f(*args, **kwargs)
-    return wrapper
-
-# ── Auth (Passwords) ──────────────────────────────────────
-def _is_bcrypt_hash(pw):
-    return isinstance(pw, str) and pw.startswith(("$2a$", "$2b$", "$2y$"))
-
-def _hash_password(pw):
-    return bcrypt.hashpw(pw.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-
-def _verify_password(pw, stored):
-    if not stored: return False
-    if _is_bcrypt_hash(stored):
-        try:
-            return bcrypt.checkpw(pw.encode("utf-8"), stored.encode("utf-8"))
-        except Exception:
-            return False
-    # توافق مرحلي مع كلمات السر القديمة غير المُجزّأة — compare_digest بدل == العادية
-    # لتفادي كشف طول/محتوى كلمة السر عبر فروقات التوقيت (timing side-channel).
-    try:
-        return hmac.compare_digest(pw.encode("utf-8"), stored.encode("utf-8"))
-    except Exception:
-        return False
-
-# ── Rate limiting (تسجيل الدخول / لوحة الإدارة) ─────────────
-# قبل: /api/login و /api/admin/* بلا أي حد لمحاولات الدخول — brute force مفتوح بالكامل.
-_login_attempts: dict = {}
-_login_lock          = threading.Lock()
-
-def _login_rate_limited(identifier, max_attempts=8, window=300):
-    now = time.time()
-    with _login_lock:
-        hist = [t for t in _login_attempts.get(identifier, []) if now - t < window]
-        hist.append(now)
-        _login_attempts[identifier] = hist
-        return len(hist) > max_attempts
-
-def _cleanup_login_attempts():
-    while True:
-        sleep(1800)
-        cutoff = time.time() - 1800
-        with _login_lock:
-            for k in list(_login_attempts.keys()):
-                _login_attempts[k] = [t for t in _login_attempts[k] if t > cutoff]
-                if not _login_attempts[k]:
-                    del _login_attempts[k]
 
 threading.Thread(target=_cleanup_login_attempts, daemon=True).start()
 
-last_msg_time: dict   = {}
-_rate_limit_lock      = threading.Lock()
-_settings_cache: dict = {}
-_settings_cache_lock  = threading.Lock()
-_CACHE_TTL            = 120
-_NEG_CACHE_TTL        = 30   # قناة مجهولة (ما عندها channel_index) — كاش قصير
-
-# منع تكرار تسجيل نفس الطلب من البوت عدة مرات لنفس المحادثة
-_recent_bot_orders: dict   = {}
-_recent_bot_orders_lock    = threading.Lock()
-_DUPLICATE_ORDER_WINDOW    = 1800  # 30 دقيقة
-
-def _is_duplicate_bot_order(uid, sender_id, phone, product):
-    # المفتاح بالتاجر + الزبون: نفس رقم واتساب يقدر يطلب من تجار مختلفين
-    key = f"{uid}:{sender_id}"
-    now = time.time()
-    with _recent_bot_orders_lock:
-        rec = _recent_bot_orders.get(key)
-        if rec and rec.get("phone") == phone and rec.get("product") == product \
-                and (now - rec.get("ts", 0)) < _DUPLICATE_ORDER_WINDOW:
-            return True
-    return False
-
-def _mark_bot_order(uid, sender_id, phone, product):
-    with _recent_bot_orders_lock:
-        _recent_bot_orders[f"{uid}:{sender_id}"] = {"phone": phone, "product": product, "ts": time.time()}
 
 # keepalive: انتقل لـ gunicorn.conf.py (when_ready) — ping وحيد من master gunicorn بدل
 # خيط فكل worker، وبلا fallback لـ localhost:10000 (كان بالبورت الغلط).
 
-def _cleanup_rate_limit():
-    while True:
-        sleep(3600)
-        cutoff = time.time() - 3600
-        with _rate_limit_lock:
-            to_del = [k for k, v in last_msg_time.items() if v < cutoff]
-            for k in to_del:
-                del last_msg_time[k]
-        with _recent_bot_orders_lock:
-            to_del2 = [k for k, v in _recent_bot_orders.items() if v.get("ts", 0) < cutoff]
-            for k in to_del2:
-                del _recent_bot_orders[k]
-        try:
-            _cleanup_shared_limits()
-        except Exception as e:
-            logging.warning(f"shared rate limit cleanup failed: {type(e).__name__}")
 
 threading.Thread(target=_cleanup_rate_limit, daemon=True).start()
 
@@ -364,397 +238,10 @@ def _init_firebase():
 
 _init_firebase()
 
-# ── إعادة المحاولة (INFO-004) ──
-# قبل: _firebase_ref كان يعاود db.reference() — وهي ما تتصلش بالشبكة أصلاً، فالفشل الحقيقي
-# (.get/.set) ما كانش يتعاود أبداً. دابا: محاولة ثانية وحدة بعد 0.5 ثانية، غير على الأخطاء
-# المؤقتة (انقطاع، timeout، 5xx). push ما يتعاودش: ماشي idempotent (نسخة مكررة).
-_FB_TRANSIENT_ERRORS = {"UnavailableError", "InternalError", "DeadlineExceededError", "UnknownError"}
-
-def _fb_is_transient(e):
-    return (isinstance(e, (requests.ConnectionError, requests.Timeout))
-            or type(e).__name__ in _FB_TRANSIENT_ERRORS)
-
-def _fb_call(fn):
-    try:
-        return fn()
-    except Exception as e:
-        if not _fb_is_transient(e):
-            raise
-        logging.warning(f"Firebase transient error ({type(e).__name__}) — retrying once")
-        sleep(0.5)
-        return fn()
-
-def _fb_get(path):
-    try:
-        return _fb_call(lambda: _firebase_ref(path).get())
-    except Exception as e:
-        logging.error(f"_fb_get({path}): {e}"); return None
-
-def _fb_query(path, order_by, *, equal_to=None, start_at=None, end_at=None, limit_last=None):
-    """استعلام RTDB بدل تنزيل العقدة كاملة. order_by: اسم child (لازم يكون فـ ".indexOn" ف
-    database.rules.json، وإلا Firebase يرفض) أو "$key". يرجّع dict مرتّب ({} إذا ما كاين والو)،
-    أو None عند الخطأ — باش المستدعي يفرّق بين "فارغ" و"فشل"."""
-    def run():
-        ref = _firebase_ref(path)
-        q = ref.order_by_key() if order_by == "$key" else ref.order_by_child(order_by)
-        if equal_to is not None: q = q.equal_to(equal_to)
-        if start_at is not None: q = q.start_at(start_at)
-        if end_at is not None:   q = q.end_at(end_at)
-        if limit_last:           q = q.limit_to_last(int(limit_last))
-        return q.get()
-    try:
-        return _fb_call(run) or {}
-    except Exception as e:
-        logging.error(f"_fb_query({path}, {order_by}): {e}"); return None
-
-def _fb_keys(path):
-    """مفاتيح الأبناء فقط (REST ?shallow=true) بلا تنزيل المحتوى. None عند الخطأ."""
-    try:
-        data = _fb_call(lambda: _firebase_ref(path).get(shallow=True))
-    except Exception as e:
-        logging.error(f"_fb_keys({path}): {e}"); return None
-    return list(data.keys()) if isinstance(data, dict) else []
-
-def _fb_put(path, data):
-    try:
-        _fb_call(lambda: _firebase_ref(path).set(data))
-        return True
-    except Exception as e:
-        logging.error(f"_fb_put({path}): {e}"); return False
-
-def _fb_patch(path, data):
-    try:
-        _fb_call(lambda: _firebase_ref(path).update(data))
-        return True
-    except Exception as e:
-        logging.error(f"_fb_patch({path}): {e}"); return False
-
-def _fb_delete(path):
-    try:
-        _fb_call(lambda: _firebase_ref(path).delete())
-        return True
-    except Exception as e:
-        logging.error(f"_fb_delete({path}): {e}"); return False
-
-def _fb_push(path, data):
-    try:
-        new_ref = _firebase_ref(path).push(data)
-        return new_ref.key
-    except Exception as e:
-        logging.error(f"_fb_push({path}): {e}"); return None
-
-def _fb_list(path):
-    data = _fb_get(path)
-    if not data or not isinstance(data, dict): return []
-    return list(reversed(list(data.values())))
-
-def _firebase_ref(path):
-    # db.reference() محلي (ما يتصلش بالشبكة) — يرمي غير على مسار غير صالح، فما كاينش علاش نعاودو
-    return db.reference(path)
-
-def _mask_id(v):
-    """للسجلات فقط: آخر 4 أحرف من معرّف الزبون (فواتساب = رقم هاتفه)."""
-    s = str(v or "")
-    return ("…" + s[-4:]) if len(s) > 4 else "…"
-
-# ── حدود معدل مشتركة بين كل الـ workers (SEC-008 / SEC-014 / SEC-020) ──
-# قبل: الحدود فالذاكرة لكل worker (4 workers = الحد ×4)، و addOrder كان محدود بـ ip:phone
-# كل 15 ثانية — اللي كان يرفض المنتج الثاني فسلة (طلب لكل منتج).
-# دابا: عدّاد بنافذة ثابتة فـ ratelimits/{bucket}/{window}/{hmac(key)} بـ transaction.
-# المفتاح مهشّر بسر السيرفر — لا IP ولا اسم مستخدم خام فقاعدة البيانات.
-# Firebase طاح → نمرّرو الطلب (fail-open) باش زبائن حقيقيين ما يتحبسوش.
-_RATE_LIMITS = {                 # bucket: (حد، النافذة بالثواني)
-    "order_ip_store":  (30, 600),    # 30 طلب / 10 دقائق لنفس IP فنفس المتجر (سلة كبيرة عدة مرات)
-    "order_store":     (300, 3600),  # 300 طلب / ساعة لكل متجر
-    "track_ip":        (20, 600),
-    "track_ip_store":  (10, 600),
-    "coupon_ip_store": (10, 600),    # تخمين أكواد الخصم
-    "coupon_store":    (200, 3600),
-    "login_ip":        (20, 600),
-    "login_user":      (10, 600),    # password spraying من IPs مختلفة على نفس الحساب
-}
-_RL_SALT = hashlib.sha256(("ratelimit:" + JWT_SECRET).encode("utf-8")).digest()
-
-def _rl_hash(key):
-    return hmac.new(_RL_SALT, str(key).encode("utf-8"), hashlib.sha256).hexdigest()[:32]
-
-def _shared_limited(bucket, key):
-    """True إذا تعدّى الحد (→ 429). كل محاولة تتحسب، حتى المرفوضة."""
-    limit, window_s = _RATE_LIMITS[bucket]
-    window_id = int(time.time() // window_s)
-    seen = {"n": 0}
-    def _txn(cur):
-        seen["n"] = _safe_int(cur) + 1
-        return seen["n"]
-    try:
-        _firebase_ref(f"ratelimits/{bucket}/{window_id}/{_rl_hash(key)}").transaction(_txn)
-    except Exception as e:
-        logging.warning(f"shared rate limit unavailable ({type(e).__name__}) — fail-open")
-        return False
-    return seen["n"] > limit
-
-def _any_shared_limited(*checks):
-    """checks = (bucket, key)... بالترتيب (الأضيق أولاً، مثلاً IP ثم المتجر). يوقف عند أول
-    حد متعدّى بلا ما يحسب الباقي — باش IP واحد مزعج ما يستهلكش سقف المتجر كامل ويحبس
-    الزبائن الحقيقيين."""
-    return any(_shared_limited(bucket, key) for bucket, key in checks)
-
-def _cleanup_shared_limits(now=None):
-    """يمسح النوافذ القديمة (يخلّي الحالية والسابقة). يتنادى من خيط التنظيف كل ساعة."""
-    now = time.time() if now is None else now
-    for bucket, (_, window_s) in _RATE_LIMITS.items():
-        current = int(now // window_s)
-        for w in (_fb_keys(f"ratelimits/{bucket}") or []):
-            if _safe_int(w, current) < current - 1:
-                _fb_delete(f"ratelimits/{bucket}/{w}")
-
-def ok_json(data):
-    return jsonify({"status": "ok", "data": data})
-
-def err_json(msg, code=400):
-    return jsonify({"status": "error", "message": msg}), code
-
-def is_rate_limited(user_id, platform="fb", window=2):
-    key = f"{platform}:{user_id}"
-    now = time.time()
-    with _rate_limit_lock:
-        if key in last_msg_time and now - last_msg_time[key] < window:
-            return True
-        last_msg_time[key] = now
-    return False
 
 # ── Plans ─────────────────────────────────────────────────
-PLANS = {
-    "free":       {"bot": False, "store": False, "landing": False, "dashboard": True, "orders": True, "integrations": False, "team": False, "label": "Free"},
-    "starter":    {"bot": False, "store": True,  "landing": True,  "dashboard": True, "orders": True, "integrations": False, "team": True,  "label": "Starter"},
-    "pro":        {"bot": True,  "store": True,  "landing": True,  "dashboard": True, "orders": True, "integrations": True,  "team": True,  "label": "Pro"},
-    "enterprise": {"bot": True,  "store": True,  "landing": True,  "dashboard": True, "orders": True, "integrations": True,  "team": True,  "label": "Enterprise"},
-    "full":       {"bot": True,  "store": True,  "landing": True,  "dashboard": True, "orders": True, "integrations": True,  "team": True,  "label": "Full",
-                    "orderCap": 300, "botMsgCap": 3000},
-    "lifetime":   {"bot": True,  "store": True,  "landing": True,  "dashboard": True, "orders": True, "integrations": True,  "team": True,  "label": "Lifetime",
-                    "orderCap": 300, "botMsgCap": 3000},
-    "bot_only":   {"bot": True, "store": False, "landing": False, "dashboard": False,
-                    "orders": False, "integrations": False, "team": False, "label": "Bot Only"},
-}
+# PLANS والثوابت فـ core/config.py
 
-CURRENCY_SYMBOLS_PY = {"DZD": "دج", "EUR": "€", "USD": "$"}
-
-BOT_LAUNCHED = os.environ.get("BOT_LAUNCHED", "true").strip().lower() == "true"
-
-# ── فريق العمل (Team Members) ──────────────────────────────
-MAX_TEAM_MEMBERS = 6
-TEAM_PERM_KEYS = ["orders", "products", "customers", "cities", "store", "bot", "messages", "integrations", "landing"]
-
-def _clean_perms(raw):
-    raw = raw or {}
-    return {k: bool(raw.get(k)) for k in TEAM_PERM_KEYS}
-
-def _count_team_members(owner_uid):
-    try:
-        raw = _fb_get(f"data/{owner_uid}/teamMembers") or {}
-        return len([1 for v in raw.values() if isinstance(v, dict)])
-    except Exception:
-        return 0
-
-# ── تتبع الاستهلاك الشهري ──────────────────────────────────
-def _usage_month_key():
-    return time.strftime("%Y-%m")
-
-def _get_usage(uid, field):
-    val = _fb_get(f"data/{uid}/usage/{_usage_month_key()}/{field}") or 0
-    try: return int(val)
-    except Exception: return 0
-
-def _increment_usage(uid, field):
-    path = f"data/{uid}/usage/{_usage_month_key()}/{field}"
-    try:
-        ref = _firebase_ref(path)
-        new_val = ref.transaction(lambda current: (current or 0) + 1)
-        return new_val if isinstance(new_val, int) else _get_usage(uid, field)
-    except Exception as e:
-        logging.error(f"_increment_usage transaction failed, fallback: {e}")
-        new_val = _get_usage(uid, field) + 1
-        _fb_put(path, new_val)
-        return new_val
-
-def _plan_cap(uid, cap_field):
-    plan = get_user_plan(uid)
-    return PLANS.get(plan, {}).get(cap_field)
-
-def _under_cap(uid, usage_field, cap_field):
-    cap = _plan_cap(uid, cap_field)
-    if not cap: return True
-    return _get_usage(uid, usage_field) < cap
-
-LIFETIME_MAX_SLOTS = 50
-
-def _get_user_record(uid):
-    """uid → users/{username} عبر uid_index فقط. قبل: كان يقرا /users كاملة كي يغيب الفهرس —
-    ومسار عام (addOrder بـ userId عشوائي) كان يقدر يفرض هاد التنزيل. الحسابات القديمة بلا فهرس
-    تتصلّح بـ /api/admin/rebuildIndexes."""
-    try:
-        uname = _fb_get(f"uid_index/{uid}")
-        if uname:
-            rec = _fb_get(f"users/{uname}")
-            if isinstance(rec, dict) and str(rec.get("User_ID", "")) == str(uid):
-                return rec
-    except Exception:
-        pass
-    return {}
-
-def get_user_plan(uid):
-    return str(_get_user_record(uid).get("plan", "starter")).lower()
-
-# ── فهارس الأسماء وعدّاد lifetime (بدل قراءة /users و/team_users كاملة) ──
-# uname_index/{lower} → مفتاح users، team_uname_index/{lower} → مفتاح team_users.
-# counters/lifetimeAccounts يتحدّث بـ transaction مع كل تغيير خطة من/إلى lifetime/full.
-_LIFETIME_PLANS = ("lifetime", "full")
-
-def _uname_key(username):
-    return str(username or "").strip().lower()
-
-def _username_taken(username):
-    """اسم مستعمل (بلا اعتبار الحروف الكبيرة) عند صاحب حساب أو عضو فريق؟"""
-    key = _uname_key(username)
-    return bool(_fb_get(f"uname_index/{key}") or _fb_get(f"team_uname_index/{key}")
-                or _fb_get(f"users/{username}") or _fb_get(f"team_users/{username}"))
-
-def _count_lifetime_accounts():
-    try:
-        return max(0, int(_fb_get("counters/lifetimeAccounts") or 0))
-    except Exception:
-        return 0
-
-class _LifetimeFull(Exception):
-    pass
-
-def _adjust_lifetime_counter(delta, cap=None):
-    """+1/-1 ذرّياً. مع cap: يرمي _LifetimeFull إذا الحد وصل (بلا كتابة)."""
-    def _txn(cur):
-        cur = max(0, int(cur or 0))
-        if cap is not None and delta > 0 and cur + delta > cap:
-            raise _LifetimeFull()
-        return max(0, cur + delta)
-    _firebase_ref("counters/lifetimeAccounts").transaction(_txn)
-
-# ── حماية حقول حساب المستخدم من التعديل الذاتي (Mass Assignment) ─────
-# قبل: /api/updateBotSettings و /api/saas (action=updateBotSettings) كانا يدمجان
-# كائن "data"/"payload" القادم كاملاً من جسم الطلب مباشرة داخل عقدة users/{username} —
-# وهي نفس العقدة التي تخزّن plan/source/Password/User_ID. أي مستخدم مسجّل (حتى بخطة
-# Free) كان يقدر يبعث {"data":{"plan":"lifetime"}} ويرقّي نفسه مجاناً، أو يبدّل
-# Username/User_ID/Password عبره. الآن: whitelist صارم يستثني كل الحقول الحساسة قبل
-# أي دمج مع سجل المستخدم — هذه المسارات مخصصة فقط لإعدادات البوت (Gemini key,
-# AI instructions, tokens الخ) وليس لبيانات الحساب/الخطة.
-_PROTECTED_USER_FIELDS = {
-    "plan", "source", "Password", "User_ID", "Username",
-    "plan_updated",
-}
-
-def _sanitize_bot_settings_patch(d):
-    if not isinstance(d, dict):
-        return {}
-    return {k: v for k, v in d.items() if k not in _PROTECTED_USER_FIELDS}
-
-# ── حماية من SSRF فربط متاجر WooCommerce الخارجية ───────────
-# قبل: كان يُقبل أي storeUrl يبدأ بـ https:// بلا أي فحص للـ host الفعلي الذي يُحلّ
-# إليه، مما يسمح لمستخدم مسجّل بتوجيه سيرفرنا لعمل طلبات HTTP لعناوين داخلية
-# (127.0.0.1, 169.254.169.254 metadata endpoint, شبكات خاصة 10.x/172.16.x/192.168.x...)
-# عبر DNS يشير لعنوان خاص.
-def _resolve_safe_public_ip(hostname):
-    """يتحقق من hostname ويرجّع أول IP عام آمن (ليس داخلي/خاص/loopback/link-local/
-    reserved/multicast) تم التحقق منه فعلياً، أو None إذا لم يوجد أي IP آمن."""
-    if not hostname:
-        return None
-    try:
-        infos = socket.getaddrinfo(hostname, None)
-    except Exception:
-        return None
-    for info in infos:
-        ip_str = info[4][0]
-        try:
-            ip = ipaddress.ip_address(ip_str)
-        except Exception:
-            continue
-        if (ip.is_private or ip.is_loopback or ip.is_link_local or
-                ip.is_reserved or ip.is_multicast or ip.is_unspecified):
-            continue
-        return ip_str
-    return None
-
-def _validate_and_pin_store_url(store_url):
-    """يتحقق من صلاحية رابط المتجر ويرجّع (hostname, safe_ip) للاستعمال المباشر مع
-    _request_with_pinned_dns، بدل السماح لـ requests بإعادة حلّ DNS من جديد وقت
-    الاتصال (يمنع DNS rebinding). يرجّع (None, None) لو الرابط غير صالح/غير آمن."""
-    try:
-        parsed = urlparse(store_url)
-    except Exception:
-        return None, None
-    if parsed.scheme != "https" or not parsed.hostname:
-        return None, None
-    ip = _resolve_safe_public_ip(parsed.hostname)
-    if not ip:
-        return None, None
-    return parsed.hostname, ip
-
-# ── تثبيت DNS (Pinning) بطريقة آمنة على مستوى الـ Thread ────────────
-# تحديث مهم (كان الإصدار السابق غير آمن تحت التزامن): النسخة السابقة كانت تُبدّل
-# urllib3.util.connection.create_connection على مستوى العملية بأكملها (module-level
-# global)، محمية بقفل _dns_pin_lock واحد. المشكلة: هذا القفل يحمي فقط الاستدعاءات
-# التي تمر عبر هذه الدالة نفسها (woo/connect وwoo/sync)، بينما بقية الكود يبعث طلبات
-# requests أخرى في threads مختلفة بالتوازي (meta_post للفيسبوك/واتساب، تحميل الوسائط،
-# Gemini API، keepalive، Facebook OAuth) بلا أي علاقة بهذا القفل. مع ThreadPoolExecutor
-# بعدة workers، thread يزامن WooCommerce في نفس اللحظة التي يبعث فيها thread آخر رسالة
-# لفيسبوك يقدر يخلي طلب فيسبوك يتوجّه بالخطأ لعنوان WooCommerce المثبَّت (أو العكس) —
-# على الأقل فشل اتصال متقطع (TLS handshake سيفشل لعدم مطابقة الشهادة)، وأسوأ الأحوال
-# سلوك غير متوقع تحت الحمل. الحل الآن: تثبيت الـ IP يتم فقط على مستوى PoolManager خاص
-# بـ HTTPAdapter مُنشأ محلياً لكل طلب (session معزولة)، بلا أي تعديل على أي حالة عالمية
-# مشتركة بين threads — كل thread يستعمل adapter خاص به فقط.
-class _PinnedHTTPSConnection(HTTPSConnection):
-    """اتصال HTTPS يفتح الـ TCP socket فعلياً على IP مثبَّت مسبقاً (self._pinned_ip)
-    بدل إعادة حلّ self.host من جديد، مع الحفاظ على SNI/التحقق من الشهادة باسم النطاق
-    الأصلي (self.host) — التعديل يطال فقط عنوان الاتصال الأدنى مستوى، ماشي التحقق من TLS."""
-    _pinned_ip = None
-
-    def _new_conn(self):
-        extra_kw = {}
-        if self.source_address:
-            extra_kw["source_address"] = self.source_address
-        if getattr(self, "socket_options", None):
-            extra_kw["socket_options"] = self.socket_options
-        target = (self._pinned_ip or self.host, self.port)
-        try:
-            conn = urllib3.util.connection.create_connection(target, self.timeout, **extra_kw)
-        except TypeError:
-            conn = urllib3.util.connection.create_connection(target, self.timeout)
-        return conn
-
-
-def _make_pinned_https_adapter(pinned_ip):
-    """يبني HTTPAdapter جديد بالكامل (poolmanager خاص به) يفرض الاتصال الفعلي على
-    pinned_ip، بلا لمس أي حالة عالمية مشتركة — آمن للاستعمال المتزامن من عدة threads
-    فالآن نفسه، كل واحد بـ pinned_ip مختلف."""
-    conn_cls = type("_PinnedConn", (_PinnedHTTPSConnection,), {"_pinned_ip": pinned_ip})
-    pool_cls = type("_PinnedHTTPSPool", (HTTPSConnectionPool,), {"ConnectionCls": conn_cls})
-
-    class _PinnedAdapter(requests.adapters.HTTPAdapter):
-        def init_poolmanager(self, *args, **kwargs):
-            self.poolmanager = PoolManager(*args, **kwargs)
-            self.poolmanager.pool_classes_by_scheme = {"https": pool_cls, "http": urllib3.HTTPConnectionPool}
-
-    return _PinnedAdapter()
-
-
-def _request_with_pinned_dns(method, url, resolved_ip, **kwargs):
-    """يرسل طلب HTTP عبر requests.Session معزولة (محلية لهذا الاستدعاء فقط)، مُلزَمة
-    بالاتصال الفعلي بـ resolved_ip الذي تم التحقق منه مسبقاً — يمنع DNS rebinding بلا
-    أي تعديل على حالة عالمية مشتركة بين threads."""
-    session = requests.Session()
-    adapter = _make_pinned_https_adapter(resolved_ip)
-    session.mount("https://", adapter)
-    try:
-        return session.request(method, url, **kwargs)
-    finally:
-        session.close()
 
 # ── Frontend ──────────────────────────────────────────────
 @app.route("/", methods=["GET"])
@@ -1349,279 +836,13 @@ def api_team_delete_member():
     _fb_delete(f"team_users/{username}")
     if _fb_get(f"team_uname_index/{_uname_key(username)}") == username:
         _fb_delete(f"team_uname_index/{_uname_key(username)}")
-    from features.assistant_api import log_audit_entry
     log_audit_entry(uid, request.auth_member_username or "owner", f"حذف عضو فريق {username}")
     return ok_json(True)
 
-def planHas_server(uid, feature):
-    plan = get_user_plan(uid)
-    return bool(PLANS.get(plan, {}).get(feature, False))
-
-# ── Orders ────────────────────────────────────────────────
-# حقول مفهرسة فـ database.rules.json (data/$uid/orders .indexOn): كل كتابة طلب تمر من
-# _save_order / _patch_order باش ما تتنساش، وإلا الاستعلامات (trackOrder...) ما تلقاش الطلب.
-def _now_ms():
-    return int(time.time() * 1000)
-
-def _order_created_ms(order_id, order):
-    """createdAt لطلب قديم بلاه: من المعرّف ORD-<ms>، ولا من حقل date، ولا دابا."""
-    m = re.fullmatch(r"ORD-(\d{12,14})", str(order_id or ""))
-    if m:
-        return int(m.group(1))
-    try:
-        return int(time.mktime(time.strptime(str(order.get("date") or "")[:16], "%Y-%m-%d %H:%M")) * 1000)
-    except Exception:
-        return _now_ms()
-
-def _phone_digits(phone):
-    return re.sub(r"\D", "", str(phone or ""))
-
-def _with_index_fields(order_id, order):
-    out = dict(order)
-    created = out.get("createdAt")
-    if not isinstance(created, (int, float)) or isinstance(created, bool):
-        out["createdAt"] = _order_created_ms(order_id, out)
-    out["updatedAt"]   = _now_ms()
-    out["phoneDigits"] = _phone_digits(out.get("phone"))
-    return out
-
-def _save_order(uid, order_id, order, before=None):
-    """كتابة كاملة لطلب: createdAt يبقى (أو يتحسب لطلب قديم)، updatedAt وphoneDigits يتحدّثو.
-    before = الطلب قبل التعديل (None لطلب جديد) — باش المجاميع تتحدّث بالفرق."""
-    after = _with_index_fields(order_id, order)
-    ok = _fb_put(f"data/{uid}/orders/{order_id}", after)
-    if ok:
-        _apply_order_change(uid, before, after)
-    return ok
-
-# حقول تأثر على المجاميع — patch فيه وحدة منها يقرا الطلب قبل باش يحسب الفرق
-_AGG_ORDER_FIELDS = ("status", "profit", "qty", "product", "phone", "name", "city", "createdAt")
-
-def _patch_order(uid, order_id, patch):
-    patch = dict(patch, updatedAt=_now_ms())
-    if "phone" in patch:
-        patch["phoneDigits"] = _phone_digits(patch["phone"])
-    path = f"data/{uid}/orders/{order_id}"
-    before = _fb_get(path) if any(k in patch for k in _AGG_ORDER_FIELDS) else None
-    ok = _fb_patch(path, patch)
-    if ok and isinstance(before, dict):
-        _apply_order_change(uid, before, {**before, **patch})
-    return ok
-
-# ── المجاميع الجارية (Phase 3 / branch 5) ─────────────────
-# بدل تنزيل كل الطلبات فـ getDashboard/getCustomers/المتجر العام:
-# - data/{uid}/stats: total/confirmed/delivered/refused، profitCents (سنتيمات صحيحة باش
-#   الجمع يكون مضبوط بأي ترتيب)، sales/{key}={name,qty} للطلبات Confirmed/Delivered،
-#   ratings/{key}={name,sum,count}. يتحدّث بالفرق (قبل/بعد) فـ transaction مع كل كتابة طلب.
-# - data/{uid}/customers/{phoneDigits}: يتعاود حسابه كامل لهاد الرقم فقط (استعلام phoneDigits).
-# - المخزون (sold/available/stat) يتحسب وقت القراءة من products + stats.sales.
-# _compute_stats/_compute_customers هي "الحساب الكامل" المرجعي — recalc كيستعملهم، والفرق
-# مبني بنفس الدوال، فالنتيجة متطابقة.
-_SOLD_STATUSES = ("Confirmed", "Delivered")
-_STAT_COUNTERS = ("total", "confirmed", "delivered", "refused", "profitCents")
-
-def _safe_int(v, default=0):
-    try:
-        return int(float(v))
-    except (TypeError, ValueError):
-        return default
-
-def _cents(v):
-    try:
-        return int(round(float(v) * 100))
-    except (TypeError, ValueError):
-        return 0
-
-def _agg_key(name):
-    """اسم منتج كمفتاح RTDB. أسماء فيها . $ # [ ] / (طلب عام بنص حر) تتحوّل لـ hash، والاسم
-    الأصلي يبقى داخل القيمة."""
-    s = str(name if name is not None else "")
-    if (s and len(s.encode("utf-8")) <= 700 and not any(c in s for c in ".$#[]/")
-            and all(ord(c) >= 32 and ord(c) != 127 for c in s)):
-        return s
-    return "~" + hashlib.sha1(s.encode("utf-8")).hexdigest()[:20]
-
-def _order_contrib(o):
-    if not isinstance(o, dict):
-        return None
-    st = o.get("status", "")
-    c = {"total": 1, "confirmed": 0, "delivered": 0, "refused": 0, "profitCents": 0, "sales": {}}
-    if st in _SOLD_STATUSES:
-        name = str(o.get("product", "") or "")
-        c["confirmed"]   = 1
-        c["delivered"]   = 1 if st == "Delivered" else 0
-        c["profitCents"] = _cents(o.get("profit", 0))
-        c["sales"][_agg_key(name)] = (name, _safe_int(o.get("qty", 1), 1))
-    elif st == "Refused":
-        c["refused"]     = 1
-        c["profitCents"] = _cents(o.get("profit", 0))
-    return c
-
-def _stats_delta(before, after):
-    d, sales = {k: 0 for k in _STAT_COUNTERS}, {}
-    for sign, o in ((-1, before), (1, after)):
-        c = _order_contrib(o)
-        if not c:
-            continue
-        for k in _STAT_COUNTERS:
-            d[k] += sign * c[k]
-        for key, (name, qty) in c["sales"].items():
-            n, q = sales.get(key, (name, 0))
-            sales[key] = (n, q + sign * qty)
-    sales = {k: v for k, v in sales.items() if v[1]}
-    if not any(d.values()) and not sales:
-        return None
-    d["sales"] = sales
-    return d
-
-def _add_to_stats(stats, delta):
-    stats = dict(stats) if isinstance(stats, dict) else {}
-    for k in _STAT_COUNTERS:
-        stats[k] = _safe_int(stats.get(k, 0)) + delta.get(k, 0)
-    sales = dict(stats.get("sales") or {})
-    for key, (name, q) in delta.get("sales", {}).items():
-        entry = sales.get(key) if isinstance(sales.get(key), dict) else {"name": name, "qty": 0}
-        qty = _safe_int(entry.get("qty", 0)) + q
-        if qty:
-            sales[key] = {"name": entry.get("name", name), "qty": qty}
-        else:
-            sales.pop(key, None)
-    if sales:
-        stats["sales"] = sales
-    else:
-        stats.pop("sales", None)  # RTDB ما يخزّنش {} — نفس الشكل فالحساب والتخزين
-    return stats
-
-def _compute_stats(orders, ratings):
-    """الحساب الكامل المرجعي لـ data/{uid}/stats (recalc / backfill)."""
-    stats = {}
-    for o in (orders or {}).values():
-        delta = _stats_delta(None, o)
-        if delta:
-            stats = _add_to_stats(stats, delta)
-    stats = _add_to_stats(stats, {})  # العدادات موجودة حتى بلا طلبات
-    rmap = {}
-    for product, rs in (ratings or {}).items():
-        vals = [_safe_int(r.get("rating", 0)) for r in (rs or {}).values() if isinstance(r, dict)] \
-            if isinstance(rs, dict) else []
-        if vals:
-            rmap[_agg_key(product)] = {"name": product, "sum": sum(vals), "count": len(vals)}
-    if rmap:
-        stats["ratings"] = rmap
-    return stats
-
-def _customer_from_orders(items):
-    """items = [(order_id, order)] لنفس الرقم. الاسم/المدينة من أقدم طلب (createdAt ثم المعرّف)."""
-    rows = sorted(((k, o) for k, o in items if isinstance(o, dict)),
-                  key=lambda kv: (_safe_int(kv[1].get("createdAt"), 0), str(kv[0])))
-    if not rows:
-        return None
-    first = rows[0][1]
-    st = [o.get("status", "") for _, o in rows]
-    return {"name": first.get("name", ""), "phone": first.get("phone", ""), "city": first.get("city", ""),
-            "totalOrders": len(rows),
-            "stats": {"confirmed": st.count("Confirmed"), "refused": st.count("Refused"),
-                      "delivered": st.count("Delivered")}}
-
-def _compute_customers(orders):
-    """الحساب الكامل المرجعي لـ data/{uid}/customers."""
-    groups = {}
-    for k, o in (orders or {}).items():
-        if isinstance(o, dict):
-            ph = _phone_digits(o.get("phone"))
-            if ph:
-                groups.setdefault(ph, []).append((k, o))
-    return {ph: _customer_from_orders(items) for ph, items in groups.items()}
-
-def _refresh_customer(uid, digits):
-    found = _fb_query(f"data/{uid}/orders", "phoneDigits", equal_to=digits)
-    if found is None:
-        logging.error(f"customer refresh failed for {_mask_id(digits)} — شغّل /api/recalcStats")
-        return
-    cust = _customer_from_orders(found.items())
-    if cust:
-        _fb_put(f"data/{uid}/customers/{digits}", cust)
-    else:
-        _fb_delete(f"data/{uid}/customers/{digits}")
-
-def _invalidate_store_cache(uid):
-    with _store_products_cache_lock:
-        _store_products_cache.pop(str(uid), None)
-
-_CUSTOMER_FIELDS = ("status", "phone", "name", "city", "createdAt")
-
-def _apply_order_change(uid, before, after):
-    """يحدّث المجاميع بعد كتابة طلب (before=None: طلب جديد، after=None: طلب محذوف)."""
-    delta = _stats_delta(before, after)
-    if delta:
-        try:
-            _firebase_ref(f"data/{uid}/stats").transaction(lambda cur: _add_to_stats(cur, delta))
-        except Exception as e:
-            logging.error(f"stats update failed ({type(e).__name__}) — شغّل /api/recalcStats")
-    b = before if isinstance(before, dict) else {}
-    a = after if isinstance(after, dict) else {}
-    if not b or not a or any(b.get(f) != a.get(f) for f in _CUSTOMER_FIELDS):
-        for ph in sorted({_phone_digits(b.get("phone")), _phone_digits(a.get("phone"))} - {""}):
-            _refresh_customer(uid, ph)
-    _invalidate_store_cache(uid)
-
-def _add_rating_to_stats(uid, product, rating):
-    key = _agg_key(product)
-    def _txn(cur):
-        cur = dict(cur) if isinstance(cur, dict) else {}
-        ratings = dict(cur.get("ratings") or {})
-        r = ratings.get(key) if isinstance(ratings.get(key), dict) else {"name": product, "sum": 0, "count": 0}
-        ratings[key] = {"name": r.get("name", product), "sum": _safe_int(r.get("sum")) + int(rating),
-                        "count": _safe_int(r.get("count")) + 1}
-        cur["ratings"] = ratings
-        return cur
-    try:
-        _firebase_ref(f"data/{uid}/stats").transaction(_txn)
-    except Exception as e:
-        logging.error(f"rating stats update failed ({type(e).__name__}) — شغّل /api/recalcStats")
-    _invalidate_store_cache(uid)
-
-def _get_stats(uid):
-    s = _fb_get(f"data/{uid}/stats")
-    return s if isinstance(s, dict) else {}
-
-def _sold_by_name(stats):
-    return {e.get("name", ""): _safe_int(e.get("qty"))
-            for e in (stats.get("sales") or {}).values() if isinstance(e, dict)}
-
-def _stock_fields(product, sold):
-    init      = _safe_int(product.get("init", 0))
-    available = max(0, init - sold)
-    stat      = ("Out of Stock" if available <= 0
-                 else "Low Stock" if available <= LOW_STOCK_THRESHOLD else "In Stock")
-    return {"sold": sold, "available": available, "stat": stat}
-
-def _recompute_aggregates(uid):
-    """recalc كامل لتاجر واحد (قراءة كل الطلبات مرة). ما يكتب والو إذا القراءة فشلات —
-    باش خطأ شبكة ما يصفّرش المجاميع."""
-    try:
-        orders  = _fb_call(lambda: _firebase_ref(f"data/{uid}/orders").get()) or {}
-        ratings = _fb_call(lambda: _firebase_ref(f"data/{uid}/ratings").get()) or {}
-    except Exception as e:
-        logging.error(f"recompute read failed for {uid}: {type(e).__name__}")
-        return None
-    orders  = orders if isinstance(orders, dict) else {}
-    ratings = ratings if isinstance(ratings, dict) else {}
-    stats, customers = _compute_stats(orders, ratings), _compute_customers(orders)
-    if not _fb_put(f"data/{uid}/stats", stats):
-        return None
-    ok = _fb_put(f"data/{uid}/customers", customers) if customers else _fb_delete(f"data/{uid}/customers")
-    if not ok:
-        return None
-    _invalidate_store_cache(uid)
-    return {"orders": len(orders), "customers": len(customers)}
 
 _ORDERS_PAGE_MAX         = 500
 _ORDERS_CURSOR_MARGIN_MS = 30_000  # تداخل آمن: كتابة بطيئة (retry) ما تضيعش من الـ polling
 
-def _opt_int_arg(name):
-    v = str(request.args.get(name, "") or "").strip()
-    return int(v) if v else None   # ValueError على قيمة غير رقمية
 
 @app.route("/api/getOrders", methods=["GET"])
 @require_auth
@@ -1642,7 +863,7 @@ def api_get_orders():
         created_after = _opt_int_arg("createdAfter")
     except ValueError:
         return err_json("Invalid paging parameters")
-    started = _now_ms()
+    started = _orders_svc._now_ms()
     if since is not None:
         cap   = _ORDERS_PAGE_MAX
         found = _fb_query(path, "updatedAt", start_at=since, limit_last=cap + 1)
@@ -1666,56 +887,6 @@ def api_get_orders():
         body["reset"] = True  # تبدّلات أكثر من الحد — الواجهة تعاود التحميل من الأول
     return jsonify(body)
 
-def _ship_values(c_data, delivery_type):
-    is_desk = delivery_type == "desk"
-    ship_cust = float(c_data.get("deskCust", 0)) if is_desk else float(c_data.get("custShip", 0))
-    ship_cost = float(c_data.get("deskCost", 0)) if is_desk else float(c_data.get("costShip", 0))
-    return ship_cust, ship_cost
-def _validate_and_apply_coupon(uid, code, subtotal):
-    """يعيد حساب الخصم من قاعدة الكوبونات على السيرفر — لا يثق بأي رقم قادم من الزبون.
-    يرجّع (discount_amount, coupon_code_or_None). عند أي مشكلة يرجّع (0, None) بصمت
-    (الطلب يستمر بلا خصم بدل ما يفشل بالكامل بسبب كود خصم غير صالح)."""
-    code = str(code or "").strip().upper()
-    if not code:
-        return 0.0, None
-    c = _fb_get(f"data/{uid}/coupons/{code}")
-    if not c or not isinstance(c, dict):
-        return 0.0, None
-    if not c.get("active", True):
-        return 0.0, None
-    if c.get("expiresAt"):
-        try:
-            if time.strftime("%Y-%m-%d") > str(c["expiresAt"])[:10]:
-                return 0.0, None
-        except Exception:
-            pass
-    max_uses = int(c.get("maxUses", 0) or 0)
-    used = int(c.get("usedCount", 0) or 0)
-    if max_uses and used >= max_uses:
-        return 0.0, None
-    min_total = float(c.get("minOrderTotal", 0) or 0)
-    if subtotal < min_total:
-        return 0.0, None
-    ctype = c.get("type", "percent")
-    value = float(c.get("value", 0) or 0)
-    discount = (subtotal * value / 100.0) if ctype == "percent" else min(value, subtotal)
-    return round(max(0.0, discount), 2), code
-
-def _increment_coupon_usage(uid, code):
-    try:
-        c = _fb_get(f"data/{uid}/coupons/{code}") or {}
-        new_used = int(c.get("usedCount", 0) or 0) + 1
-        _fb_patch(f"data/{uid}/coupons/{code}", {"usedCount": new_used})
-    except Exception as e:
-        logging.error(f"_increment_coupon_usage: {e}")
-
-def _calc_order_profit(p_data, c_data, qty, delivery_type, status, existing_profit=0.0):
-    ship_cust, ship_cost = _ship_values(c_data, delivery_type)
-    if status in ("Confirmed", "Delivered"):
-        return ((float(p_data.get("sell", 0)) - float(p_data.get("cost", 0))) * int(qty)) + (ship_cust - ship_cost)
-    elif status == "Refused":
-        return -float(c_data.get("returnFee", 0))
-    return existing_profit
 
 @app.route("/api/addOrder", methods=["POST"])
 def api_add_order():
@@ -1813,7 +984,6 @@ def api_update_status():
             profit = _calc_order_profit(p_data, c_data, order.get("qty", 1), delivery_type, status, order.get("profit", 0))
     order["profit"] = profit
     _save_order(uid, oid, order, before=before)
-    from features.assistant_api import log_audit_entry
     log_audit_entry(uid, request.auth_member_username or "owner",
                      "تغيير حالة طلب", f"الطلب {oid} → {status}")
     return ok_json(True)
@@ -1935,7 +1105,6 @@ def api_delete_product():
     name = str(d.get("name") or "").strip()
     if not name: return err_json("Missing fields")
     _fb_delete(f"data/{uid}/products/{name}")
-    from features.assistant_api import log_audit_entry
     log_audit_entry(uid, request.auth_member_username or "owner", f"حذف منتج {name}")
     return ok_json(True)
 
@@ -2892,34 +2061,6 @@ def api_update_bot_settings():
     d = _sanitize_bot_settings_patch(d)
     return _save_bot_settings(username, uid, d)
 
-# معرّفات القنوات فـ users/{username}: كل وحدة عندها channel_index/{id} → username، باش
-# webhook يلقى التاجر بقراءتين بلا مسح /users. SEC-009: معرّف مربوط بحساب آخر يترفض.
-_CHANNEL_FIELDS = ("page_id_FB", "Page_ID_instgram", "page_id_instagram", "phone_number_id")
-
-def _channel_ids(rec):
-    return {str(rec.get(f) or "").strip() for f in _CHANNEL_FIELDS} - {""}
-
-def _save_bot_settings(username, uid, patch):
-    existing = _fb_get(f"users/{username}") or {}
-    updated  = {**existing, **patch, "Username": username, "User_ID": uid}
-    old_ids, new_ids = _channel_ids(existing), _channel_ids(updated)
-    for cid in new_ids:
-        if not cid.isdigit():
-            return err_json(f"معرّف غير صالح: {cid} — أرقام فقط")
-    for cid in new_ids - old_ids:
-        owner = _fb_get(f"channel_index/{cid}")
-        if owner and owner != username:
-            return err_json(f"المعرّف {cid} مربوط بحساب آخر", 409)
-    if not _fb_put(f"users/{username}", updated):
-        return err_json("Firebase unavailable", 503)
-    for cid in new_ids:
-        _fb_put(f"channel_index/{cid}", username)
-    for cid in old_ids - new_ids:
-        if _fb_get(f"channel_index/{cid}") == username:
-            _fb_delete(f"channel_index/{cid}")
-    with _settings_cache_lock:
-        _settings_cache.clear()
-    return ok_json(True)
 
 # ── Conversations / Messages ───────────────────────────────
 @app.route("/api/getConversations", methods=["GET"])
@@ -2965,9 +2106,6 @@ def api_get_conversations():
         body["reset"] = True
     return jsonify(body)
 
-def _opt_float_arg(name):
-    v = str(request.args.get(name, "") or "").strip()
-    return float(v) if v else None   # ValueError على قيمة غير رقمية
 
 @app.route("/api/getConversationMessages", methods=["GET"])
 @require_auth
@@ -3155,30 +2293,6 @@ def api_admin_rebuild_indexes():
     return ok_json({"orders": orders_res, "users": users_res,
                     "aggregates": {"merchants": agg_ok, "failed": agg_failed}, "botLogs": logs_res})
 
-def _migrate_bot_logs():
-    """ينسخ ai_logs/{uid}/{sender}/{push} القديم إلى bot_logs/{uid}/legacy_{sender}_{push}.
-    مفاتيح ثابتة → تقدر تعاودها بلا تكرار. القديم ما يتمسحش."""
-    uids = _fb_keys("data")
-    if uids is None:
-        return None
-    merchants = copied = 0
-    for uid in uids:
-        legacy = _fb_get(f"ai_logs/{uid}")
-        if not isinstance(legacy, dict):
-            continue
-        patch = {}
-        for sender, rows in legacy.items():
-            if not isinstance(rows, dict):
-                continue
-            for key, row in rows.items():
-                if isinstance(row, dict):
-                    patch[f"legacy_{sender}_{key}"] = {**row, "sender_id": row.get("sender_id") or sender}
-        if patch:
-            if not _fb_patch(f"bot_logs/{uid}", patch):
-                return None
-            merchants += 1
-            copied += len(patch)
-    return {"merchants": merchants, "copied": copied}
 
 @app.route("/api/recalcStats", methods=["POST"])
 @require_auth
@@ -3194,84 +2308,6 @@ def api_recalc_stats():
         return err_json("Firebase unavailable", 503)
     return ok_json(res)
 
-def _rebuild_user_indexes():
-    # _fb_get يرجّع None للـ "ما كاينش" وللخطأ معاً — نتأكدو أولاً أن Firebase يجاوب
-    if _fb_keys("/") is None:
-        return None
-    as_dict = lambda v: v if isinstance(v, dict) else {}
-    users, members = as_dict(_fb_get("users")), as_dict(_fb_get("team_users"))
-    existing_channels = as_dict(_fb_get("channel_index"))
-    patch, conflicts, unames, claims = {}, [], {}, {}
-    lifetime = 0
-    for key, u in users.items():
-        if not isinstance(u, dict):
-            continue
-        lower = _uname_key(u.get("Username") or key)
-        if lower in unames:
-            conflicts.append(f"uname_index/{lower}: {unames[lower]} vs {key}")
-        else:
-            unames[lower] = key
-            patch[f"uname_index/{lower}"] = key
-        if u.get("User_ID"):
-            patch[f"uid_index/{u['User_ID']}"] = key
-        if str(u.get("plan", "")).lower() in _LIFETIME_PLANS:
-            lifetime += 1
-        for cid in _channel_ids(u):
-            if cid.isdigit():
-                claims.setdefault(cid, []).append(key)
-    for cid, claimants in claims.items():
-        current = existing_channels.get(cid)
-        owner = current if current in claimants else claimants[0]
-        patch[f"channel_index/{cid}"] = owner
-        conflicts += [f"channel_index/{cid}: {owner} vs {other}" for other in claimants if other != owner]
-    for key, m in members.items():
-        if not isinstance(m, dict):
-            continue
-        lower = _uname_key(m.get("Username") or key)
-        if lower in unames:
-            conflicts.append(f"team_uname_index/{lower}: owner {unames[lower]} vs member {key}")
-        patch[f"team_uname_index/{lower}"] = key
-    patch["counters/lifetimeAccounts"] = lifetime
-    if not _fb_patch("/", patch):
-        return None
-    if conflicts:
-        logging.warning(f"🔧 rebuildIndexes: {len(conflicts)} conflicts — راجعهم يدوياً")
-    return {"users": len(unames), "members": len(members), "lifetimeAccounts": lifetime,
-            "conflicts": conflicts}
-
-def _rebuild_order_fields():
-    uids = _fb_keys("data")
-    if uids is None:
-        return err_json("Firebase unavailable", 503)
-    now = _now_ms()
-    merchants = checked = updated = 0
-    for uid in uids:
-        orders = _fb_get(f"data/{uid}/orders")
-        if not isinstance(orders, dict):
-            continue
-        merchants += 1
-        patch = {}
-        for oid, o in orders.items():
-            if not isinstance(o, dict):
-                continue
-            checked += 1
-            fix = {}
-            created = o.get("createdAt")
-            if not isinstance(created, (int, float)) or isinstance(created, bool):
-                fix["createdAt"] = _order_created_ms(oid, o)
-            updated_at = o.get("updatedAt")
-            if not isinstance(updated_at, (int, float)) or isinstance(updated_at, bool):
-                fix["updatedAt"] = now
-            digits = _phone_digits(o.get("phone"))
-            if o.get("phoneDigits") != digits:
-                fix["phoneDigits"] = digits
-            if fix:
-                updated += 1
-                patch.update({f"{oid}/{k}": v for k, v in fix.items()})
-        if patch and not _fb_patch(f"data/{uid}/orders", patch):
-            return err_json(f"write failed for merchant {uid}", 500)
-    logging.info(f"🔧 rebuildIndexes: orders merchants={merchants} checked={checked} updated={updated}")
-    return {"merchants": merchants, "checked": checked, "updated": updated}
 
 @app.route("/api/admin/listClients", methods=["GET"])
 @require_admin
@@ -3366,41 +2402,6 @@ def api_saas():
         logging.error(f"/api/saas: {e}")
         return err_json(str(e), 500)
 
-# ── Facebook OAuth ────────────────────────────────────────
-def get_user_settings(identifier):
-    identifier = str(identifier or "").strip()
-    if not identifier: return None
-    with _settings_cache_lock:
-        cached = _settings_cache.get(identifier)
-        ttl = _CACHE_TTL if (cached and cached["data"] is not None) else _NEG_CACHE_TTL
-        if cached and time.time() - cached["ts"] < ttl:
-            return cached["data"]
-    try:
-        uname = _fb_get(f"channel_index/{identifier}")
-        if uname:
-            data = _fb_get(f"users/{uname}")
-            if isinstance(data, dict):
-                ids = [str(data.get("page_id_FB") or "").strip(),
-                       str(data.get("Page_ID_instgram") or "").strip(),
-                       str(data.get("page_id_instagram") or "").strip(),
-                       str(data.get("phone_number_id") or "").strip()]
-                if identifier in ids:
-                    with _settings_cache_lock:
-                        _settings_cache[identifier] = {"data": data, "ts": time.time()}
-                    return data
-        # قبل: فهرس ناقص → قراءة /users كاملة فكل webhook لقناة مجهولة. دابا channel_index
-        # يتكتب عند حفظ إعدادات البوت (_sync_channel_index) والربط بفيسبوك، والقديم بـ
-        # rebuildIndexes. قناة مجهولة: نتذكّروها شوية باش ما نعاودوش نقراو فكل رسالة.
-        with _settings_cache_lock:
-            _settings_cache[identifier] = {"data": None, "ts": time.time()}
-        return None
-    except Exception as e:
-        logging.error(f"get_user_settings: {e}"); return None
-
-def _bot_allowed_for(bot_settings):
-    if not bot_settings: return False
-    plan = str(bot_settings.get("plan", "starter")).lower()
-    return PLANS.get(plan, {}).get("bot", False)
 
 # رسالة ثابتة لكل أخطاء الربط — نص الاستثناء (فيه URL كامل بـ client_secret/access_token)
 # ما يتعرضش للمستخدم ولا يتسجّل أبداً.
@@ -3590,415 +2591,7 @@ def fb_disconnect():
         "instgram_access_token":"","pages":[],"updated_at":time.strftime("%Y-%m-%dT%H:%M:%S")})
     return jsonify({"status":"ok"})
 
-# ── Bot / Webhook ─────────────────────────────────────────
-def meta_post(url, payload, headers=None, retries=3):
-    for attempt in range(retries):
-        try:
-            r = requests.post(url, json=payload, headers=headers, timeout=15)
-            if r.ok:
-                logging.info(f"✅ meta_post OK → {url}")
-                return True
-            logging.error(f"❌ meta_post FAILED [{r.status_code}] → {url} | response={r.text[:500]}")
-            if r.status_code in (400,401,403): return False
-        except Exception as e:
-            logging.error(f"meta_post attempt {attempt+1}: {e}")
-        sleep(1.5)
-    return False
 
-def send_facebook_message(recipient_id, text, access_token, page_id=None):
-    if not access_token:
-        logging.error(f"send_facebook_message: NO access_token for recipient {_mask_id(recipient_id)}")
-        return False
-    if not recipient_id or not text:
-        logging.error(f"send_facebook_message: missing recipient_id or text")
-        return False
-    url = (f"https://graph.facebook.com/v21.0/{page_id}/messages"
-           if page_id else "https://graph.facebook.com/v21.0/me/messages")
-    logging.info(f"📤 Sending FB message to {_mask_id(recipient_id)} via page {page_id}")
-    return meta_post(url, {"recipient":{"id":recipient_id},"message":{"text":text[:2000]},"access_token":access_token})
-
-def send_whatsapp_message(phone_number_id, recipient_id, text, token):
-    if not token or not text: return False
-    return meta_post(f"https://graph.facebook.com/v21.0/{phone_number_id}/messages",
-        {"messaging_product":"whatsapp","to":recipient_id,"type":"text","text":{"body":text[:2000]}},
-        headers={"Authorization":f"Bearer {token}","Content-Type":"application/json"})
-
-def get_media_url(media_id, access_token):
-    try:
-        r = requests.get(f"https://graph.facebook.com/v21.0/{media_id}",
-                         params={"access_token":access_token}, timeout=10)
-        return r.json().get("url","") if r.ok else ""
-    except Exception: return ""
-
-def download_media(url, access_token):
-    try:
-        r = requests.get(url, headers={"Authorization":f"Bearer {access_token}"}, timeout=20)
-        return r.content if r.ok else b""
-    except Exception: return b""
-
-def _gemini_generate_with_fallback(api_key, contents, config, label=""):
-    last_err = None
-    for model in _GEMINI_MODELS:
-        for attempt in range(2):
-            try:
-                client = genai.Client(api_key=api_key, http_options={"api_version":"v1beta"})
-                base_max_tokens = getattr(config, "max_output_tokens", 1024) or 1024
-                cfg_dict = {
-                    "temperature": getattr(config, "temperature", 0.7),
-                    "max_output_tokens": max(base_max_tokens, 2048),
-                }
-                sys_instr = getattr(config, "system_instruction", None)
-                if sys_instr:
-                    cfg_dict["system_instruction"] = sys_instr
-                if "2.5" in model:
-                    cfg_dict["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
-                cfg = types.GenerateContentConfig(**cfg_dict)
-                response = client.models.generate_content(model=model, contents=contents, config=cfg)
-
-                text = ""
-                finish_reason = None
-                if response and response.candidates:
-                    cand = response.candidates[0]
-                    finish_reason = getattr(cand, "finish_reason", None)
-                    if cand.content and cand.content.parts:
-                        for part in cand.content.parts:
-                            t = getattr(part, "text", "") or ""
-                            if t: text += t
-                if not text:
-                    try: text = response.text or ""
-                    except Exception: pass
-                text = text.strip()
-
-                if not text:
-                    pf = getattr(response, "prompt_feedback", None)
-                    logging.warning(
-                        f"Gemini {model} EMPTY | finish_reason={finish_reason} | "
-                        f"prompt_feedback={pf} | candidates_count={len(response.candidates) if response and response.candidates else 0}"
-                    )
-                    raise ValueError(f"Empty response (finish_reason={finish_reason})")
-                return text, model
-            except Exception as e:
-                last_err = e
-                if "404" in str(e) or "NOT_FOUND" in str(e): break
-                sleep(1.5)
-    raise RuntimeError(f"All Gemini models failed: {last_err}")
-
-# سجل البوت مربوط بالتاجر: chats/{merchant_uid}/{sender_id}. السجل القديم chats/{sender_id}
-# (مشترك بين التجار) يبقى فقاعدة البيانات بلا حذف، لكن ما يتقراش.
-def get_history(sender_id, merchant_uid):
-    if not merchant_uid: return []
-    try:
-        data = _firebase_ref(f"chats/{merchant_uid}/{sender_id}").get()
-        if not data: return []
-        hist = sorted(data.values(), key=lambda x: x.get("timestamp",0))
-        return hist[-(MAX_HISTORY_TURNS*2):]
-    except Exception: return []
-
-def save_history(sender_id, merchant_uid, user_msg, bot_msg):
-    if not merchant_uid: return
-    try:
-        ref = _firebase_ref(f"chats/{merchant_uid}/{sender_id}")
-        now = time.time()
-        ref.push({"role":"user","content":user_msg,"timestamp":now})
-        ref.push({"role":"assistant","content":bot_msg,"timestamp":now+0.001})
-    except Exception as e:
-        logging.error(f"save_history: {e}")
-
-def history_to_text(history):
-    lines = []
-    for t in history:
-        prefix = "العميل" if t.get("role")=="user" else "البوت"
-        lines.append(f"{prefix}: {t.get('content','')}")
-    return "\n".join(lines)
-
-def log_ai_message(sender_id, user_msg, bot_msg, platform="FB", merchant_uid=""):
-    # bot_logs/{uid}/{push} مسطّح (timestamp مفهرس) باش getBotLogs يقرا غير آخر N.
-    # قبل: ai_logs/{uid}/{sender}/{push} — ما يتقراش غير كامل. القديم يتنسخ بـ rebuildIndexes.
-    try:
-        path = f"bot_logs/{merchant_uid}" if merchant_uid else f"ai_logs/{sender_id}"
-        _firebase_ref(path).push({
-            "user_message":user_msg,"bot_reply":bot_msg,"platform":platform,
-            "timestamp":time.time(),"date":time.strftime("%Y-%m-%d %H:%M:%S"),
-            "sender_id":sender_id,
-        })
-    except Exception as e:
-        logging.error(f"log_ai_message: {e}")
-
-def _log_conversation(uid, sender_id, direction, text, platform, via="", page_id="", name=""):
-    if not uid or not sender_id:
-        return
-    now = time.time()
-    entry = {
-        "direction": direction, "text": (text or "")[:2000], "platform": platform,
-        "timestamp": now, "date": time.strftime("%Y-%m-%d %H:%M:%S"),
-    }
-    if via: entry["via"] = via
-    try:
-        _firebase_ref(f"conversations/{uid}/{sender_id}").push(entry)
-        meta_patch = {
-            "lastMessage": (text or "")[:200], "lastTimestamp": now,
-            "lastDirection": direction, "platform": platform,
-        }
-        if page_id: meta_patch["pageId"] = page_id
-        if name: meta_patch["name"] = name
-        # update ينشئ العقدة إذا ما كانتش — بلا قراءة قبل الكتابة فكل رسالة (الواجهة تبيّن
-        # senderId إذا الاسم غايب)
-        _fb_patch(f"conversations_meta/{uid}/{sender_id}", meta_patch)
-    except Exception as e:
-        logging.error(f"_log_conversation: {e}")
-
-def get_products_text(bot_settings):
-    try:
-        uid      = bot_settings.get("User_ID")
-        products = _fb_get(f"data/{uid}/products") if uid else None
-        if products and isinstance(products, dict):
-            sold = _sold_by_name(_get_stats(uid))
-            lines = [f"- {p.get('name','?')}: {p.get('sell','?')} | stock:{_stock_fields(p, sold.get(p.get('name',''), 0))['available']} | {p.get('category','')}".strip()
-                     for p in products.values() if isinstance(p,dict)]
-            if lines: return "\n".join(lines)
-    except Exception: pass
-    return bot_settings.get("products_info","")
-
-def extract_json(full_text):
-    try:
-        match = re.search(rf"{re.escape(_JSON_START)}(.*?){re.escape(_JSON_END)}", full_text, re.DOTALL)
-        if match:
-            return json.loads(match.group(1).strip()), full_text.split(_JSON_START)[0].strip()
-    except Exception: pass
-    return None, full_text
-
-def _find_field(order_data, *exact_keys):
-    for k in exact_keys:
-        v = order_data.get(k)
-        if v: return v
-    for key, val in order_data.items():
-        key_l = str(key).strip()
-        for target in exact_keys:
-            if target and target in key_l and val:
-                return val
-    return ""
-
-def _normalize_delivery_type(raw):
-    raw = str(raw or "").strip().lower()
-    desk_keywords = ["مكتب", "ستوب ديسك", "ستوب دسك", "stop desk", "stopdesk", "bureau",
-                      "نقطة استلام", "office", "agence", "وكالة"]
-    for kw in desk_keywords:
-        if kw in raw:
-            return "desk"
-    return "home"
-
-def validate_order(order_data):
-    if not order_data or not isinstance(order_data,dict): return False,"لا توجد بيانات"
-    product = _find_field(order_data, "product", "product_name", "المنتج", "اسم المنتج")
-    if not product or str(product).strip() in ("","null","None"): return False,"اسم المنتج غير موجود"
-    qty = _find_field(order_data, "quantity", "qty", "الكمية")
-    if not qty or str(qty).strip() in ("","null","0"): return False,"الكمية غير محددة"
-    name = _find_field(order_data, "name", "الاسم", "اسم")
-    if not name: return False,"اسم العميل غير موجود"
-    phone = _find_field(order_data, "phone", "الهاتف", "هاتف")
-    if not phone: return False,"رقم الهاتف غير موجود"
-    city = _find_field(order_data, "city", "المدينة", "مدينة")
-    if not city: return False,"المدينة غير موجودة"
-    delivery = _find_field(order_data, "delivery_type", "نوع التوصيل", "التوصيل")
-    if not delivery: return False,"نوع التوصيل غير محدد (منزل أو مكتب الاستلام)"
-    return True,""
-
-def save_order_from_bot(order_data, bot_settings, sender_id=""):
-    try:
-        uid = bot_settings.get("User_ID")
-        if not uid: return False
-        qty_raw = _find_field(order_data, "quantity", "qty", "الكمية") or 1
-        try: qty_val = int(re.sub(r"\D","",str(qty_raw)) or 1)
-        except Exception: qty_val = 1
-        phone   = _find_field(order_data, "phone", "الهاتف", "هاتف")
-        product = _find_field(order_data, "product", "product_name", "المنتج", "اسم المنتج")
-        delivery_type = _normalize_delivery_type(_find_field(order_data, "delivery_type", "نوع التوصيل", "التوصيل"))
-
-        if sender_id and _is_duplicate_bot_order(uid, sender_id, phone, product):
-            logging.info(f"⏭️ تجاهل طلب مكرر من البوت | sender={_mask_id(sender_id)} | product={product}")
-            return False
-
-        if not _under_cap(uid, "orderCount", "orderCap"):
-            logging.warning(f"⏭️ تجاوز سقف الطلبات الشهري | uid={uid}")
-            return False
-
-        order_id = f"ORD-{int(time.time()*1000)}"
-        order    = {
-            "id":order_id,"date":time.strftime("%Y-%m-%d %H:%M"),"status":"Pending",
-            "profit":0,"source":"bot","date_sent":"","date_delivered":"","deliveryType":delivery_type,
-            "name":   _find_field(order_data, "name", "الاسم", "اسم"),
-            "phone":  phone,
-            "product":product,
-            "qty":    qty_val,
-            "city":   _find_field(order_data, "city", "المدينة", "مدينة"),
-            "address":_find_field(order_data, "address", "العنوان", "عنوان"),
-            "unitPrice":0,"shipping":0,"total":0,
-        }
-        p_data = _fb_get(f"data/{uid}/products/{order['product']}")
-        c_data = _fb_get(f"data/{uid}/cities/{order['city']}")
-        if p_data: order["unitPrice"] = float(p_data.get("sell",0))
-        if c_data:
-            ship_cust, _ = _ship_values(c_data, delivery_type)
-            order["shipping"] = ship_cust
-        order["total"] = (order["unitPrice"]*order["qty"]) + order["shipping"]
-        _save_order(uid, order_id, order)
-        _increment_usage(uid, "orderCount")
-        if sender_id: _mark_bot_order(uid, sender_id, phone, product)
-        logging.info(f"✅ Bot order saved: {order_id}")
-        return True
-    except Exception as e:
-        logging.error(f"save_order_from_bot: {e}")
-        return False
-
-def ask_gemini(sender_id, user_message, bot_settings,
-               media_bytes=b"", mime_type="", is_voice=False, is_image=False):
-    api_key = str(bot_settings.get("Gemini_api_key") or "").strip()
-    if not api_key: return "مفتاح الذكاء الاصطناعي غير موجود.", None
-    if is_voice and media_bytes:
-        try:
-            contents = [types.Part.from_bytes(data=media_bytes,mime_type=mime_type),
-                        types.Part.from_text(text="استمع وحوّل إلى نص فقط.")]
-            text, _ = _gemini_generate_with_fallback(api_key, contents,
-                      types.GenerateContentConfig(temperature=0.1,max_output_tokens=512),"audio")
-            user_message = text; media_bytes = b""
-        except Exception:
-            user_message = "[لم أتمكن من فهم الرسالة الصوتية]"; media_bytes = b""
-    if is_image and media_bytes:
-        try:
-            contents = [types.Part.from_bytes(data=media_bytes,mime_type=mime_type),
-                        types.Part.from_text(text=f"صف هذه الصورة من منظور مبيعات. {user_message or ''}")]
-            desc, _ = _gemini_generate_with_fallback(api_key, contents,
-                     types.GenerateContentConfig(temperature=0.2,max_output_tokens=256),"image")
-            user_message = f"{user_message}\n[وصف الصورة: {desc}]" if user_message else f"[وصف الصورة: {desc}]"
-            media_bytes = b""
-        except Exception: pass
-    if not user_message.strip(): user_message = "[رسالة فارغة]"
-    if len(user_message) > 1500: user_message = user_message[:1500]
-    merchant_uid = str(bot_settings.get("User_ID","") or "")
-    try:
-        instructions = bot_settings.get("AI_instructions","أنت مساعد مبيعات ذكي.")
-        products     = get_products_text(bot_settings)
-        history_text = history_to_text(get_history(sender_id, merchant_uid))
-        req_format = '{"product":"اسم المنتج","quantity":"الكمية","name":"اسم العميل","phone":"رقم الهاتف","city":"المدينة","delivery_type":"منزل أو مكتب الاستلام","address":"العنوان"}'
-        system_text = f"""أنت مساعد مبيعات لمتجر إلكتروني. مهمتك مساعدة العملاء في الطلب.
-رد بنفس لغة العميل (عربي أو فرنسي).
-اجمع من العميل بشكل ودي: الاسم الكامل، الهاتف، المدينة، اسم المنتج، الكمية، العنوان، **ونوع التوصيل الذي يفضّله العميل بنفسه (توصيل للمنزل، أو توصيل لمكتب الاستلام/Stop Desk)** — اسأله بوضوح عن هذا الخيار ولا تفترضه أبداً من نفسك. لا تكتب تأكيد الطلب قبل جمع كل هذه المعلومات.
-تعليمات إضافية من المتجر:
-{instructions}
-
-قائمة المنتجات المتوفرة:
-{products or "لا توجد منتجات مسجلة حالياً."}
-
-عندما تجمع كل المعلومات المطلوبة من العميل (الاسم والهاتف والمدينة والمنتج والكمية ونوع التوصيل والعنوان)، أضف في نهاية ردك مباشرة (بدون أي نص بعدها) كتلة JSON بهذا الشكل بالضبط، باستخدام نفس أسماء المفاتيح الإنجليزية product, quantity, name, phone, city, delivery_type, address (لا تترجم أسماء المفاتيح، فقط القيم بالعربي أو الفرنسي، وقيمة delivery_type تكون "منزل" أو "مكتب"):
-{_JSON_START}
-{req_format}
-{_JSON_END}
-
-⚠️ مهم جداً: إذا كان سجل المحادثة السابق يُظهر أنك سبق وأرسلت كتلة JSON بهذا الشكل لهذا العميل بنفس المنتج، فلا تكررها أبداً في أي رد لاحق — فقط أكّد له بأدب أن طلبه مسجّل ومتابَع، بدون أي كتلة JSON جديدة.
-"""
-        history_block = f"سجل المحادثة السابق:\n{history_text}\n\n" if history_text else ""
-        user_text_block = f"{history_block}رسالة العميل الحالية: {user_message}"
-
-        contents = [types.Part.from_text(text=user_text_block)]
-        config   = types.GenerateContentConfig(
-            temperature=0.7, max_output_tokens=1024,
-            system_instruction=system_text,
-        )
-        full_text, _ = _gemini_generate_with_fallback(api_key,contents,config,f"chat:{sender_id}")
-        order_data, clean_text = extract_json(full_text)
-        if order_data:
-            logging.info(f"📦 JSON extracted for {_mask_id(sender_id)}: fields={list(order_data.keys())}")
-            is_valid, reason = validate_order(order_data)
-            if not is_valid:
-                logging.warning(f"⚠️ Order invalid for {_mask_id(sender_id)}: {reason}")
-                try:
-                    retry_text, _ = _gemini_generate_with_fallback(api_key,
-                        [types.Part.from_text(text=f'العميل: "{user_message}"\nالناقص: {reason}\nاسأل بلطف.')],
-                        types.GenerateContentConfig(temperature=0.5,max_output_tokens=512),"retry")
-                    clean_text = retry_text
-                except Exception: pass
-                order_data = None
-        save_history(sender_id, merchant_uid, user_message, clean_text)
-        log_ai_message(sender_id, user_message, clean_text, merchant_uid=merchant_uid)
-        return clean_text, order_data
-    except Exception as e:
-        logging.error(f"ask_gemini {_mask_id(sender_id)}: {e}")
-        return "عذراً، حاول مرة أخرى بعد قليل.", None
-
-def process_bg(sender_id, user_text, bot, send_fn,
-               media_bytes=b"", mime_type="", is_voice=False, is_image=False, platform="fb", page_id=""):
-    def task():
-        logging.info(f"🔄 process_bg START | sender={_mask_id(sender_id)} | platform={platform} | text_len={len(user_text or '')}")
-        try:
-            merchant_uid = bot.get("User_ID", "")
-            if merchant_uid and not _under_cap(merchant_uid, "botMsgCount", "botMsgCap"):
-                logging.warning(f"⏭️ تجاوز سقف رسائل البوت الشهري | uid={merchant_uid} — لا يتم استدعاء Gemini")
-                try: send_fn("عذراً، تم الوصول للحد الشهري لخدمة المساعد الذكي. سيتم التواصل معك يدوياً قريباً 🙏")
-                except Exception: pass
-                return
-            if merchant_uid: _increment_usage(merchant_uid, "botMsgCount")
-            reply, order = ask_gemini(sender_id,user_text,bot,
-                                      media_bytes=media_bytes,mime_type=mime_type,
-                                      is_voice=is_voice,is_image=is_image)
-            logging.info(f"🤖 ask_gemini DONE | sender={_mask_id(sender_id)} | reply_len={len(reply or '')} | order={'yes' if order else 'no'}")
-            if order and (not reply or not reply.strip()):
-                reply = "✅ تم استلام طلبك بنجاح! سنتواصل معك قريباً لتأكيد التوصيل."
-            elif not reply or not reply.strip():
-                reply = "عذراً، لم أتمكن من المعالجة الآن. حاول مرة أخرى."
-            try:
-                ok = send_fn(reply)
-                logging.info(f"📨 send_fn result for {_mask_id(sender_id)}: {ok}")
-                if ok and merchant_uid:
-                    _log_conversation(merchant_uid, sender_id, "out", reply, platform, via="bot", page_id=page_id)
-            except Exception as send_err:
-                logging.error(f"send_fn raised exception ({_mask_id(sender_id)}): {send_err}")
-            if order:
-                save_order_from_bot(order, bot, sender_id)
-        except Exception as e:
-            logging.error(f"BG task ({_mask_id(sender_id)}): {e}", exc_info=True)
-            try: send_fn("عذراً، حدث خطأ مؤقت.")
-            except Exception: pass
-    _executor.submit(task)
-def _webhook_object(raw_body):
-    """للسجلات فقط: نوع المنتج اللي بعث الـ webhook (بلا أي محتوى آخر من الجسم)."""
-    try:
-        obj = json.loads(raw_body).get("object")
-    except Exception:
-        return "?"
-    return obj if obj in ("page", "instagram", "whatsapp_business_account") else "?"
-
-def verify_sig(raw_body, headers):
-    # 1. جلب الأسرار: سر تطبيق ميتا (فيسبوك/واتساب/إنستغرام عبر Facebook Login)
-    #    + سر إنستغرام المنفصل (Instagram API with Instagram Login يوقّع بيه وحدو)
-    keys = []
-    for name in ("META_APP_SECRET", "INSTAGRAM_APP_SECRET"):
-        k = os.environ.get(name, "").strip()
-        if k and k not in keys:
-            keys.append(k)
-    if not keys:
-        logging.critical("🚨 META_APP_SECRET مفقود من متغيرات البيئة!")
-        return False
-    
-    # 2. جلب التوقيع من الهيدر
-    sig_header = headers.get("X-Hub-Signature-256", "")
-    if not sig_header.startswith("sha256="):
-        logging.warning("⚠️ لم يتم العثور على sha256 في الهيدر")
-        return False
-    
-    received_sig = sig_header[7:]
-
-    # 3+4. حساب التوقيع على البيانات الخام لكل سر + مقارنة زمن-ثابت
-    #      — بلا تسجيل أي جزء من التوقيعات أو السر أو جسم الطلب
-    match = False
-    for k in keys:
-        calculated_sig = hmac.new(k.encode('utf-8'), raw_body, hashlib.sha256).hexdigest()
-        if hmac.compare_digest(calculated_sig, received_sig):
-            match = True
-
-    if not match:
-        logging.warning(f"⚠️ توقيع webhook غير مطابق | حجم البيانات: {len(raw_body)} بايت")
-
-    return match
 @app.after_request
 def security_headers(resp):
     resp.headers["X-Content-Type-Options"] = "nosniff"
@@ -4010,15 +2603,6 @@ def limit_size():
     if request.content_length and request.content_length > MAX_PAYLOAD_SIZE:
         abort(413)
 
-_STICKERS   = ["😊 أهلاً! كيف يمكنني مساعدتك؟","👋 مرحباً! يسعدنا خدمتك.","❤️ شكراً لتواصلك!"]
-_sticker_i  = 0
-_sticker_lk = threading.Lock()
-
-def sticker_reply():
-    global _sticker_i
-    with _sticker_lk:
-        r = _STICKERS[_sticker_i % len(_STICKERS)]; _sticker_i += 1
-    return r
 
 @app.route("/webhook", methods=["GET", "POST"])
 def webhook():
@@ -4039,116 +2623,7 @@ def webhook():
     data = request.get_json(silent=True)
     if not data: return "Bad Request", 400
     logging.info(f"📩 webhook RECEIVED: object={data.get('object')} | entries={len(data.get('entry',[]))}")
-    def handle(payload):
-        try:
-            for entry in payload.get("entry",[]) or []:
-                if "changes" in entry:
-                    for change in entry.get("changes",[]) or []:
-                        val = change.get("value",{})
-                        if "messages" not in val: continue
-                        phone_id = val.get("metadata",{}).get("phone_number_id","")
-                        bot      = get_user_settings(phone_id)
-                        if not bot: continue
-                        if not _bot_allowed_for(bot):
-                            logging.info(f"⏭️ webhook(wa): خطة التاجر لا تدعم البوت | phone_id={phone_id}")
-                            continue
-                        wa_tok = str(bot.get("whtsapp_token") or "").strip()
-                        if not wa_tok: continue
-                        merchant_uid_wa = bot.get("User_ID", "")
-                        for msg in val.get("messages",[]) or []:
-                            sid=msg.get("from",""); mtype=msg.get("type","")
-                            utxt=""; mdata=b""; mime=""; isvoc=isimg=False
-                            if mtype=="text":
-                                utxt=msg.get("text",{}).get("body","").strip()
-                            elif mtype in ("audio","voice"):
-                                isvoc=True; obj=msg.get("audio") or msg.get("voice") or {}
-                                mid=obj.get("id","")
-                                if mid:
-                                    murl=get_media_url(mid,wa_tok)
-                                    if murl: mdata=download_media(murl,wa_tok); mime=obj.get("mime_type","audio/ogg").split(";")[0].strip()
-                            elif mtype=="image":
-                                isimg=True; obj=msg.get("image",{}); utxt=obj.get("caption",""); mid=obj.get("id","")
-                                if mid:
-                                    murl=get_media_url(mid,wa_tok)
-                                    if murl: mdata=download_media(murl,wa_tok); mime=obj.get("mime_type","image/jpeg")
-                            elif mtype=="sticker":
-                                def _s(reply,_sid=sid,_pid=phone_id,_tok=wa_tok): return send_whatsapp_message(_pid,_sid,reply,_tok)
-                                _executor.submit(lambda fn=_s: fn(sticker_reply())); continue
-                            if not utxt and not mdata: continue
-                            log_text_wa = utxt or ("🎙️ [رسالة صوتية]" if isvoc else "🖼️ [صورة]" if isimg else "")
-                            if merchant_uid_wa:
-                                _log_conversation(merchant_uid_wa, sid, "in", log_text_wa, "wa", page_id=phone_id)
-                            if is_rate_limited(f"{merchant_uid_wa}:{sid}","wa"): continue
-                            def wa_fn(reply,_sid=sid,_pid=phone_id,_tok=wa_tok): return send_whatsapp_message(_pid,_sid,reply,_tok)
-                            process_bg(sid,utxt,bot,wa_fn,mdata,mime,isvoc,isimg,"wa",phone_id)
-                elif "messaging" in entry:
-                    page_id=str(entry.get("id","") or "").strip()
-                    bot=get_user_settings(page_id)
-                    if not bot:
-                        logging.warning(f"⚠️ webhook: NO merchant found for page_id={page_id}")
-                        continue
-                    if not _bot_allowed_for(bot):
-                        logging.info(f"⏭️ webhook(fb): خطة التاجر لا تدعم البوت | page_id={page_id}")
-                        continue
-                    fb_pid = str(bot.get("page_id_FB") or "").strip()
-                    ig_pid = str(bot.get("Page_ID_instgram") or bot.get("page_id_instagram") or "").strip()
-                    if page_id == ig_pid and ig_pid:
-                        tok = str(bot.get("instgram_access_token") or "").strip()
-                        is_instagram = True
-                    elif page_id == fb_pid and fb_pid:
-                        tok = str(bot.get("fb_access_token") or "").strip()
-                        is_instagram = False
-                    else:
-                        tok = str(bot.get("fb_access_token") or bot.get("instgram_access_token") or "").strip()
-                        is_instagram = False
-                        logging.warning(f"⚠️ webhook: page_id={page_id} didn't match fb_pid={fb_pid} or ig_pid={ig_pid} exactly")
-                    if not tok:
-                        logging.warning(f"⚠️ webhook: merchant found (User_ID={bot.get('User_ID')}) but NO access token for page_id={page_id} (is_instagram={is_instagram})")
-                        continue
-                    send_pid = (fb_pid or None) if is_instagram else page_id
-                    logging.info(f"🔑 Using {'Instagram' if is_instagram else 'Facebook'} token for page_id={page_id} | send_pid={send_pid or 'me'}")
-                    platform_str = "ig" if is_instagram else "fb"
-                    merchant_uid_fb = bot.get("User_ID", "")
-                    msging_list = entry.get("messaging",[]) or []
-                    logging.info(f"📋 messaging entries count: {len(msging_list)}")
-                    for me in msging_list:
-                        sid=me.get("sender",{}).get("id","")
-                        logging.info(f"👤 processing message from sid={_mask_id(sid)}")
-                        if not sid or sid==page_id:
-                            logging.info(f"⏭️ skipped: sid empty or equals page_id")
-                            continue
-                        utxt=""; mdata=b""; mime=""; isvoc=isimg=False
-                        if "message" in me and not me["message"].get("is_echo"):
-                            msg=me["message"]
-                            if "text" in msg: utxt=msg["text"].strip()
-                            elif "attachments" in msg:
-                                for att in msg.get("attachments",[]) or []:
-                                    atype=att.get("type",""); pload=att.get("payload",{}); murl=pload.get("url","")
-                                    if atype in ("audio","voice"):
-                                        isvoc=True; mime="audio/mpeg"
-                                        if murl: mdata=download_media(murl,tok)
-                                    elif atype=="image":
-                                        isimg=True; mime="image/jpeg"
-                                        if murl: mdata=download_media(murl,tok)
-                                    elif atype=="sticker":
-                                        def _sf(reply,_sid=sid,_tok=tok,_pid=page_id): return send_facebook_message(_sid,reply,_tok,page_id=_pid)
-                                        _executor.submit(lambda fn=_sf: fn(sticker_reply()))
-                        elif "postback" in me:
-                            utxt=me["postback"].get("title") or me["postback"].get("payload","")
-                        if not utxt and not mdata:
-                            logging.info(f"⏭️ skipped: no text/media extracted from message")
-                            continue
-                        log_text_fb = utxt or ("🎙️ [رسالة صوتية]" if isvoc else "🖼️ [صورة]" if isimg else "")
-                        if merchant_uid_fb:
-                            _log_conversation(merchant_uid_fb, sid, "in", log_text_fb, platform_str, page_id=(send_pid or page_id))
-                        if is_rate_limited(f"{merchant_uid_fb}:{sid}","fb"):
-                            logging.info(f"⏭️ skipped: rate limited for sid={_mask_id(sid)}")
-                            continue
-                        def fb_fn(reply,_sid=sid,_tok=tok,_pid=send_pid): return send_facebook_message(_sid,reply,_tok,page_id=_pid)
-                        process_bg(sid,utxt,bot,fb_fn,mdata,mime,isvoc,isimg,platform_str,(send_pid or page_id))
-        except Exception as e:
-            logging.error(f"handle() error: {e}")
-    _executor.submit(handle, data)
+    submit_webhook(data)
     return "OK", 200
 from features.discounts_api import discounts_bp
 from features.tracking_api import tracking_bp

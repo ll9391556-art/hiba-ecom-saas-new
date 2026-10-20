@@ -1,0 +1,326 @@
+[
+ {
+  "rule": "/",
+  "methods": "GET"
+ },
+ {
+  "rule": "/admin",
+  "methods": "GET"
+ },
+ {
+  "rule": "/api/addCity",
+  "methods": "POST"
+ },
+ {
+  "rule": "/api/addOrder",
+  "methods": "POST"
+ },
+ {
+  "rule": "/api/addProduct",
+  "methods": "POST"
+ },
+ {
+  "rule": "/api/admin/createClient",
+  "methods": "POST"
+ },
+ {
+  "rule": "/api/admin/listClients",
+  "methods": "GET"
+ },
+ {
+  "rule": "/api/admin/rebuildIndexes",
+  "methods": "POST"
+ },
+ {
+  "rule": "/api/assistant/adInsights",
+  "methods": "GET"
+ },
+ {
+  "rule": "/api/assistant/ask",
+  "methods": "POST"
+ },
+ {
+  "rule": "/api/assistant/auditLog",
+  "methods": "GET"
+ },
+ {
+  "rule": "/api/assistant/history",
+  "methods": "GET"
+ },
+ {
+  "rule": "/api/assistant/weeklyReport",
+  "methods": "GET"
+ },
+ {
+  "rule": "/api/coupons/create",
+  "methods": "POST"
+ },
+ {
+  "rule": "/api/coupons/delete",
+  "methods": "POST"
+ },
+ {
+  "rule": "/api/coupons/list",
+  "methods": "GET"
+ },
+ {
+  "rule": "/api/coupons/update",
+  "methods": "POST"
+ },
+ {
+  "rule": "/api/coupons/validate",
+  "methods": "GET"
+ },
+ {
+  "rule": "/api/deleteCity",
+  "methods": "POST"
+ },
+ {
+  "rule": "/api/deleteProduct",
+  "methods": "POST"
+ },
+ {
+  "rule": "/api/getBotSettings",
+  "methods": "GET"
+ },
+ {
+  "rule": "/api/getCities",
+  "methods": "GET"
+ },
+ {
+  "rule": "/api/getConversationMessages",
+  "methods": "GET"
+ },
+ {
+  "rule": "/api/getConversations",
+  "methods": "GET"
+ },
+ {
+  "rule": "/api/getCustomers",
+  "methods": "GET"
+ },
+ {
+  "rule": "/api/getDashboard",
+  "methods": "GET"
+ },
+ {
+  "rule": "/api/getOAuthState",
+  "methods": "GET"
+ },
+ {
+  "rule": "/api/getOrders",
+  "methods": "GET"
+ },
+ {
+  "rule": "/api/getProductRatings",
+  "methods": "GET"
+ },
+ {
+  "rule": "/api/getProducts",
+  "methods": "GET"
+ },
+ {
+  "rule": "/api/getStoreCities",
+  "methods": "GET"
+ },
+ {
+  "rule": "/api/getStoreProducts",
+  "methods": "GET"
+ },
+ {
+  "rule": "/api/getStoreSettings",
+  "methods": "GET"
+ },
+ {
+  "rule": "/api/getUserPlan",
+  "methods": "GET"
+ },
+ {
+  "rule": "/api/landing/delete",
+  "methods": "POST"
+ },
+ {
+  "rule": "/api/landing/generate",
+  "methods": "POST"
+ },
+ {
+  "rule": "/api/landing/list",
+  "methods": "GET"
+ },
+ {
+  "rule": "/api/landing/postToInstagram",
+  "methods": "POST"
+ },
+ {
+  "rule": "/api/landing/questions",
+  "methods": "POST"
+ },
+ {
+  "rule": "/api/landing/togglePublish",
+  "methods": "POST"
+ },
+ {
+  "rule": "/api/login",
+  "methods": "POST"
+ },
+ {
+  "rule": "/api/me",
+  "methods": "GET"
+ },
+ {
+  "rule": "/api/multistore/list",
+  "methods": "GET"
+ },
+ {
+  "rule": "/api/recalcStats",
+  "methods": "POST"
+ },
+ {
+  "rule": "/api/saas",
+  "methods": "POST"
+ },
+ {
+  "rule": "/api/sendMessage",
+  "methods": "POST"
+ },
+ {
+  "rule": "/api/shipping/connect",
+  "methods": "POST"
+ },
+ {
+  "rule": "/api/shipping/createShipment",
+  "methods": "POST"
+ },
+ {
+  "rule": "/api/shipping/disconnect",
+  "methods": "POST"
+ },
+ {
+  "rule": "/api/shipping/status",
+  "methods": "GET"
+ },
+ {
+  "rule": "/api/submitRating",
+  "methods": "POST"
+ },
+ {
+  "rule": "/api/support/myTickets",
+  "methods": "GET"
+ },
+ {
+  "rule": "/api/support/submit",
+  "methods": "POST"
+ },
+ {
+  "rule": "/api/team/addMember",
+  "methods": "POST"
+ },
+ {
+  "rule": "/api/team/deleteMember",
+  "methods": "POST"
+ },
+ {
+  "rule": "/api/team/listMembers",
+  "methods": "GET"
+ },
+ {
+  "rule": "/api/team/updateMember",
+  "methods": "POST"
+ },
+ {
+  "rule": "/api/trackOrder",
+  "methods": "GET"
+ },
+ {
+  "rule": "/api/tracking/getSettings",
+  "methods": "GET"
+ },
+ {
+  "rule": "/api/tracking/public",
+  "methods": "GET"
+ },
+ {
+  "rule": "/api/tracking/save",
+  "methods": "POST"
+ },
+ {
+  "rule": "/api/updateBotSettings",
+  "methods": "POST"
+ },
+ {
+  "rule": "/api/updateOrderDelivery",
+  "methods": "POST"
+ },
+ {
+  "rule": "/api/updateStatus",
+  "methods": "POST"
+ },
+ {
+  "rule": "/api/updateStoreSettings",
+  "methods": "POST"
+ },
+ {
+  "rule": "/api/updateUserPlan",
+  "methods": "POST"
+ },
+ {
+  "rule": "/api/uploadImage",
+  "methods": "POST"
+ },
+ {
+  "rule": "/api/woo/connect",
+  "methods": "POST"
+ },
+ {
+  "rule": "/api/woo/disconnect",
+  "methods": "POST"
+ },
+ {
+  "rule": "/api/woo/status",
+  "methods": "GET"
+ },
+ {
+  "rule": "/api/woo/sync",
+  "methods": "POST"
+ },
+ {
+  "rule": "/callback",
+  "methods": "GET"
+ },
+ {
+  "rule": "/fb-disconnect",
+  "methods": "POST"
+ },
+ {
+  "rule": "/fb-status",
+  "methods": "GET"
+ },
+ {
+  "rule": "/health",
+  "methods": "GET"
+ },
+ {
+  "rule": "/healthz",
+  "methods": "GET"
+ },
+ {
+  "rule": "/lp/<page_id>",
+  "methods": "GET"
+ },
+ {
+  "rule": "/privacy",
+  "methods": "GET"
+ },
+ {
+  "rule": "/static/<path:filename>",
+  "methods": "GET"
+ },
+ {
+  "rule": "/terms",
+  "methods": "GET"
+ },
+ {
+  "rule": "/webhook",
+  "methods": "GET,POST"
+ }
+]

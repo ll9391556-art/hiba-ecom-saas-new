@@ -122,7 +122,7 @@ def test_health_checks_firebase(client, app, monkeypatch):
     class UnavailableError(Exception):
         pass
 
-    monkeypatch.setattr(app, "sleep", lambda s: None)
+    monkeypatch.setattr("core.db.sleep", lambda s: None)  # retry يعيش فـ core.db
     monkeypatch.setattr(fakes.FakeReference, "get", lambda *a, **k: (_ for _ in ()).throw(UnavailableError()))
     r = client.get("/health")
     assert r.status_code == 503 and r.get_json()["firebase"] is False
