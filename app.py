@@ -282,6 +282,7 @@ _rate_limit_lock      = threading.Lock()
 _settings_cache: dict = {}
 _settings_cache_lock  = threading.Lock()
 _CACHE_TTL            = 120
+_NEG_CACHE_TTL        = 30   # قناة مجهولة (ما عندها channel_index) — كاش قصير
 
 # منع تكرار تسجيل نفس الطلب من البوت عدة مرات لنفس المحادثة
 _recent_bot_orders: dict   = {}
@@ -525,21 +526,15 @@ def _under_cap(uid, usage_field, cap_field):
 LIFETIME_MAX_SLOTS = 50
 
 def _get_user_record(uid):
+    """uid → users/{username} عبر uid_index فقط. قبل: كان يقرا /users كاملة كي يغيب الفهرس —
+    ومسار عام (addOrder بـ userId عشوائي) كان يقدر يفرض هاد التنزيل. الحسابات القديمة بلا فهرس
+    تتصلّح بـ /api/admin/rebuildIndexes."""
     try:
         uname = _fb_get(f"uid_index/{uid}")
         if uname:
             rec = _fb_get(f"users/{uname}")
             if isinstance(rec, dict) and str(rec.get("User_ID", "")) == str(uid):
                 return rec
-        # فهرس ناقص (مستخدم قديم) — بحث كامل مرة وحدة فقط، ثم نصلّح الفهرس تلقائياً
-        users = _fb_get("users") or {}
-        for uname2, u in users.items():
-            if isinstance(u, dict) and str(u.get("User_ID", "")) == str(uid):
-                try:
-                    _fb_put(f"uid_index/{uid}", uname2)
-                except Exception:
-                    pass
-                return u
     except Exception:
         pass
     return {}
@@ -547,12 +542,37 @@ def _get_user_record(uid):
 def get_user_plan(uid):
     return str(_get_user_record(uid).get("plan", "starter")).lower()
 
+# ── فهارس الأسماء وعدّاد lifetime (بدل قراءة /users و/team_users كاملة) ──
+# uname_index/{lower} → مفتاح users، team_uname_index/{lower} → مفتاح team_users.
+# counters/lifetimeAccounts يتحدّث بـ transaction مع كل تغيير خطة من/إلى lifetime/full.
+_LIFETIME_PLANS = ("lifetime", "full")
+
+def _uname_key(username):
+    return str(username or "").strip().lower()
+
+def _username_taken(username):
+    """اسم مستعمل (بلا اعتبار الحروف الكبيرة) عند صاحب حساب أو عضو فريق؟"""
+    key = _uname_key(username)
+    return bool(_fb_get(f"uname_index/{key}") or _fb_get(f"team_uname_index/{key}")
+                or _fb_get(f"users/{username}") or _fb_get(f"team_users/{username}"))
+
 def _count_lifetime_accounts():
     try:
-        users = _fb_get("users") or {}
-        return sum(1 for u in users.values() if isinstance(u, dict) and u.get("plan") in ("lifetime", "full"))
+        return max(0, int(_fb_get("counters/lifetimeAccounts") or 0))
     except Exception:
         return 0
+
+class _LifetimeFull(Exception):
+    pass
+
+def _adjust_lifetime_counter(delta, cap=None):
+    """+1/-1 ذرّياً. مع cap: يرمي _LifetimeFull إذا الحد وصل (بلا كتابة)."""
+    def _txn(cur):
+        cur = max(0, int(cur or 0))
+        if cap is not None and delta > 0 and cur + delta > cap:
+            raise _LifetimeFull()
+        return max(0, cur + delta)
+    _firebase_ref("counters/lifetimeAccounts").transaction(_txn)
 
 # ── حماية حقول حساب المستخدم من التعديل الذاتي (Mass Assignment) ─────
 # قبل: /api/updateBotSettings و /api/saas (action=updateBotSettings) كانا يدمجان
@@ -1084,34 +1104,29 @@ def api_login():
     if not user or not pwd:
         return err_json("Missing credentials")
 
-    # 1) نحاول أولاً كصاحب حساب رئيسي (owner) — عقدة users/
-    users = _fb_get("users") or {}
-    if isinstance(users, dict):
-        for key, udata in users.items():
-            if not isinstance(udata, dict): continue
-            if str(udata.get("Username") or "").lower() != user.lower():
-                continue
-            stored_pw = str(udata.get("Password") or "")
-            if not _verify_password(pwd, stored_pw):
-                return err_json("Invalid credentials", 401)
-            if not _is_bcrypt_hash(stored_pw):
-                _fb_patch(f"users/{key}", {"Password": _hash_password(pwd)})
-            token = issue_token(udata.get("User_ID", ""), udata.get("Username", user), role="owner")
-            safe  = {k: v for k, v in udata.items() if k != "Password"}
-            safe["token"] = token
-            safe["role"]  = "owner"
-            return ok_json(safe)
+    # 1) نحاول أولاً كصاحب حساب رئيسي (owner) — users/{key} عبر uname_index (بلا اعتبار
+    #    الحروف الكبيرة). قبل: قراءة /users كاملة (توكنات كل التجار) فكل تسجيل دخول.
+    #    حساب قديم بلا فهرس: المفتاح بنفس الاسم بالضبط، حتى تتعدّى rebuildIndexes.
+    owner_key = _fb_get(f"uname_index/{_uname_key(user)}") or user
+    udata = _fb_get(f"users/{owner_key}")
+    if isinstance(udata, dict) and str(udata.get("Username") or "").lower() == user.lower():
+        stored_pw = str(udata.get("Password") or "")
+        if not _verify_password(pwd, stored_pw):
+            return err_json("Invalid credentials", 401)
+        if not _is_bcrypt_hash(stored_pw):
+            _fb_patch(f"users/{owner_key}", {"Password": _hash_password(pwd)})
+        token = issue_token(udata.get("User_ID", ""), udata.get("Username", user), role="owner")
+        safe  = {k: v for k, v in udata.items() if k != "Password"}
+        safe["token"] = token
+        safe["role"]  = "owner"
+        return ok_json(safe)
 
-    # 2) لم يُوجد كصاحب حساب — نحاول كعضو فريق (team member) — عقدة team_users/
-    member = _fb_get(f"team_users/{user}")
-    member_key = user
-    if not member or not isinstance(member, dict):
-        all_members = _fb_get("team_users") or {}
+    # 2) لم يُوجد كصاحب حساب — نحاول كعضو فريق — team_users/{key} عبر team_uname_index
+    #    (قبل: قراءة /team_users كاملة كي ما يطابقش الاسم المفتاح بالضبط)
+    member_key = _fb_get(f"team_uname_index/{_uname_key(user)}") or user
+    member = _fb_get(f"team_users/{member_key}")
+    if not isinstance(member, dict) or str(member.get("Username") or member_key).lower() != user.lower():
         member = None
-        if isinstance(all_members, dict):
-            for k, m in all_members.items():
-                if isinstance(m, dict) and str(m.get("Username") or "").lower() == user.lower():
-                    member = m; member_key = k; break
     if member and isinstance(member, dict):
         stored_pw = str(member.get("Password") or "")
         if not _verify_password(pwd, stored_pw):
@@ -1187,7 +1202,7 @@ def api_team_add_member():
         return err_json("ميزة الفريق غير متاحة لخطتك الحالية", 403)
     if _count_team_members(uid) >= MAX_TEAM_MEMBERS:
         return err_json(f"وصلت للحد الأقصى ({MAX_TEAM_MEMBERS}) من أعضاء الفريق", 409)
-    if _fb_get(f"users/{username}") or _fb_get(f"team_users/{username}"):
+    if _username_taken(username):
         return err_json("اسم المستخدم مستعمل من قبل", 409)
     now = time.strftime("%Y-%m-%d %H:%M")
     record_public = {"name": name, "permissions": perms, "active": True, "created_at": now}
@@ -1198,6 +1213,7 @@ def api_team_add_member():
     }
     _fb_put(f"data/{uid}/teamMembers/{username}", record_public)
     _fb_put(f"team_users/{username}", record_login)
+    _fb_put(f"team_uname_index/{_uname_key(username)}", username)
     return ok_json({"username": username})
 
 @app.route("/api/team/updateMember", methods=["POST"])
@@ -1241,6 +1257,8 @@ def api_team_delete_member():
         return err_json("العضو غير موجود", 404)
     _fb_delete(f"data/{uid}/teamMembers/{username}")
     _fb_delete(f"team_users/{username}")
+    if _fb_get(f"team_uname_index/{_uname_key(username)}") == username:
+        _fb_delete(f"team_uname_index/{_uname_key(username)}")
     from features.assistant_api import log_audit_entry
     log_audit_entry(uid, request.auth_member_username or "owner", f"حذف عضو فريق {username}")
     return ok_json(True)
@@ -2593,9 +2611,33 @@ def api_update_bot_settings():
     # حماية Mass Assignment: نستثني الحقول الحساسة (plan/source/Password/User_ID/Username)
     # قبل الدمج — هذا المسار مخصص فقط لإعدادات البوت وليس لبيانات الحساب/الخطة.
     d = _sanitize_bot_settings_patch(d)
+    return _save_bot_settings(username, uid, d)
+
+# معرّفات القنوات فـ users/{username}: كل وحدة عندها channel_index/{id} → username، باش
+# webhook يلقى التاجر بقراءتين بلا مسح /users. SEC-009: معرّف مربوط بحساب آخر يترفض.
+_CHANNEL_FIELDS = ("page_id_FB", "Page_ID_instgram", "page_id_instagram", "phone_number_id")
+
+def _channel_ids(rec):
+    return {str(rec.get(f) or "").strip() for f in _CHANNEL_FIELDS} - {""}
+
+def _save_bot_settings(username, uid, patch):
     existing = _fb_get(f"users/{username}") or {}
-    updated  = {**existing, **d, "Username": username, "User_ID": uid}
-    _fb_put(f"users/{username}", updated)
+    updated  = {**existing, **patch, "Username": username, "User_ID": uid}
+    old_ids, new_ids = _channel_ids(existing), _channel_ids(updated)
+    for cid in new_ids:
+        if not cid.isdigit():
+            return err_json(f"معرّف غير صالح: {cid} — أرقام فقط")
+    for cid in new_ids - old_ids:
+        owner = _fb_get(f"channel_index/{cid}")
+        if owner and owner != username:
+            return err_json(f"المعرّف {cid} مربوط بحساب آخر", 409)
+    if not _fb_put(f"users/{username}", updated):
+        return err_json("Firebase unavailable", 503)
+    for cid in new_ids:
+        _fb_put(f"channel_index/{cid}", username)
+    for cid in old_ids - new_ids:
+        if _fb_get(f"channel_index/{cid}") == username:
+            _fb_delete(f"channel_index/{cid}")
     with _settings_cache_lock:
         _settings_cache.clear()
     return ok_json(True)
@@ -2710,9 +2752,17 @@ def api_update_user_plan():
     if not uid or not username: return err_json("Missing fields")
     if plan not in PLANS: return err_json(f"Invalid plan: {list(PLANS.keys())}")
     existing = _fb_get(f"users/{username}") or {}
+    was_lifetime = str(existing.get("plan", "")).lower() in _LIFETIME_PLANS
     existing["plan"]         = plan
     existing["plan_updated"] = time.strftime("%Y-%m-%d %H:%M")
     _fb_put(f"users/{username}", existing)
+    # عدّاد lifetime يتبع الانتقال من/إلى lifetime/full (lifetime↔full ما يبدّلوش)
+    now_lifetime = plan in _LIFETIME_PLANS
+    if was_lifetime != now_lifetime:
+        try:
+            _adjust_lifetime_counter(1 if now_lifetime else -1)
+        except Exception as e:
+            logging.error(f"lifetime counter update failed: {type(e).__name__} — شغّل rebuildIndexes")
     return ok_json({"plan": plan})
 
 @app.route("/api/admin/createClient", methods=["POST"])
@@ -2728,16 +2778,28 @@ def api_admin_create_client():
     if not username or not password: return err_json("اسم المستخدم وكلمة السر مطلوبين")
     if len(password) < 6: return err_json("كلمة السر قصيرة جداً (6 أحرف على الأقل)")
     if plan not in PLANS: return err_json(f"خطة غير صحيحة: {list(PLANS.keys())}")
-    if plan in ("lifetime", "full") and _count_lifetime_accounts() >= LIFETIME_MAX_SLOTS:
-        return err_json(f"تم الوصول للحد الأقصى ({LIFETIME_MAX_SLOTS}) من عروض Lifetime", 409)
-    if _fb_get(f"users/{username}"): return err_json("اسم المستخدم مستعمل من قبل", 409)
+    if _username_taken(username): return err_json("اسم المستخدم مستعمل من قبل", 409)
+    if plan in _LIFETIME_PLANS:
+        # حجز خانة lifetime ذرّياً قبل إنشاء الحساب (بدل عدّ /users كاملة)
+        try:
+            _adjust_lifetime_counter(1, cap=LIFETIME_MAX_SLOTS)
+        except _LifetimeFull:
+            return err_json(f"تم الوصول للحد الأقصى ({LIFETIME_MAX_SLOTS}) من عروض Lifetime", 409)
+        except Exception as e:
+            logging.error(f"lifetime counter reserve failed: {type(e).__name__}")
+            return err_json("Firebase unavailable", 503)
     new_uid = str(int(time.time() * 1000))
-    _fb_put(f"users/{username}", {
+    if not _fb_put(f"users/{username}", {
         "Username": username, "Password": _hash_password(password),
         "User_ID": new_uid, "plan": plan, "source": source,
         "plan_updated": time.strftime("%Y-%m-%d %H:%M"),
-    })
+    }):
+        if plan in _LIFETIME_PLANS:
+            try: _adjust_lifetime_counter(-1)
+            except Exception: pass
+        return err_json("Firebase unavailable", 503)
     _fb_put(f"uid_index/{new_uid}", username)
+    _fb_put(f"uname_index/{_uname_key(username)}", username)
     _fb_put(f"data/{new_uid}/storeSettings", {
         "name": store_name, "tagline": "", "logo": "🛒", "lang": "AR", "currency": "DZD",
     })
@@ -2747,9 +2809,64 @@ def api_admin_create_client():
 @app.route("/api/admin/rebuildIndexes", methods=["POST"])
 @require_admin
 def api_admin_rebuild_indexes():
-    """تعبئة لمرة وحدة بعد deploy: يزيد createdAt/updatedAt/phoneDigits للطلبات القديمة
-    (اللي تكتبت قبل _save_order). idempotent: الطلبات الصحيحة ما تتكتبش، وباقي الحقول
-    ما تتمسّش. كتابة وحدة (update متعدد المسارات) لكل تاجر."""
+    """تعبئة لمرة وحدة بعد كل deploy يزيد فهرس (idempotent — تقدر تعاودها):
+    - orders: createdAt/updatedAt/phoneDigits للطلبات القديمة.
+    - users: uname_index، uid_index، team_uname_index، channel_index، وعدّاد lifetime.
+    هادي الوحيدة (مع listClients) اللي تقرا /users و/team_users كاملة — بالقصد، مرة وحدة."""
+    users_res = _rebuild_user_indexes()
+    if users_res is None:
+        return err_json("Firebase unavailable", 503)
+    orders_res = _rebuild_order_fields()
+    if isinstance(orders_res, tuple):
+        return orders_res
+    return ok_json({"orders": orders_res, "users": users_res})
+
+def _rebuild_user_indexes():
+    # _fb_get يرجّع None للـ "ما كاينش" وللخطأ معاً — نتأكدو أولاً أن Firebase يجاوب
+    if _fb_keys("/") is None:
+        return None
+    as_dict = lambda v: v if isinstance(v, dict) else {}
+    users, members = as_dict(_fb_get("users")), as_dict(_fb_get("team_users"))
+    existing_channels = as_dict(_fb_get("channel_index"))
+    patch, conflicts, unames, claims = {}, [], {}, {}
+    lifetime = 0
+    for key, u in users.items():
+        if not isinstance(u, dict):
+            continue
+        lower = _uname_key(u.get("Username") or key)
+        if lower in unames:
+            conflicts.append(f"uname_index/{lower}: {unames[lower]} vs {key}")
+        else:
+            unames[lower] = key
+            patch[f"uname_index/{lower}"] = key
+        if u.get("User_ID"):
+            patch[f"uid_index/{u['User_ID']}"] = key
+        if str(u.get("plan", "")).lower() in _LIFETIME_PLANS:
+            lifetime += 1
+        for cid in _channel_ids(u):
+            if cid.isdigit():
+                claims.setdefault(cid, []).append(key)
+    for cid, claimants in claims.items():
+        current = existing_channels.get(cid)
+        owner = current if current in claimants else claimants[0]
+        patch[f"channel_index/{cid}"] = owner
+        conflicts += [f"channel_index/{cid}: {owner} vs {other}" for other in claimants if other != owner]
+    for key, m in members.items():
+        if not isinstance(m, dict):
+            continue
+        lower = _uname_key(m.get("Username") or key)
+        if lower in unames:
+            conflicts.append(f"team_uname_index/{lower}: owner {unames[lower]} vs member {key}")
+        patch[f"team_uname_index/{lower}"] = key
+    patch["counters/lifetimeAccounts"] = lifetime
+    if not _fb_patch("/", patch):
+        return None
+    if conflicts:
+        logging.warning(f"🔧 rebuildIndexes: {len(conflicts)} conflicts — راجعهم يدوياً")
+    return {"users": len(unames), "members": len(members), "lifetimeAccounts": lifetime,
+            "conflicts": conflicts}
+
+def _rebuild_order_fields():
     uids = _fb_keys("data")
     if uids is None:
         return err_json("Firebase unavailable", 503)
@@ -2781,7 +2898,7 @@ def api_admin_rebuild_indexes():
         if patch and not _fb_patch(f"data/{uid}/orders", patch):
             return err_json(f"write failed for merchant {uid}", 500)
     logging.info(f"🔧 rebuildIndexes: orders merchants={merchants} checked={checked} updated={updated}")
-    return ok_json({"orders": {"merchants": merchants, "checked": checked, "updated": updated}})
+    return {"merchants": merchants, "checked": checked, "updated": updated}
 
 @app.route("/api/admin/listClients", methods=["GET"])
 @require_admin
@@ -2881,9 +2998,7 @@ def api_saas():
             data = _sanitize_bot_settings_patch(data)
             if not data:
                 return ok_json(True)
-            _fb_patch(f"users/{auth_username}", data)
-            with _settings_cache_lock: _settings_cache.clear()
-            return ok_json(True)
+            return _save_bot_settings(auth_username, auth_uid, data)
         return err_json("unknown_action")
     except Exception as e:
         logging.error(f"/api/saas: {e}")
@@ -2895,7 +3010,8 @@ def get_user_settings(identifier):
     if not identifier: return None
     with _settings_cache_lock:
         cached = _settings_cache.get(identifier)
-        if cached and time.time() - cached["ts"] < _CACHE_TTL:
+        ttl = _CACHE_TTL if (cached and cached["data"] is not None) else _NEG_CACHE_TTL
+        if cached and time.time() - cached["ts"] < ttl:
             return cached["data"]
     try:
         uname = _fb_get(f"channel_index/{identifier}")
@@ -2910,23 +3026,11 @@ def get_user_settings(identifier):
                     with _settings_cache_lock:
                         _settings_cache[identifier] = {"data": data, "ts": time.time()}
                     return data
-        # فهرس ناقص أو غير محدّث — بحث كامل مرة، ثم تصحيح الفهرس تلقائياً
-        users = _fb_get("users")
-        if not users: return None
-        for uname2, data in users.items():
-            if not isinstance(data, dict): continue
-            ids = [str(data.get("page_id_FB") or "").strip(),
-                   str(data.get("Page_ID_instgram") or "").strip(),
-                   str(data.get("page_id_instagram") or "").strip(),
-                   str(data.get("phone_number_id") or "").strip()]
-            if identifier in ids:
-                try:
-                    _fb_put(f"channel_index/{identifier}", uname2)
-                except Exception:
-                    pass
-                with _settings_cache_lock:
-                    _settings_cache[identifier] = {"data": data, "ts": time.time()}
-                return data
+        # قبل: فهرس ناقص → قراءة /users كاملة فكل webhook لقناة مجهولة. دابا channel_index
+        # يتكتب عند حفظ إعدادات البوت (_sync_channel_index) والربط بفيسبوك، والقديم بـ
+        # rebuildIndexes. قناة مجهولة: نتذكّروها شوية باش ما نعاودوش نقراو فكل رسالة.
+        with _settings_cache_lock:
+            _settings_cache[identifier] = {"data": None, "ts": time.time()}
         return None
     except Exception as e:
         logging.error(f"get_user_settings: {e}"); return None
