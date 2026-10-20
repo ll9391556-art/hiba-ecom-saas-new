@@ -63,12 +63,12 @@ def test_load_older_pages_without_gaps_or_overlap(client, db, owner):
 def test_since_returns_only_changed_orders(client, db, owner, app, monkeypatch):
     uid = owner["uid"]
     _seed(db, uid, 50)
-    monkeypatch.setattr(app, "_now_ms", lambda: T0 + 10_000_000)
+    monkeypatch.setattr("services.orders._now_ms", lambda: T0 + 10_000_000)
     _, first = _get(client, owner)
     cursor = first["cursor"]
     assert cursor == T0 + 10_000_000 - app._ORDERS_CURSOR_MARGIN_MS
     # طلب قديم يتبدّل حالته بعد التحميل
-    monkeypatch.setattr(app, "_now_ms", lambda: T0 + 10_000_500)
+    monkeypatch.setattr("services.orders._now_ms", lambda: T0 + 10_000_500)
     r = client.post("/api/updateStatus", json={"orderId": f"ORD-{T0 + 3}", "status": "Refused"},
                     headers=owner["headers"])
     assert r.status_code == 200

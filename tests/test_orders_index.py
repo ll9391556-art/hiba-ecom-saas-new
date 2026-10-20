@@ -17,7 +17,7 @@ ADMIN = {"X-Admin-Key": "dummy-admin-key"}
 def clock(app, monkeypatch):
     """_now_ms يزيد بـ 1000 فكل نداء — باش نفرّقو createdAt على updatedAt."""
     ticks = itertools.count(1_700_000_000_000, 1000)
-    monkeypatch.setattr(app, "_now_ms", lambda: next(ticks))
+    monkeypatch.setattr("services.orders._now_ms", lambda: next(ticks))
 
 
 @pytest.fixture

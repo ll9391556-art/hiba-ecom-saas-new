@@ -13,3 +13,11 @@ def _cents(v):
         return int(round(float(v) * 100))
     except (TypeError, ValueError):
         return 0
+
+
+
+
+def _mask_id(v):
+    """للسجلات فقط: آخر 4 أحرف من معرّف الزبون (فواتساب = رقم هاتفه)."""
+    s = str(v or "")
+    return ("…" + s[-4:]) if len(s) > 4 else "…"

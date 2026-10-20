@@ -36,7 +36,72 @@ from core.db import (_FB_TRANSIENT_ERRORS, _fb_is_transient, _fb_call, _fb_get, 
                      _fb_put, _fb_patch, _fb_delete, _fb_push, _fb_list, _firebase_ref)
 from core.http import ok_json, err_json, _opt_int_arg, _opt_float_arg
 from core.audit import log_audit_entry
-from core.util import _safe_int, _cents
+# Phase 4 / A4: services/ — منطق الأعمال (الطلبات والمجاميع، الحسابات، الكوبونات)
+import services.orders as _orders_svc  # _now_ms: الاختبارات تعدّلو فـ services.orders
+from services.orders import (
+    _store_products_cache,
+    _store_products_cache_lock,
+    _STORE_CACHE_TTL,
+    _order_created_ms,
+    _phone_digits,
+    _with_index_fields,
+    _save_order,
+    _AGG_ORDER_FIELDS,
+    _patch_order,
+    _SOLD_STATUSES,
+    _STAT_COUNTERS,
+    _agg_key,
+    _order_contrib,
+    _stats_delta,
+    _add_to_stats,
+    _compute_stats,
+    _customer_from_orders,
+    _compute_customers,
+    _refresh_customer,
+    _invalidate_store_cache,
+    _CUSTOMER_FIELDS,
+    _apply_order_change,
+    _add_rating_to_stats,
+    _get_stats,
+    _sold_by_name,
+    _stock_fields,
+    _recompute_aggregates,
+    _ship_values,
+    _calc_order_profit,
+    _rebuild_order_fields,
+)
+from services.users import (
+    _settings_cache,
+    _settings_cache_lock,
+    _CACHE_TTL,
+    _NEG_CACHE_TTL,
+    _count_team_members,
+    _usage_month_key,
+    _get_usage,
+    _increment_usage,
+    _plan_cap,
+    _under_cap,
+    _get_user_record,
+    get_user_plan,
+    _LIFETIME_PLANS,
+    _uname_key,
+    _username_taken,
+    _count_lifetime_accounts,
+    _LifetimeFull,
+    _adjust_lifetime_counter,
+    _PROTECTED_USER_FIELDS,
+    _sanitize_bot_settings_patch,
+    planHas_server,
+    _CHANNEL_FIELDS,
+    _channel_ids,
+    _save_bot_settings,
+    _rebuild_user_indexes,
+)
+from services.coupons import (
+    _validate_and_apply_coupon,
+    _increment_coupon_usage,
+)
+from core.util import _safe_int, _cents, _mask_id
 from core.security import (
     _encrypt_secret, _decrypt_secret, issue_token, decode_token, _extract_bearer,
     require_auth, require_perm, require_admin, require_owner,
@@ -100,9 +165,6 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=_TRUSTED_PROXY_HOPS, x_proto=1, x_ho
 # /api/getOAuthState وحدو يقبل credentials: يحط كوكي nonce ديال ربط فيسبوك (SEC-004).
 CORS(app, resources={r"/api/getOAuthState": {"origins": _ALLOWED_ORIGINS, "supports_credentials": True},
                      r"/*": {"origins": _ALLOWED_ORIGINS}}, supports_credentials=False)
-_store_products_cache = {}
-_store_products_cache_lock = threading.Lock()
-_STORE_CACHE_TTL = 30  # ثواني — توازن بين حداثة المخزون وتخفيف الحمل
 
 _executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="bot_worker")
 
@@ -111,10 +173,6 @@ threading.Thread(target=_cleanup_login_attempts, daemon=True).start()
 
 last_msg_time: dict   = {}
 _rate_limit_lock      = threading.Lock()
-_settings_cache: dict = {}
-_settings_cache_lock  = threading.Lock()
-_CACHE_TTL            = 120
-_NEG_CACHE_TTL        = 30   # قناة مجهولة (ما عندها channel_index) — كاش قصير
 
 # منع تكرار تسجيل نفس الطلب من البوت عدة مرات لنفس المحادثة
 _recent_bot_orders: dict   = {}
@@ -178,12 +236,6 @@ def _init_firebase():
 _init_firebase()
 
 
-def _mask_id(v):
-    """للسجلات فقط: آخر 4 أحرف من معرّف الزبون (فواتساب = رقم هاتفه)."""
-    s = str(v or "")
-    return ("…" + s[-4:]) if len(s) > 4 else "…"
-
-
 def is_rate_limited(user_id, platform="fb", window=2):
     key = f"{platform}:{user_id}"
     now = time.time()
@@ -195,111 +247,6 @@ def is_rate_limited(user_id, platform="fb", window=2):
 
 # ── Plans ─────────────────────────────────────────────────
 # PLANS والثوابت فـ core/config.py
-
-def _count_team_members(owner_uid):
-    try:
-        raw = _fb_get(f"data/{owner_uid}/teamMembers") or {}
-        return len([1 for v in raw.values() if isinstance(v, dict)])
-    except Exception:
-        return 0
-
-# ── تتبع الاستهلاك الشهري ──────────────────────────────────
-def _usage_month_key():
-    return time.strftime("%Y-%m")
-
-def _get_usage(uid, field):
-    val = _fb_get(f"data/{uid}/usage/{_usage_month_key()}/{field}") or 0
-    try: return int(val)
-    except Exception: return 0
-
-def _increment_usage(uid, field):
-    path = f"data/{uid}/usage/{_usage_month_key()}/{field}"
-    try:
-        ref = _firebase_ref(path)
-        new_val = ref.transaction(lambda current: (current or 0) + 1)
-        return new_val if isinstance(new_val, int) else _get_usage(uid, field)
-    except Exception as e:
-        logging.error(f"_increment_usage transaction failed, fallback: {e}")
-        new_val = _get_usage(uid, field) + 1
-        _fb_put(path, new_val)
-        return new_val
-
-def _plan_cap(uid, cap_field):
-    plan = get_user_plan(uid)
-    return PLANS.get(plan, {}).get(cap_field)
-
-def _under_cap(uid, usage_field, cap_field):
-    cap = _plan_cap(uid, cap_field)
-    if not cap: return True
-    return _get_usage(uid, usage_field) < cap
-
-
-def _get_user_record(uid):
-    """uid → users/{username} عبر uid_index فقط. قبل: كان يقرا /users كاملة كي يغيب الفهرس —
-    ومسار عام (addOrder بـ userId عشوائي) كان يقدر يفرض هاد التنزيل. الحسابات القديمة بلا فهرس
-    تتصلّح بـ /api/admin/rebuildIndexes."""
-    try:
-        uname = _fb_get(f"uid_index/{uid}")
-        if uname:
-            rec = _fb_get(f"users/{uname}")
-            if isinstance(rec, dict) and str(rec.get("User_ID", "")) == str(uid):
-                return rec
-    except Exception:
-        pass
-    return {}
-
-def get_user_plan(uid):
-    return str(_get_user_record(uid).get("plan", "starter")).lower()
-
-# ── فهارس الأسماء وعدّاد lifetime (بدل قراءة /users و/team_users كاملة) ──
-# uname_index/{lower} → مفتاح users، team_uname_index/{lower} → مفتاح team_users.
-# counters/lifetimeAccounts يتحدّث بـ transaction مع كل تغيير خطة من/إلى lifetime/full.
-_LIFETIME_PLANS = ("lifetime", "full")
-
-def _uname_key(username):
-    return str(username or "").strip().lower()
-
-def _username_taken(username):
-    """اسم مستعمل (بلا اعتبار الحروف الكبيرة) عند صاحب حساب أو عضو فريق؟"""
-    key = _uname_key(username)
-    return bool(_fb_get(f"uname_index/{key}") or _fb_get(f"team_uname_index/{key}")
-                or _fb_get(f"users/{username}") or _fb_get(f"team_users/{username}"))
-
-def _count_lifetime_accounts():
-    try:
-        return max(0, int(_fb_get("counters/lifetimeAccounts") or 0))
-    except Exception:
-        return 0
-
-class _LifetimeFull(Exception):
-    pass
-
-def _adjust_lifetime_counter(delta, cap=None):
-    """+1/-1 ذرّياً. مع cap: يرمي _LifetimeFull إذا الحد وصل (بلا كتابة)."""
-    def _txn(cur):
-        cur = max(0, int(cur or 0))
-        if cap is not None and delta > 0 and cur + delta > cap:
-            raise _LifetimeFull()
-        return max(0, cur + delta)
-    _firebase_ref("counters/lifetimeAccounts").transaction(_txn)
-
-# ── حماية حقول حساب المستخدم من التعديل الذاتي (Mass Assignment) ─────
-# قبل: /api/updateBotSettings و /api/saas (action=updateBotSettings) كانا يدمجان
-# كائن "data"/"payload" القادم كاملاً من جسم الطلب مباشرة داخل عقدة users/{username} —
-# وهي نفس العقدة التي تخزّن plan/source/Password/User_ID. أي مستخدم مسجّل (حتى بخطة
-# Free) كان يقدر يبعث {"data":{"plan":"lifetime"}} ويرقّي نفسه مجاناً، أو يبدّل
-# Username/User_ID/Password عبره. الآن: whitelist صارم يستثني كل الحقول الحساسة قبل
-# أي دمج مع سجل المستخدم — هذه المسارات مخصصة فقط لإعدادات البوت (Gemini key,
-# AI instructions, tokens الخ) وليس لبيانات الحساب/الخطة.
-_PROTECTED_USER_FIELDS = {
-    "plan", "source", "Password", "User_ID", "Username",
-    "plan_updated",
-}
-
-def _sanitize_bot_settings_patch(d):
-    if not isinstance(d, dict):
-        return {}
-    return {k: v for k, v in d.items() if k not in _PROTECTED_USER_FIELDS}
 
 
 # ── Frontend ──────────────────────────────────────────────
@@ -898,257 +845,6 @@ def api_team_delete_member():
     log_audit_entry(uid, request.auth_member_username or "owner", f"حذف عضو فريق {username}")
     return ok_json(True)
 
-def planHas_server(uid, feature):
-    plan = get_user_plan(uid)
-    return bool(PLANS.get(plan, {}).get(feature, False))
-
-# ── Orders ────────────────────────────────────────────────
-# حقول مفهرسة فـ database.rules.json (data/$uid/orders .indexOn): كل كتابة طلب تمر من
-# _save_order / _patch_order باش ما تتنساش، وإلا الاستعلامات (trackOrder...) ما تلقاش الطلب.
-def _now_ms():
-    return int(time.time() * 1000)
-
-def _order_created_ms(order_id, order):
-    """createdAt لطلب قديم بلاه: من المعرّف ORD-<ms>، ولا من حقل date، ولا دابا."""
-    m = re.fullmatch(r"ORD-(\d{12,14})", str(order_id or ""))
-    if m:
-        return int(m.group(1))
-    try:
-        return int(time.mktime(time.strptime(str(order.get("date") or "")[:16], "%Y-%m-%d %H:%M")) * 1000)
-    except Exception:
-        return _now_ms()
-
-def _phone_digits(phone):
-    return re.sub(r"\D", "", str(phone or ""))
-
-def _with_index_fields(order_id, order):
-    out = dict(order)
-    created = out.get("createdAt")
-    if not isinstance(created, (int, float)) or isinstance(created, bool):
-        out["createdAt"] = _order_created_ms(order_id, out)
-    out["updatedAt"]   = _now_ms()
-    out["phoneDigits"] = _phone_digits(out.get("phone"))
-    return out
-
-def _save_order(uid, order_id, order, before=None):
-    """كتابة كاملة لطلب: createdAt يبقى (أو يتحسب لطلب قديم)، updatedAt وphoneDigits يتحدّثو.
-    before = الطلب قبل التعديل (None لطلب جديد) — باش المجاميع تتحدّث بالفرق."""
-    after = _with_index_fields(order_id, order)
-    ok = _fb_put(f"data/{uid}/orders/{order_id}", after)
-    if ok:
-        _apply_order_change(uid, before, after)
-    return ok
-
-# حقول تأثر على المجاميع — patch فيه وحدة منها يقرا الطلب قبل باش يحسب الفرق
-_AGG_ORDER_FIELDS = ("status", "profit", "qty", "product", "phone", "name", "city", "createdAt")
-
-def _patch_order(uid, order_id, patch):
-    patch = dict(patch, updatedAt=_now_ms())
-    if "phone" in patch:
-        patch["phoneDigits"] = _phone_digits(patch["phone"])
-    path = f"data/{uid}/orders/{order_id}"
-    before = _fb_get(path) if any(k in patch for k in _AGG_ORDER_FIELDS) else None
-    ok = _fb_patch(path, patch)
-    if ok and isinstance(before, dict):
-        _apply_order_change(uid, before, {**before, **patch})
-    return ok
-
-# ── المجاميع الجارية (Phase 3 / branch 5) ─────────────────
-# بدل تنزيل كل الطلبات فـ getDashboard/getCustomers/المتجر العام:
-# - data/{uid}/stats: total/confirmed/delivered/refused، profitCents (سنتيمات صحيحة باش
-#   الجمع يكون مضبوط بأي ترتيب)، sales/{key}={name,qty} للطلبات Confirmed/Delivered،
-#   ratings/{key}={name,sum,count}. يتحدّث بالفرق (قبل/بعد) فـ transaction مع كل كتابة طلب.
-# - data/{uid}/customers/{phoneDigits}: يتعاود حسابه كامل لهاد الرقم فقط (استعلام phoneDigits).
-# - المخزون (sold/available/stat) يتحسب وقت القراءة من products + stats.sales.
-# _compute_stats/_compute_customers هي "الحساب الكامل" المرجعي — recalc كيستعملهم، والفرق
-# مبني بنفس الدوال، فالنتيجة متطابقة.
-_SOLD_STATUSES = ("Confirmed", "Delivered")
-_STAT_COUNTERS = ("total", "confirmed", "delivered", "refused", "profitCents")
-
-
-def _agg_key(name):
-    """اسم منتج كمفتاح RTDB. أسماء فيها . $ # [ ] / (طلب عام بنص حر) تتحوّل لـ hash، والاسم
-    الأصلي يبقى داخل القيمة."""
-    s = str(name if name is not None else "")
-    if (s and len(s.encode("utf-8")) <= 700 and not any(c in s for c in ".$#[]/")
-            and all(ord(c) >= 32 and ord(c) != 127 for c in s)):
-        return s
-    return "~" + hashlib.sha1(s.encode("utf-8")).hexdigest()[:20]
-
-def _order_contrib(o):
-    if not isinstance(o, dict):
-        return None
-    st = o.get("status", "")
-    c = {"total": 1, "confirmed": 0, "delivered": 0, "refused": 0, "profitCents": 0, "sales": {}}
-    if st in _SOLD_STATUSES:
-        name = str(o.get("product", "") or "")
-        c["confirmed"]   = 1
-        c["delivered"]   = 1 if st == "Delivered" else 0
-        c["profitCents"] = _cents(o.get("profit", 0))
-        c["sales"][_agg_key(name)] = (name, _safe_int(o.get("qty", 1), 1))
-    elif st == "Refused":
-        c["refused"]     = 1
-        c["profitCents"] = _cents(o.get("profit", 0))
-    return c
-
-def _stats_delta(before, after):
-    d, sales = {k: 0 for k in _STAT_COUNTERS}, {}
-    for sign, o in ((-1, before), (1, after)):
-        c = _order_contrib(o)
-        if not c:
-            continue
-        for k in _STAT_COUNTERS:
-            d[k] += sign * c[k]
-        for key, (name, qty) in c["sales"].items():
-            n, q = sales.get(key, (name, 0))
-            sales[key] = (n, q + sign * qty)
-    sales = {k: v for k, v in sales.items() if v[1]}
-    if not any(d.values()) and not sales:
-        return None
-    d["sales"] = sales
-    return d
-
-def _add_to_stats(stats, delta):
-    stats = dict(stats) if isinstance(stats, dict) else {}
-    for k in _STAT_COUNTERS:
-        stats[k] = _safe_int(stats.get(k, 0)) + delta.get(k, 0)
-    sales = dict(stats.get("sales") or {})
-    for key, (name, q) in delta.get("sales", {}).items():
-        entry = sales.get(key) if isinstance(sales.get(key), dict) else {"name": name, "qty": 0}
-        qty = _safe_int(entry.get("qty", 0)) + q
-        if qty:
-            sales[key] = {"name": entry.get("name", name), "qty": qty}
-        else:
-            sales.pop(key, None)
-    if sales:
-        stats["sales"] = sales
-    else:
-        stats.pop("sales", None)  # RTDB ما يخزّنش {} — نفس الشكل فالحساب والتخزين
-    return stats
-
-def _compute_stats(orders, ratings):
-    """الحساب الكامل المرجعي لـ data/{uid}/stats (recalc / backfill)."""
-    stats = {}
-    for o in (orders or {}).values():
-        delta = _stats_delta(None, o)
-        if delta:
-            stats = _add_to_stats(stats, delta)
-    stats = _add_to_stats(stats, {})  # العدادات موجودة حتى بلا طلبات
-    rmap = {}
-    for product, rs in (ratings or {}).items():
-        vals = [_safe_int(r.get("rating", 0)) for r in (rs or {}).values() if isinstance(r, dict)] \
-            if isinstance(rs, dict) else []
-        if vals:
-            rmap[_agg_key(product)] = {"name": product, "sum": sum(vals), "count": len(vals)}
-    if rmap:
-        stats["ratings"] = rmap
-    return stats
-
-def _customer_from_orders(items):
-    """items = [(order_id, order)] لنفس الرقم. الاسم/المدينة من أقدم طلب (createdAt ثم المعرّف)."""
-    rows = sorted(((k, o) for k, o in items if isinstance(o, dict)),
-                  key=lambda kv: (_safe_int(kv[1].get("createdAt"), 0), str(kv[0])))
-    if not rows:
-        return None
-    first = rows[0][1]
-    st = [o.get("status", "") for _, o in rows]
-    return {"name": first.get("name", ""), "phone": first.get("phone", ""), "city": first.get("city", ""),
-            "totalOrders": len(rows),
-            "stats": {"confirmed": st.count("Confirmed"), "refused": st.count("Refused"),
-                      "delivered": st.count("Delivered")}}
-
-def _compute_customers(orders):
-    """الحساب الكامل المرجعي لـ data/{uid}/customers."""
-    groups = {}
-    for k, o in (orders or {}).items():
-        if isinstance(o, dict):
-            ph = _phone_digits(o.get("phone"))
-            if ph:
-                groups.setdefault(ph, []).append((k, o))
-    return {ph: _customer_from_orders(items) for ph, items in groups.items()}
-
-def _refresh_customer(uid, digits):
-    found = _fb_query(f"data/{uid}/orders", "phoneDigits", equal_to=digits)
-    if found is None:
-        logging.error(f"customer refresh failed for {_mask_id(digits)} — شغّل /api/recalcStats")
-        return
-    cust = _customer_from_orders(found.items())
-    if cust:
-        _fb_put(f"data/{uid}/customers/{digits}", cust)
-    else:
-        _fb_delete(f"data/{uid}/customers/{digits}")
-
-def _invalidate_store_cache(uid):
-    with _store_products_cache_lock:
-        _store_products_cache.pop(str(uid), None)
-
-_CUSTOMER_FIELDS = ("status", "phone", "name", "city", "createdAt")
-
-def _apply_order_change(uid, before, after):
-    """يحدّث المجاميع بعد كتابة طلب (before=None: طلب جديد، after=None: طلب محذوف)."""
-    delta = _stats_delta(before, after)
-    if delta:
-        try:
-            _firebase_ref(f"data/{uid}/stats").transaction(lambda cur: _add_to_stats(cur, delta))
-        except Exception as e:
-            logging.error(f"stats update failed ({type(e).__name__}) — شغّل /api/recalcStats")
-    b = before if isinstance(before, dict) else {}
-    a = after if isinstance(after, dict) else {}
-    if not b or not a or any(b.get(f) != a.get(f) for f in _CUSTOMER_FIELDS):
-        for ph in sorted({_phone_digits(b.get("phone")), _phone_digits(a.get("phone"))} - {""}):
-            _refresh_customer(uid, ph)
-    _invalidate_store_cache(uid)
-
-def _add_rating_to_stats(uid, product, rating):
-    key = _agg_key(product)
-    def _txn(cur):
-        cur = dict(cur) if isinstance(cur, dict) else {}
-        ratings = dict(cur.get("ratings") or {})
-        r = ratings.get(key) if isinstance(ratings.get(key), dict) else {"name": product, "sum": 0, "count": 0}
-        ratings[key] = {"name": r.get("name", product), "sum": _safe_int(r.get("sum")) + int(rating),
-                        "count": _safe_int(r.get("count")) + 1}
-        cur["ratings"] = ratings
-        return cur
-    try:
-        _firebase_ref(f"data/{uid}/stats").transaction(_txn)
-    except Exception as e:
-        logging.error(f"rating stats update failed ({type(e).__name__}) — شغّل /api/recalcStats")
-    _invalidate_store_cache(uid)
-
-def _get_stats(uid):
-    s = _fb_get(f"data/{uid}/stats")
-    return s if isinstance(s, dict) else {}
-
-def _sold_by_name(stats):
-    return {e.get("name", ""): _safe_int(e.get("qty"))
-            for e in (stats.get("sales") or {}).values() if isinstance(e, dict)}
-
-def _stock_fields(product, sold):
-    init      = _safe_int(product.get("init", 0))
-    available = max(0, init - sold)
-    stat      = ("Out of Stock" if available <= 0
-                 else "Low Stock" if available <= LOW_STOCK_THRESHOLD else "In Stock")
-    return {"sold": sold, "available": available, "stat": stat}
-
-def _recompute_aggregates(uid):
-    """recalc كامل لتاجر واحد (قراءة كل الطلبات مرة). ما يكتب والو إذا القراءة فشلات —
-    باش خطأ شبكة ما يصفّرش المجاميع."""
-    try:
-        orders  = _fb_call(lambda: _firebase_ref(f"data/{uid}/orders").get()) or {}
-        ratings = _fb_call(lambda: _firebase_ref(f"data/{uid}/ratings").get()) or {}
-    except Exception as e:
-        logging.error(f"recompute read failed for {uid}: {type(e).__name__}")
-        return None
-    orders  = orders if isinstance(orders, dict) else {}
-    ratings = ratings if isinstance(ratings, dict) else {}
-    stats, customers = _compute_stats(orders, ratings), _compute_customers(orders)
-    if not _fb_put(f"data/{uid}/stats", stats):
-        return None
-    ok = _fb_put(f"data/{uid}/customers", customers) if customers else _fb_delete(f"data/{uid}/customers")
-    if not ok:
-        return None
-    _invalidate_store_cache(uid)
-    return {"orders": len(orders), "customers": len(customers)}
 
 _ORDERS_PAGE_MAX         = 500
 _ORDERS_CURSOR_MARGIN_MS = 30_000  # تداخل آمن: كتابة بطيئة (retry) ما تضيعش من الـ polling
@@ -1173,7 +869,7 @@ def api_get_orders():
         created_after = _opt_int_arg("createdAfter")
     except ValueError:
         return err_json("Invalid paging parameters")
-    started = _now_ms()
+    started = _orders_svc._now_ms()
     if since is not None:
         cap   = _ORDERS_PAGE_MAX
         found = _fb_query(path, "updatedAt", start_at=since, limit_last=cap + 1)
@@ -1197,56 +893,6 @@ def api_get_orders():
         body["reset"] = True  # تبدّلات أكثر من الحد — الواجهة تعاود التحميل من الأول
     return jsonify(body)
 
-def _ship_values(c_data, delivery_type):
-    is_desk = delivery_type == "desk"
-    ship_cust = float(c_data.get("deskCust", 0)) if is_desk else float(c_data.get("custShip", 0))
-    ship_cost = float(c_data.get("deskCost", 0)) if is_desk else float(c_data.get("costShip", 0))
-    return ship_cust, ship_cost
-def _validate_and_apply_coupon(uid, code, subtotal):
-    """يعيد حساب الخصم من قاعدة الكوبونات على السيرفر — لا يثق بأي رقم قادم من الزبون.
-    يرجّع (discount_amount, coupon_code_or_None). عند أي مشكلة يرجّع (0, None) بصمت
-    (الطلب يستمر بلا خصم بدل ما يفشل بالكامل بسبب كود خصم غير صالح)."""
-    code = str(code or "").strip().upper()
-    if not code:
-        return 0.0, None
-    c = _fb_get(f"data/{uid}/coupons/{code}")
-    if not c or not isinstance(c, dict):
-        return 0.0, None
-    if not c.get("active", True):
-        return 0.0, None
-    if c.get("expiresAt"):
-        try:
-            if time.strftime("%Y-%m-%d") > str(c["expiresAt"])[:10]:
-                return 0.0, None
-        except Exception:
-            pass
-    max_uses = int(c.get("maxUses", 0) or 0)
-    used = int(c.get("usedCount", 0) or 0)
-    if max_uses and used >= max_uses:
-        return 0.0, None
-    min_total = float(c.get("minOrderTotal", 0) or 0)
-    if subtotal < min_total:
-        return 0.0, None
-    ctype = c.get("type", "percent")
-    value = float(c.get("value", 0) or 0)
-    discount = (subtotal * value / 100.0) if ctype == "percent" else min(value, subtotal)
-    return round(max(0.0, discount), 2), code
-
-def _increment_coupon_usage(uid, code):
-    try:
-        c = _fb_get(f"data/{uid}/coupons/{code}") or {}
-        new_used = int(c.get("usedCount", 0) or 0) + 1
-        _fb_patch(f"data/{uid}/coupons/{code}", {"usedCount": new_used})
-    except Exception as e:
-        logging.error(f"_increment_coupon_usage: {e}")
-
-def _calc_order_profit(p_data, c_data, qty, delivery_type, status, existing_profit=0.0):
-    ship_cust, ship_cost = _ship_values(c_data, delivery_type)
-    if status in ("Confirmed", "Delivered"):
-        return ((float(p_data.get("sell", 0)) - float(p_data.get("cost", 0))) * int(qty)) + (ship_cust - ship_cost)
-    elif status == "Refused":
-        return -float(c_data.get("returnFee", 0))
-    return existing_profit
 
 @app.route("/api/addOrder", methods=["POST"])
 def api_add_order():
@@ -2421,34 +2067,6 @@ def api_update_bot_settings():
     d = _sanitize_bot_settings_patch(d)
     return _save_bot_settings(username, uid, d)
 
-# معرّفات القنوات فـ users/{username}: كل وحدة عندها channel_index/{id} → username، باش
-# webhook يلقى التاجر بقراءتين بلا مسح /users. SEC-009: معرّف مربوط بحساب آخر يترفض.
-_CHANNEL_FIELDS = ("page_id_FB", "Page_ID_instgram", "page_id_instagram", "phone_number_id")
-
-def _channel_ids(rec):
-    return {str(rec.get(f) or "").strip() for f in _CHANNEL_FIELDS} - {""}
-
-def _save_bot_settings(username, uid, patch):
-    existing = _fb_get(f"users/{username}") or {}
-    updated  = {**existing, **patch, "Username": username, "User_ID": uid}
-    old_ids, new_ids = _channel_ids(existing), _channel_ids(updated)
-    for cid in new_ids:
-        if not cid.isdigit():
-            return err_json(f"معرّف غير صالح: {cid} — أرقام فقط")
-    for cid in new_ids - old_ids:
-        owner = _fb_get(f"channel_index/{cid}")
-        if owner and owner != username:
-            return err_json(f"المعرّف {cid} مربوط بحساب آخر", 409)
-    if not _fb_put(f"users/{username}", updated):
-        return err_json("Firebase unavailable", 503)
-    for cid in new_ids:
-        _fb_put(f"channel_index/{cid}", username)
-    for cid in old_ids - new_ids:
-        if _fb_get(f"channel_index/{cid}") == username:
-            _fb_delete(f"channel_index/{cid}")
-    with _settings_cache_lock:
-        _settings_cache.clear()
-    return ok_json(True)
 
 # ── Conversations / Messages ───────────────────────────────
 @app.route("/api/getConversations", methods=["GET"])
@@ -2720,84 +2338,6 @@ def api_recalc_stats():
         return err_json("Firebase unavailable", 503)
     return ok_json(res)
 
-def _rebuild_user_indexes():
-    # _fb_get يرجّع None للـ "ما كاينش" وللخطأ معاً — نتأكدو أولاً أن Firebase يجاوب
-    if _fb_keys("/") is None:
-        return None
-    as_dict = lambda v: v if isinstance(v, dict) else {}
-    users, members = as_dict(_fb_get("users")), as_dict(_fb_get("team_users"))
-    existing_channels = as_dict(_fb_get("channel_index"))
-    patch, conflicts, unames, claims = {}, [], {}, {}
-    lifetime = 0
-    for key, u in users.items():
-        if not isinstance(u, dict):
-            continue
-        lower = _uname_key(u.get("Username") or key)
-        if lower in unames:
-            conflicts.append(f"uname_index/{lower}: {unames[lower]} vs {key}")
-        else:
-            unames[lower] = key
-            patch[f"uname_index/{lower}"] = key
-        if u.get("User_ID"):
-            patch[f"uid_index/{u['User_ID']}"] = key
-        if str(u.get("plan", "")).lower() in _LIFETIME_PLANS:
-            lifetime += 1
-        for cid in _channel_ids(u):
-            if cid.isdigit():
-                claims.setdefault(cid, []).append(key)
-    for cid, claimants in claims.items():
-        current = existing_channels.get(cid)
-        owner = current if current in claimants else claimants[0]
-        patch[f"channel_index/{cid}"] = owner
-        conflicts += [f"channel_index/{cid}: {owner} vs {other}" for other in claimants if other != owner]
-    for key, m in members.items():
-        if not isinstance(m, dict):
-            continue
-        lower = _uname_key(m.get("Username") or key)
-        if lower in unames:
-            conflicts.append(f"team_uname_index/{lower}: owner {unames[lower]} vs member {key}")
-        patch[f"team_uname_index/{lower}"] = key
-    patch["counters/lifetimeAccounts"] = lifetime
-    if not _fb_patch("/", patch):
-        return None
-    if conflicts:
-        logging.warning(f"🔧 rebuildIndexes: {len(conflicts)} conflicts — راجعهم يدوياً")
-    return {"users": len(unames), "members": len(members), "lifetimeAccounts": lifetime,
-            "conflicts": conflicts}
-
-def _rebuild_order_fields():
-    uids = _fb_keys("data")
-    if uids is None:
-        return err_json("Firebase unavailable", 503)
-    now = _now_ms()
-    merchants = checked = updated = 0
-    for uid in uids:
-        orders = _fb_get(f"data/{uid}/orders")
-        if not isinstance(orders, dict):
-            continue
-        merchants += 1
-        patch = {}
-        for oid, o in orders.items():
-            if not isinstance(o, dict):
-                continue
-            checked += 1
-            fix = {}
-            created = o.get("createdAt")
-            if not isinstance(created, (int, float)) or isinstance(created, bool):
-                fix["createdAt"] = _order_created_ms(oid, o)
-            updated_at = o.get("updatedAt")
-            if not isinstance(updated_at, (int, float)) or isinstance(updated_at, bool):
-                fix["updatedAt"] = now
-            digits = _phone_digits(o.get("phone"))
-            if o.get("phoneDigits") != digits:
-                fix["phoneDigits"] = digits
-            if fix:
-                updated += 1
-                patch.update({f"{oid}/{k}": v for k, v in fix.items()})
-        if patch and not _fb_patch(f"data/{uid}/orders", patch):
-            return err_json(f"write failed for merchant {uid}", 500)
-    logging.info(f"🔧 rebuildIndexes: orders merchants={merchants} checked={checked} updated={updated}")
-    return {"merchants": merchants, "checked": checked, "updated": updated}
 
 @app.route("/api/admin/listClients", methods=["GET"])
 @require_admin

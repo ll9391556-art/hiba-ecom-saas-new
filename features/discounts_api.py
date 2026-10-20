@@ -14,6 +14,7 @@ from app import (
     require_auth, require_perm, _fb_get, _fb_put, _fb_patch, _fb_delete,
     ok_json, err_json, _any_shared_limited,
 )
+from services.coupons import coupon_discount, coupon_problem
 
 discounts_bp = Blueprint("discounts", __name__)
 
@@ -138,27 +139,14 @@ def validate_coupon_public():
         return err_json("محاولات كثيرة جداً — حاول بعد قليل", 429)
 
     c = _fb_get(f"data/{uid}/coupons/{code}")
-    if not c or not isinstance(c, dict):
-        return err_json("كود الخصم غير موجود", 404)
-    if not c.get("active", True):
-        return err_json("كود الخصم غير فعّال حالياً")
-    if c.get("expiresAt"):
-        try:
-            if time.strftime("%Y-%m-%d") > str(c["expiresAt"])[:10]:
-                return err_json("انتهت صلاحية كود الخصم")
-        except Exception:
-            pass
-    max_uses = int(c.get("maxUses", 0) or 0)
-    used = int(c.get("usedCount", 0) or 0)
-    if max_uses and used >= max_uses:
-        return err_json("تم استنفاد هذا الكود بالكامل")
-    min_total = float(c.get("minOrderTotal", 0) or 0)
-    if subtotal < min_total:
-        return err_json(f"الحد الأدنى للطلب لاستعمال هذا الكود هو {min_total}")
+    # نفس التحقق اللي يستعملو addOrder (services/coupons.py)
+    problem = coupon_problem(c, subtotal)
+    if problem:
+        return err_json(problem, 404 if not isinstance(c, dict) or not c else 400)
 
-    discount_amount = (subtotal * c["value"] / 100.0) if c["type"] == "percent" else min(c["value"], subtotal)
+    discount_amount = coupon_discount(c, subtotal)
     return ok_json({
-        "code": code, "type": c["type"], "value": c["value"],
+        "code": code, "type": c.get("type", "percent"), "value": c.get("value", 0),
         "appliesTo": c.get("appliesTo", "all"),
         "discountAmount": round(discount_amount, 2),
     })

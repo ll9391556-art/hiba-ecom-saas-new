@@ -79,7 +79,7 @@ def scenario(client, db, shop, app, monkeypatch):
     """طلبات بأرقام ومنتجات مختلفة، وتنقلات حالة فيها رجوع (Confirmed→Refused...)."""
     uid = shop["uid"]
     ticks = iter(range(1_700_000_000_000, 1_800_000_000_000, 1000))
-    monkeypatch.setattr(app, "_now_ms", lambda: next(ticks))
+    monkeypatch.setattr("services.orders._now_ms", lambda: next(ticks))
     monkeypatch.setattr(app, "is_rate_limited", lambda *a, **k: False)
     a1 = _order(client, uid, "0555 11 11 11", "Sac", 2, "Amina")
     a2 = _order(client, uid, "0555111111", "Montre", 1, "Amina B")
