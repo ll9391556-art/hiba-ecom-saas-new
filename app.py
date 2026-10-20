@@ -1287,12 +1287,55 @@ def _patch_order(uid, order_id, patch):
         patch["phoneDigits"] = _phone_digits(patch["phone"])
     return _fb_patch(f"data/{uid}/orders/{order_id}", patch)
 
+_ORDERS_PAGE_MAX         = 500
+_ORDERS_CURSOR_MARGIN_MS = 30_000  # تداخل آمن: كتابة بطيئة (retry) ما تضيعش من الـ polling
+
+def _opt_int_arg(name):
+    v = str(request.args.get(name, "") or "").strip()
+    return int(v) if v else None   # ValueError على قيمة غير رقمية
+
 @app.route("/api/getOrders", methods=["GET"])
 @require_auth
 @require_perm("orders")
 def api_get_orders():
-    uid = request.auth_uid
-    return ok_json(_fb_list(f"data/{uid}/orders"))
+    """قبل: كل طلبات التاجر فكل نداء (والواجهة تنادي كل 8 ثواني). دابا باستعلامات مفهرسة:
+    - بلا معاملات: آخر `limit` طلب (افتراضياً 200) حسب createdAt.
+    - before=<createdAt>: الصفحة الأقدم ("تحميل الأقدم").
+    - since=<cursor>: غير الطلبات اللي تبدّلت (updatedAt >= cursor). reset=true إذا كثار بزاف.
+    - createdAfter=<ms>: الطلبات الجديدة من تاريخ (منحنى الأرباح).
+    data تبقى لائحة (الأحدث أولاً)؛ cursor وhasMore فنفس الرد."""
+    uid  = request.auth_uid
+    path = f"data/{uid}/orders"
+    try:
+        limit         = max(1, min(int(request.args.get("limit") or 200), _ORDERS_PAGE_MAX))
+        since         = _opt_int_arg("since")
+        before        = _opt_int_arg("before")
+        created_after = _opt_int_arg("createdAfter")
+    except ValueError:
+        return err_json("Invalid paging parameters")
+    started = _now_ms()
+    if since is not None:
+        cap   = _ORDERS_PAGE_MAX
+        found = _fb_query(path, "updatedAt", start_at=since, limit_last=cap + 1)
+    elif created_after is not None:
+        cap   = _ORDERS_PAGE_MAX
+        found = _fb_query(path, "createdAt", start_at=created_after, limit_last=cap + 1)
+    else:
+        cap   = limit
+        found = _fb_query(path, "createdAt", end_at=(before - 1) if before is not None else None,
+                          limit_last=cap + 1)
+    if found is None:
+        return err_json("تعذّر تحميل الطلبات — حاول بعد قليل", 503)
+    orders   = [o for o in found.values() if isinstance(o, dict)]
+    has_more = len(orders) > cap
+    if has_more:
+        orders = orders[-cap:]  # النتائج تصاعدية → نخلّيو الأحدث
+    orders.sort(key=lambda o: o.get("createdAt") or 0, reverse=True)
+    body = {"status": "ok", "data": orders, "hasMore": has_more,
+            "cursor": started - _ORDERS_CURSOR_MARGIN_MS}
+    if since is not None and has_more:
+        body["reset"] = True  # تبدّلات أكثر من الحد — الواجهة تعاود التحميل من الأول
+    return jsonify(body)
 
 def _ship_values(c_data, delivery_type):
     is_desk = delivery_type == "desk"

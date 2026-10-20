@@ -587,6 +587,9 @@ select.status-sel{background:var(--card2);border:1px solid var(--border);color:v
           <tbody id="ordersTbl"></tbody>
         </table>
       </div>
+      <div id="ordersMoreWrap" style="display:none;text-align:center;padding:12px">
+        <button class="btn-outline btn-sm" onclick="loadOlderOrders()">⬇️ تحميل الطلبات الأقدم / Charger plus</button>
+      </div>
     </div>
   </div>
 
@@ -1545,6 +1548,8 @@ function logout(){
   authToken   = null;
   currentRole = "owner";
   TEAM_MEMBERS = [];
+  // طلبات الحساب السابق ما يبقاوش فالذاكرة (الـ polling يدمج، ما يعوّضش)
+  allOrders = []; ORDERS_BY_ID = {}; ORDERS_CURSOR = null; ORDERS_OLDEST = null; ORDERS_HAS_MORE = false;
   localStorage.removeItem("of_token");
   stopOrdersPolling();
   stopConvListPolling();
@@ -1842,7 +1847,8 @@ async function loadTrendChart(cur){
   var canvas = document.getElementById("chartTrend");
   if(!canvas || typeof Chart==="undefined") return;
   try{
-    var r = await apiGet("/getOrders", {});
+    // غير طلبات آخر 8 أيام (المنحنى يبيّن 7) — بدل كل الطلبات
+    var r = await apiGet("/getOrders", {createdAfter: Date.now() - 8*86400000});
     var orders = (r.status==="ok") ? (r.data||[]) : [];
     var days = [], map = {};
     for(var i=6;i>=0;i--){
@@ -1898,16 +1904,72 @@ async function loadTrendChart(cur){
 // =========================================================
 // ORDERS
 // =========================================================
+// الطلبات المحمّلة: آخر 200، و"تحميل الأقدم" يزيد صفحات. الـ polling يجيب غير اللي تبدّل
+// من بعد ORDERS_CURSOR (وقت السيرفر)، ويندمج بالـ id.
+var ORDERS_BY_ID    = {};
+var ORDERS_CURSOR   = null;
+var ORDERS_OLDEST   = null;   // أقدم createdAt محمّل عبر الصفحات (ماشي عبر الـ polling)
+var ORDERS_HAS_MORE = false;
+var ORDERS_PAGE     = 200;
+
+function _mergeOrders(list, fromPage){
+  var changed = false;
+  (list||[]).forEach(function(o){
+    if(!o || !o.id) return;
+    // طلب قديم بزاف (برا الصفحات المحمّلة) ما يدخلش من الـ polling، باش "تحميل الأقدم" يبقى صحيح
+    if(!fromPage && !ORDERS_BY_ID[o.id] && ORDERS_HAS_MORE && (o.createdAt||0) < ORDERS_OLDEST) return;
+    ORDERS_BY_ID[o.id] = o; changed = true;
+  });
+  allOrders = Object.keys(ORDERS_BY_ID).map(function(k){ return ORDERS_BY_ID[k]; })
+    .sort(function(a,b){ return (b.createdAt||0)-(a.createdAt||0); });
+  return changed;
+}
+
+function _applyOrdersPage(r){
+  var created = (r.data||[]).map(function(o){ return o.createdAt||0; });
+  if(created.length) ORDERS_OLDEST = Math.min.apply(null, created.concat(ORDERS_OLDEST===null?[]:[ORDERS_OLDEST]));
+  ORDERS_HAS_MORE = !!r.hasMore;
+  _mergeOrders(r.data, true);
+  var more = document.getElementById("ordersMoreWrap");
+  if(more) more.style.display = ORDERS_HAS_MORE ? "block" : "none";
+}
+
 async function loadOrders(){
   var tbl = document.getElementById("ordersTbl");
   tbl.innerHTML = '<tr><td colspan="15" class="empty-state"><span class="spinner"></span></td></tr>';
   try{
-    var r = await apiGet("/getOrders", {});
+    var r = await apiGet("/getOrders", {limit: ORDERS_PAGE});
     if(r.status==="ok"){
-      allOrders = r.data||[];
-      renderOrders(allOrders);
-    }
+      ORDERS_BY_ID = {}; ORDERS_OLDEST = null;
+      ORDERS_CURSOR = r.cursor;
+      _applyOrdersPage(r);
+      filterOrders();
+    } else { tbl.innerHTML='<tr><td colspan="15" class="empty-state">'+esc(r.message||"Erreur")+'</td></tr>'; }
   }catch(e){ tbl.innerHTML='<tr><td colspan="15" class="empty-state">Erreur</td></tr>'; }
+}
+
+async function loadOlderOrders(){
+  if(!ORDERS_HAS_MORE || ORDERS_OLDEST===null) return;
+  try{
+    var r = await apiGet("/getOrders", {limit: ORDERS_PAGE, before: ORDERS_OLDEST});
+    if(r.status==="ok"){ _applyOrdersPage(r); filterOrders(); }
+    else toast("❌ "+(r.message||"Erreur"),"err");
+  }catch(e){ toast("Erreur réseau","err"); }
+}
+
+// تبدّلات فقط من بعد آخر cursor. ما كاين حتى نداء كي يكون التبويب مخفي.
+async function pollOrders(){
+  if(!authToken || document.hidden) return;
+  var activeSec = document.querySelector(".section.active");
+  if(!activeSec || activeSec.id!=="sec_orders") return;
+  if(ORDERS_CURSOR===null){ loadOrders(); return; }
+  try{
+    var r = await apiGet("/getOrders", {since: ORDERS_CURSOR});
+    if(r.status!=="ok") return;
+    if(r.reset){ loadOrders(); return; }
+    ORDERS_CURSOR = r.cursor;
+    if(r.data && r.data.length && _mergeOrders(r.data, false)) filterOrders();
+  }catch(e){}
 }
 
 function renderOrders(orders){
@@ -3132,19 +3194,12 @@ document.querySelectorAll(".modal-overlay").forEach(function(m){
 // =========================================================
 function startOrdersPolling(){
   stopOrdersPolling();
-  _ordersPollTimer = setInterval(async function(){
-    if(!authToken) return;
-    var activeSec = document.querySelector(".section.active");
-    if(!activeSec || activeSec.id!=="sec_orders") return;
-    try{
-      var r = await apiGet("/getOrders", {});
-      if(r.status==="ok"){
-        allOrders = r.data||[];
-        filterOrders();
-      }
-    }catch(e){}
-  }, 8000);
+  _ordersPollTimer = setInterval(pollOrders, 10000);
 }
+// رجوع للتبويب: تحديث فوري بدل ما نستناو الدورة الجاية
+document.addEventListener("visibilitychange", function(){
+  if(!document.hidden && _ordersPollTimer) pollOrders();
+});
 function stopOrdersPolling(){
   if(_ordersPollTimer){ clearInterval(_ordersPollTimer); _ordersPollTimer = null; }
 }
