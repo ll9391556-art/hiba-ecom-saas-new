@@ -80,7 +80,7 @@ def test_since_returns_only_changed_orders(client, db, owner, app, monkeypatch):
 
 
 def test_since_with_too_many_changes_asks_for_reset(client, db, owner, app, monkeypatch):
-    monkeypatch.setattr(app, "_ORDERS_PAGE_MAX", 10)
+    monkeypatch.setattr("routes.orders._ORDERS_PAGE_MAX", 10)
     _seed(db, owner["uid"], 15)
     _, body = _get(client, owner, since=T0)
     assert body["reset"] is True and len(body["data"]) == 10
@@ -99,7 +99,7 @@ def test_bad_paging_params_rejected(client, owner, params):
 
 
 def test_query_failure_is_an_error_not_an_empty_list(client, owner, app, monkeypatch):
-    monkeypatch.setattr(app, "_fb_query", lambda *a, **k: None)
+    monkeypatch.setattr("routes.orders._fb_query", lambda *a, **k: None)
     code, _ = _get(client, owner)
     assert code == 503
 

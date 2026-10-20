@@ -91,8 +91,8 @@ def test_woo_sync_dedupes_by_key_without_reading_all_orders(client, db, store, a
     db.set(f"data/{uid}/integrations/woocommerce", {"connected": True, "storeUrl": "https://shop.test",
                                                      "consumerKeyEnc": "x", "consumerSecretEnc": "y"})
     db.set(f"data/{uid}/orders/ORD-WOO-1", {"id": "ORD-WOO-1", "wooOrderId": "1", "phone": "0555"})
-    monkeypatch.setattr(app, "_validate_and_pin_store_url", lambda url: ("shop.test", "203.0.113.5"))
-    monkeypatch.setattr(app, "_decrypt_secret", lambda tok: "dummy-secret")
+    monkeypatch.setattr("routes.integrations._validate_and_pin_store_url", lambda url: ("shop.test", "203.0.113.5"))
+    monkeypatch.setattr("routes.integrations._decrypt_secret", lambda tok: "dummy-secret")
 
     class Resp:
         ok, status_code = True, 200
@@ -102,7 +102,7 @@ def test_woo_sync_dedupes_by_key_without_reading_all_orders(client, db, store, a
                     {"id": 2, "billing": {"phone": "0666 77 88", "first_name": "B"},
                      "line_items": [{"name": "Sac", "quantity": 2}], "total": "2400"}]
 
-    monkeypatch.setattr(app, "_request_with_pinned_dns", lambda *a, **k: Resp())
+    monkeypatch.setattr("routes.integrations._request_with_pinned_dns", lambda *a, **k: Resp())
     fakes.READS.clear()
     r = client.post("/api/woo/sync", headers=store["headers"])
     assert r.get_json()["data"]["imported"] == 1
