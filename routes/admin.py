@@ -1,0 +1,166 @@
+# -*- coding: utf-8 -*-
+"""لوحة الإدارة (/admin) ومسارات X-Admin-Key: الخطط، إنشاء العملاء، التعبئة (rebuildIndexes)، اللائحة. منقول من app.py بلا تغيير (Phase 4 / A8)."""
+import hashlib
+import hmac
+import json
+import logging
+import re
+import secrets
+import time
+from urllib.parse import quote, unquote
+
+import requests
+from flask import Blueprint, abort, jsonify, make_response, request, send_from_directory
+from markupsafe import escape as _esc
+
+from core.config import (
+    LIFETIME_MAX_SLOTS,
+    PLANS,
+)
+from core.db import (
+    _fb_get,
+    _fb_keys,
+    _fb_put,
+)
+from core.http import (
+    err_json,
+    ok_json,
+)
+from core.security import (
+    _hash_password,
+    require_admin,
+)
+from services.bot import (
+    _migrate_bot_logs,
+)
+from services.orders import (
+    _rebuild_order_fields,
+    _recompute_aggregates,
+)
+from services.users import (
+    _LIFETIME_PLANS,
+    _LifetimeFull,
+    _adjust_lifetime_counter,
+    _rebuild_user_indexes,
+    _uname_key,
+    _username_taken,
+)
+
+from core.templates import render
+bp = Blueprint("admin", __name__)
+
+
+
+
+@bp.route("/admin", methods=["GET"])
+def admin_page():
+    return render("admin.html"), 200
+
+
+@bp.route("/api/updateUserPlan", methods=["POST"])
+@require_admin
+def api_update_user_plan():
+    body     = request.get_json(silent=True) or {}
+    uid      = str(body.get("userId")   or "").strip()
+    username = str(body.get("username") or "").strip()
+    plan     = str(body.get("plan")     or "starter").strip().lower()
+    if not uid or not username: return err_json("Missing fields")
+    if plan not in PLANS: return err_json(f"Invalid plan: {list(PLANS.keys())}")
+    existing = _fb_get(f"users/{username}") or {}
+    was_lifetime = str(existing.get("plan", "")).lower() in _LIFETIME_PLANS
+    existing["plan"]         = plan
+    existing["plan_updated"] = time.strftime("%Y-%m-%d %H:%M")
+    _fb_put(f"users/{username}", existing)
+    # عدّاد lifetime يتبع الانتقال من/إلى lifetime/full (lifetime↔full ما يبدّلوش)
+    now_lifetime = plan in _LIFETIME_PLANS
+    if was_lifetime != now_lifetime:
+        try:
+            _adjust_lifetime_counter(1 if now_lifetime else -1)
+        except Exception as e:
+            logging.error(f"lifetime counter update failed: {type(e).__name__} — شغّل rebuildIndexes")
+    return ok_json({"plan": plan})
+
+
+@bp.route("/api/admin/createClient", methods=["POST"])
+@require_admin
+def api_admin_create_client():
+    body     = request.get_json(silent=True) or {}
+    username = str(body.get("username") or "").strip()
+    password = str(body.get("password") or "").strip()
+    store_name = str(body.get("storeName") or "").strip() or "متجري"
+    plan     = str(body.get("plan") or "starter").strip().lower()
+    source   = str(body.get("source") or "local").strip().lower()
+    if source not in ("local", "fiverr"): source = "local"
+    if not username or not password: return err_json("اسم المستخدم وكلمة السر مطلوبين")
+    if len(password) < 6: return err_json("كلمة السر قصيرة جداً (6 أحرف على الأقل)")
+    if plan not in PLANS: return err_json(f"خطة غير صحيحة: {list(PLANS.keys())}")
+    if _username_taken(username): return err_json("اسم المستخدم مستعمل من قبل", 409)
+    if plan in _LIFETIME_PLANS:
+        # حجز خانة lifetime ذرّياً قبل إنشاء الحساب (بدل عدّ /users كاملة)
+        try:
+            _adjust_lifetime_counter(1, cap=LIFETIME_MAX_SLOTS)
+        except _LifetimeFull:
+            return err_json(f"تم الوصول للحد الأقصى ({LIFETIME_MAX_SLOTS}) من عروض Lifetime", 409)
+        except Exception as e:
+            logging.error(f"lifetime counter reserve failed: {type(e).__name__}")
+            return err_json("Firebase unavailable", 503)
+    new_uid = str(int(time.time() * 1000))
+    if not _fb_put(f"users/{username}", {
+        "Username": username, "Password": _hash_password(password),
+        "User_ID": new_uid, "plan": plan, "source": source,
+        "plan_updated": time.strftime("%Y-%m-%d %H:%M"),
+    }):
+        if plan in _LIFETIME_PLANS:
+            try: _adjust_lifetime_counter(-1)
+            except Exception: pass
+        return err_json("Firebase unavailable", 503)
+    _fb_put(f"uid_index/{new_uid}", username)
+    _fb_put(f"uname_index/{_uname_key(username)}", username)
+    _fb_put(f"data/{new_uid}/storeSettings", {
+        "name": store_name, "tagline": "", "logo": "🛒", "lang": "AR", "currency": "DZD",
+    })
+    return ok_json({"username": username, "userId": new_uid,
+                     "storeLink": f"{request.url_root.rstrip('/')}/?store={new_uid}"})
+
+
+@bp.route("/api/admin/rebuildIndexes", methods=["POST"])
+@require_admin
+def api_admin_rebuild_indexes():
+    """تعبئة لمرة وحدة بعد كل deploy يزيد فهرس (idempotent — تقدر تعاودها):
+    - orders: createdAt/updatedAt/phoneDigits للطلبات القديمة.
+    - users: uname_index، uid_index، team_uname_index، channel_index، وعدّاد lifetime.
+    هادي الوحيدة (مع listClients) اللي تقرا /users و/team_users كاملة — بالقصد، مرة وحدة."""
+    users_res = _rebuild_user_indexes()
+    if users_res is None:
+        return err_json("Firebase unavailable", 503)
+    orders_res = _rebuild_order_fields()
+    if isinstance(orders_res, tuple):
+        return orders_res
+    # المجاميع الجارية (stats/customers) لكل تاجر — من بعد حقول الطلبات
+    agg_ok, agg_failed = 0, []
+    for uid in (_fb_keys("data") or []):
+        if _recompute_aggregates(uid) is None:
+            agg_failed.append(uid)
+        else:
+            agg_ok += 1
+    logs_res = _migrate_bot_logs()
+    if logs_res is None:
+        return err_json("Firebase unavailable", 503)
+    return ok_json({"orders": orders_res, "users": users_res,
+                    "aggregates": {"merchants": agg_ok, "failed": agg_failed}, "botLogs": logs_res})
+
+
+@bp.route("/api/admin/listClients", methods=["GET"])
+@require_admin
+def api_admin_list_clients():
+    users = _fb_get("users") or {}
+    result = []
+    for uname, u in users.items():
+        if isinstance(u, dict):
+            result.append({
+                "username": u.get("Username", uname), "userId": u.get("User_ID", ""),
+                "plan": u.get("plan", "starter"), "planUpdated": u.get("plan_updated", ""),
+                "source": u.get("source", "local"),
+            })
+    result.sort(key=lambda x: x.get("planUpdated",""), reverse=True)
+    return ok_json(result)
