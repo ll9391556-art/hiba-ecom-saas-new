@@ -15,7 +15,7 @@ def test_public_order_product_reaches_dashboard_as_data(client, db, seed_owner):
         "name": "x", "phone": "0555000000", "city": "Alger", "product": PAYLOAD, "qty": 1}})
     assert r.status_code == 200
     oid = r.get_json()["data"]["orderId"]
-    db.set(f"data/{owner['uid']}/orders/{oid}/status", "Confirmed")
+    client.post("/api/updateStatus", json={"orderId": oid, "status": "Confirmed"}, headers=owner["headers"])
     d = client.get("/api/getDashboard", headers=owner["headers"]).get_json()["data"]
     assert d["topProducts"][0]["name"] == PAYLOAD  # البيانات تبقى كما هي — التهريب فالواجهة
 
