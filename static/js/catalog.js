@@ -22,7 +22,7 @@ async function loadProducts(){
           '<td>'+esc(p.sold||0)+'</td>'+
           '<td>'+esc(p.available||0)+'</td>'+
           '<td><span class="badge '+stCls+'">'+esc(p.stat||"?")+'</span></td>'+
-          '<td><button class="btn-danger" data-name="'+esc(p.name)+'" onclick="deleteProduct(this.dataset.name)"><i class="bi bi-trash"></i></button></td>'+
+          '<td><button class="btn-danger" data-name="'+esc(p.name)+'" data-on-click="deleteProduct(this.dataset.name)"><i class="bi bi-trash"></i></button></td>'+
         '</tr>';
       }).join("") || '<tr><td colspan="11"><div class="empty-state"><i class="bi bi-box-seam"></i></div></td></tr>';
     }
@@ -109,7 +109,7 @@ async function loadCities(){
           '<td>'+esc(c.deskCost||0)+' '+cur+'</td>'+
           '<td>'+esc(c.deskCust||0)+' '+cur+'</td>'+
           '<td>'+esc(c.returnFee||0)+' '+cur+'</td>'+
-          '<td><button class="btn-danger" data-name="'+esc(c.name)+'" onclick="deleteCity(this.dataset.name)"><i class="bi bi-trash"></i></button></td>'+
+          '<td><button class="btn-danger" data-name="'+esc(c.name)+'" data-on-click="deleteCity(this.dataset.name)"><i class="bi bi-trash"></i></button></td>'+
         '</tr>';
       }).join("") || '<tr><td colspan="7"><div class="empty-state"><i class="bi bi-geo-alt"></i></div></td></tr>';
 

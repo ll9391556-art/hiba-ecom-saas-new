@@ -67,7 +67,7 @@ button:hover{transform:translateY(-1px);box-shadow:0 8px 20px -6px rgba(14,165,2
       <input id="t_snap" placeholder="مثال: xxxxxxxx-xxxx-xxxx"/>
     </div>
 
-    <button onclick="saveTracking()">حفظ الإعدادات</button>
+    <button data-on-click="saveTracking()">حفظ الإعدادات</button>
     <div id="saveMsg" class="msg"></div>
   </div>
 </div>
@@ -75,6 +75,9 @@ button:hover{transform:translateY(-1px);box-shadow:0 8px 20px -6px rgba(14,165,2
 <script src="/static/js/core.js"></script>
 <script src="/static/js/api.js"></script>
 <script>
+registerActions({
+  "saveTracking()": function(event){ saveTracking(); },
+});
 // API_URL / authToken / apiGet / apiPost / esc: من /static/js/core.js و api.js (Phase 4 / F4)
 
 async function loadTracking(){

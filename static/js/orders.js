@@ -92,7 +92,7 @@ function renderOrders(orders){
       '<td>'+esc(o.city||"—")+'</td>'+
       '<td>'+
         '<span class="badge bn me-1">'+(o.deliveryType==="desk"?t("desk_short"):t("home_short"))+'</span>'+
-        '<select class="status-sel" data-id="'+safeId+'" onchange="updateOrderDelivery(this.dataset.id,this.value)">'+
+        '<select class="status-sel" data-id="'+safeId+'" data-on-change="updateOrderDelivery(this.dataset.id,this.value)">'+
           '<option value="home"'+(o.deliveryType!=="desk"?" selected":"")+'>'+t("home_delivery")+'</option>'+
           '<option value="desk"'+(o.deliveryType==="desk"?" selected":"")+'>'+t("desk_delivery")+'</option>'+
         '</select>'+
@@ -104,9 +104,9 @@ function renderOrders(orders){
       '<td style="font-size:11px;color:var(--muted)">'+esc(o.date_delivered||"—")+'</td>'+
           '<td>'+
         '<span class="badge '+stCls+' me-1">'+esc(o.status)+'</span>'+
-        '<select class="status-sel" onchange="updateStatus(this.dataset.id,this.value)" data-id="'+safeId+'">'+opts+'</select>'+
+        '<select class="status-sel" data-on-change="updateStatus(this.dataset.id,this.value)" data-id="'+safeId+'">'+opts+'</select>'+
       '</td>'+
-      '<td><button class="btn-outline btn-sm" data-id="'+safeId+'" onclick="printOrderSlip(this.dataset.id)" title="طباعة بون دو كوموند"><i class="bi bi-printer"></i></button></td>'+
+      '<td><button class="btn-outline btn-sm" data-id="'+safeId+'" data-on-click="printOrderSlip(this.dataset.id)" title="طباعة بون دو كوموند"><i class="bi bi-printer"></i></button></td>'+
     '</tr>';
   }).join("");
 }

@@ -26,14 +26,14 @@
       <label id="lblPass">Mot de passe</label>
       <input id="loginPass" class="form-control" type="password" autocomplete="current-password"/>
     </div>
-    <button class="btn-primary" style="width:100%" onclick="doLogin()" id="loginBtn">
+    <button class="btn-primary" style="width:100%" data-on-click="doLogin()" id="loginBtn">
       <span id="loginBtnTxt">Connexion</span>
     </button>
     <div id="loginErr" style="display:none" class="err-msg"></div>
     <div style="margin-top:20px;display:flex;gap:8px;justify-content:center">
-      <button class="lang-btn" onclick="setLang('FR')">FR</button>
-      <button class="lang-btn" onclick="setLang('AR')">AR</button>
-      <button class="lang-btn" onclick="setLang('EN')">EN</button>
+      <button class="lang-btn" data-on-click="setLang('FR')">FR</button>
+      <button class="lang-btn" data-on-click="setLang('AR')">AR</button>
+      <button class="lang-btn" data-on-click="setLang('EN')">EN</button>
     </div>
   </div>
 </div>
@@ -46,71 +46,71 @@
     <small id="sideUser">—</small>
   </div>
   <div class="sidebar-nav">
-    <div class="nav-item active" onclick="showSection('dashboard')">
+    <div class="nav-item active" data-on-click="showSection('dashboard')">
       <i class="bi bi-grid-1x2"></i><span data-i18n="nav_dashboard">Tableau de bord</span>
     </div>
-    <div class="nav-item" onclick="showSection('orders')">
+    <div class="nav-item" data-on-click="showSection('orders')">
       <i class="bi bi-bag-check"></i><span data-i18n="nav_orders">Commandes</span>
     </div>
-    <div class="nav-item" onclick="showSection('products')">
+    <div class="nav-item" data-on-click="showSection('products')">
       <i class="bi bi-box-seam"></i><span data-i18n="nav_products">Produits</span>
     </div>
-    <div class="nav-item" onclick="showSection('customers')">
+    <div class="nav-item" data-on-click="showSection('customers')">
       <i class="bi bi-people"></i><span data-i18n="nav_customers">Clients</span>
     </div>
-    <div class="nav-item" onclick="showSection('cities')">
+    <div class="nav-item" data-on-click="showSection('cities')">
       <i class="bi bi-geo-alt"></i><span data-i18n="nav_cities">Villes</span>
     </div>
-    <div class="nav-item" onclick="showSection('store')">
+    <div class="nav-item" data-on-click="showSection('store')">
       <i class="bi bi-shop"></i><span data-i18n="nav_store">Boutique</span>
     </div>
-    <div class="nav-item" onclick="showSection('landing')">
+    <div class="nav-item" data-on-click="showSection('landing')">
       <i class="bi bi-easel2"></i><span data-i18n="nav_landing">Pages de destination</span>
     </div>
-    <div class="nav-item" onclick="showSection('bot')">
+    <div class="nav-item" data-on-click="showSection('bot')">
       <i class="bi bi-robot"></i><span data-i18n="nav_bot">Bot AI</span>
     </div>
-    <div class="nav-item" onclick="showSection('messages')">
+    <div class="nav-item" data-on-click="showSection('messages')">
       <i class="bi bi-chat-dots"></i><span data-i18n="nav_messages">Messages</span>
     </div>
-    <div class="nav-item" onclick="showSection('integrations')">
+    <div class="nav-item" data-on-click="showSection('integrations')">
       <i class="bi bi-plug"></i><span data-i18n="nav_integrations">ربط المتجر</span>
     </div>
-    <div class="nav-item" id="navTeam" onclick="showSection('team')" style="display:none">
+    <div class="nav-item" id="navTeam" data-on-click="showSection('team')" style="display:none">
       <i class="bi bi-person-badge"></i><span data-i18n="nav_team">الفريق</span>
     </div>
-    <div class="nav-item" id="navPlans" onclick="showSection('plans')">
+    <div class="nav-item" id="navPlans" data-on-click="showSection('plans')">
       <i class="bi bi-star"></i><span data-i18n="nav_plans">Abonnements</span>
     </div>
-    <div class="nav-item" onclick="showSection('settings')">
+    <div class="nav-item" data-on-click="showSection('settings')">
       <i class="bi bi-gear"></i><span data-i18n="nav_settings">Paramètres</span>
     </div>
        <!-- بعد: زدنا data-i18n لكل span -->
-    <div class="nav-item" onclick="window.open('/static/features/discounts.html','_blank')">
+    <div class="nav-item" data-on-click="window.open('/static/features/discounts.html','_blank')">
      <i class="bi bi-tag"></i><span data-i18n="nav_discounts">أكواد الخصم</span>
     </div>
-    <div class="nav-item" onclick="window.open('/static/features/tracking.html','_blank')">
+    <div class="nav-item" data-on-click="window.open('/static/features/tracking.html','_blank')">
      <i class="bi bi-graph-up-arrow"></i><span data-i18n="nav_tracking">التتبع الإعلاني</span>
     </div>
-    <div class="nav-item" onclick="window.open('/static/features/shipping.html','_blank')">
+    <div class="nav-item" data-on-click="window.open('/static/features/shipping.html','_blank')">
      <i class="bi bi-truck"></i><span data-i18n="nav_shipping">شركات الشحن</span>
     </div>
-    <div class="nav-item" onclick="window.open('/static/features/assistant.html','_blank')">
+    <div class="nav-item" data-on-click="window.open('/static/features/assistant.html','_blank')">
      <i class="bi bi-robot"></i><span data-i18n="nav_assistant">المساعد الإداري</span>
     </div>
-    <div class="nav-item" onclick="window.open('/static/features/support.html','_blank')">
+    <div class="nav-item" data-on-click="window.open('/static/features/support.html','_blank')">
      <i class="bi bi-headset"></i><span data-i18n="nav_support">الدعم الفني</span>
     </div>
   </div>
   <div class="sidebar-footer">
     <div id="planDisplay">—</div>
-    <div onclick="toggleTheme()" style="margin-top:10px;display:flex;align-items:center;justify-content:space-between;background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;cursor:pointer;transition:.2s">
+    <div data-on-click="toggleTheme()" style="margin-top:10px;display:flex;align-items:center;justify-content:space-between;background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;cursor:pointer;transition:.2s">
       <span id="themeLabel" style="font-size:12px;color:var(--muted)">☀️ Mode Clair</span>
       <div id="themePill" style="width:34px;height:19px;background:rgba(255,255,255,.12);border-radius:10px;position:relative;transition:.3s;flex-shrink:0">
         <div id="themeDot" style="position:absolute;top:3px;left:3px;width:13px;height:13px;background:#fff;border-radius:50%;transition:.3s"></div>
       </div>
     </div>
-    <div style="margin-top:8px;font-size:11px;cursor:pointer;color:var(--red)" onclick="logout()">
+    <div style="margin-top:8px;font-size:11px;cursor:pointer;color:var(--red)" data-on-click="logout()">
       <i class="bi bi-box-arrow-left"></i> <span data-i18n="logout">Déconnexion</span>
     </div>
   </div>
@@ -120,15 +120,15 @@
 
   <div class="topbar">
     <div style="display:flex;align-items:center;gap:12px">
-      <button class="btn-primary btn-sm" id="menuToggle" onclick="toggleSidebar()" style="display:none" title="فتح القائمة">
+      <button class="btn-primary btn-sm" id="menuToggle" data-on-click="toggleSidebar()" style="display:none" title="فتح القائمة">
         <i class="bi bi-list"></i> القائمة
       </button>
       <div class="topbar-title" id="pageTitle">Tableau de bord</div>
     </div>
     <div class="topbar-right">
-      <button class="lang-btn" onclick="setLang('FR')" id="langFR">FR</button>
-      <button class="lang-btn" onclick="setLang('AR')" id="langAR">AR</button>
-      <button class="lang-btn" onclick="setLang('EN')" id="langEN">EN</button>
+      <button class="lang-btn" data-on-click="setLang('FR')" id="langFR">FR</button>
+      <button class="lang-btn" data-on-click="setLang('AR')" id="langAR">AR</button>
+      <button class="lang-btn" data-on-click="setLang('EN')" id="langEN">EN</button>
       <div id="currencyButtons" style="display:flex;gap:4px;margin-right:6px"></div>
       <div class="user-info" id="topUser">—</div>
     </div>
@@ -189,13 +189,13 @@
       <div class="table-head">
         <h5 data-i18n="nav_orders">Commandes</h5>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <input class="search-input" id="orderSearch" placeholder="🔍 Rechercher..." oninput="filterOrders()"/>
-          <select class="form-select" style="width:140px" id="statusFilter" onchange="filterOrders()">
+          <input class="search-input" id="orderSearch" placeholder="🔍 Rechercher..." data-on-input="filterOrders()"/>
+          <select class="form-select" style="width:140px" id="statusFilter" data-on-change="filterOrders()">
             <option value="">Tous</option>
             <option>Pending</option><option>Confirmed</option>
             <option>Delivered</option><option>Refused</option><option>No Answer</option>
           </select>
-          <button class="btn-primary btn-sm" onclick="openModal('addOrderModal')">
+          <button class="btn-primary btn-sm" data-on-click="openModal('addOrderModal')">
             <i class="bi bi-plus-lg"></i> <span data-i18n="add_order">Ajouter</span>
           </button>
         </div>
@@ -216,7 +216,7 @@
         </table>
       </div>
       <div id="ordersMoreWrap" style="display:none;text-align:center;padding:12px">
-        <button class="btn-outline btn-sm" onclick="loadOlderOrders()">⬇️ تحميل الطلبات الأقدم / Charger plus</button>
+        <button class="btn-outline btn-sm" data-on-click="loadOlderOrders()">⬇️ تحميل الطلبات الأقدم / Charger plus</button>
       </div>
     </div>
   </div>
@@ -225,7 +225,7 @@
     <div class="table-wrap">
       <div class="table-head">
         <h5 data-i18n="nav_products">Produits</h5>
-        <button class="btn-primary btn-sm" onclick="openModal('addProductModal')">
+        <button class="btn-primary btn-sm" data-on-click="openModal('addProductModal')">
           <i class="bi bi-plus-lg"></i> <span data-i18n="add_product">Ajouter</span>
         </button>
       </div>
@@ -246,7 +246,7 @@
     <div class="table-wrap">
       <div class="table-head">
         <h5 data-i18n="nav_customers">Clients</h5>
-        <input class="search-input" id="custSearch" placeholder="🔍 Rechercher..." oninput="filterCustomers()"/>
+        <input class="search-input" id="custSearch" placeholder="🔍 Rechercher..." data-on-input="filterCustomers()"/>
       </div>
       <table>
         <thead><tr>
@@ -264,7 +264,7 @@
     <div class="table-wrap">
       <div class="table-head">
         <h5 data-i18n="nav_cities">Villes / Tarifs</h5>
-        <button class="btn-primary btn-sm" onclick="openModal('addCityModal')">
+        <button class="btn-primary btn-sm" data-on-click="openModal('addCityModal')">
           <i class="bi bi-plus-lg"></i> <span data-i18n="add_city">Ajouter</span>
         </button>
       </div>
@@ -288,17 +288,17 @@
     <div id="storeContent">
       <div style="background:var(--card);border:1px solid rgba(37,99,235,.4);border-radius:12px;padding:14px 16px;margin-bottom:18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <i class="bi bi-link-45deg" style="color:var(--accent);font-size:20px;flex-shrink:0"></i>
-        <input id="storeLinkInput" readonly style="flex:1;min-width:200px;background:var(--card2);border:1px solid var(--border);color:var(--accent);border-radius:8px;padding:8px 12px;font-size:13px;font-weight:600;cursor:pointer" onclick="this.select();document.execCommand('copy');toast('✅ Lien copié!','ok')"/>
-        <button class="btn-primary btn-sm" onclick="document.getElementById('storeLinkInput').select();document.execCommand('copy');toast('✅ Lien copié!','ok')">
+        <input id="storeLinkInput" readonly style="flex:1;min-width:200px;background:var(--card2);border:1px solid var(--border);color:var(--accent);border-radius:8px;padding:8px 12px;font-size:13px;font-weight:600;cursor:pointer" data-on-click="this.select();document.execCommand('copy');toast('✅ Lien copié!','ok')"/>
+        <button class="btn-primary btn-sm" data-on-click="document.getElementById('storeLinkInput').select();document.execCommand('copy');toast('✅ Lien copié!','ok')">
           <i class="bi bi-clipboard"></i> Copier
         </button>
-        <button class="btn-outline btn-sm" onclick="window.open(document.getElementById('storeLinkInput').value,'_blank')">
+        <button class="btn-outline btn-sm" data-on-click="window.open(document.getElementById('storeLinkInput').value,'_blank')">
           <i class="bi bi-box-arrow-up-right"></i> Ouvrir
         </button>
       </div>
       <div class="topbar" style="margin-bottom:16px">
         <h4 id="storeTitle">Ma Boutique</h4>
-        <button class="btn-primary btn-sm" onclick="openModal('storeSettingsModal')">
+        <button class="btn-primary btn-sm" data-on-click="openModal('storeSettingsModal')">
           <i class="bi bi-gear"></i> <span data-i18n="settings">Paramètres</span>
         </button>
       </div>
@@ -311,14 +311,14 @@
       <i class="bi bi-easel2"></i>
       <h5 data-i18n="locked_landing">Pages de destination non disponibles</h5>
       <p data-i18n="upgrade_landing">Passez au plan Starter ou supérieur</p>
-      <button class="btn-primary" style="margin-top:16px" onclick="showSection('plans')">
+      <button class="btn-primary" style="margin-top:16px" data-on-click="showSection('plans')">
         <span data-i18n="see_plans">Voir les abonnements</span>
       </button>
     </div>
     <div id="landingContent">
       <div class="topbar" style="margin-bottom:16px">
         <h4 data-i18n="landing_title">🎯 Pages de destination</h4>
-        <button class="btn-primary btn-sm" onclick="openModal('createLandingModal')">
+        <button class="btn-primary btn-sm" data-on-click="openModal('createLandingModal')">
           <i class="bi bi-plus-lg"></i> <span data-i18n="create_landing">Créer une page</span>
         </button>
       </div>
@@ -340,7 +340,7 @@
       <i class="bi bi-robot"></i>
       <h5 data-i18n="locked_bot">Bot AI non disponible</h5>
       <p data-i18n="upgrade_bot">Passez au plan Pro ou Full</p>
-      <button class="btn-primary" style="margin-top:16px" onclick="showSection('plans')">
+      <button class="btn-primary" style="margin-top:16px" data-on-click="showSection('plans')">
         <span data-i18n="see_plans">Voir les abonnements</span>
       </button>
     </div>
@@ -349,12 +349,12 @@
         <h5 style="margin-bottom:14px">🔗 Connecter Facebook & Instagram</h5>
         <div id="fbConnectStatus" style="font-size:13px;color:var(--muted);margin-bottom:14px">⏳ Vérification...</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-          <button onclick="connectFacebook()" style="background:linear-gradient(135deg,#1877f2,#0d5bbf);color:#fff;border:none;border-radius:8px;padding:9px 18px;font-weight:700;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:7px">
+          <button data-on-click="connectFacebook()" style="background:linear-gradient(135deg,#1877f2,#0d5bbf);color:#fff;border:none;border-radius:8px;padding:9px 18px;font-weight:700;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:7px">
             <svg style="width:16px;height:16px;fill:white" viewBox="0 0 24 24"><path d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.41c0-3.025 1.792-4.697 4.533-4.697 1.312 0 2.686.236 2.686.236v2.971h-1.513c-1.491 0-1.956.93-1.956 1.883v2.27h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z"/></svg>
             Connecter FB & Instagram
           </button>
-          <button onclick="checkFbStatus()" class="btn-outline btn-sm">🔄 Actualiser</button>
-          <button onclick="disconnectFacebook()" style="background:rgba(239,68,68,.1);color:var(--red);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">🔌 Déconnecter</button>
+          <button data-on-click="checkFbStatus()" class="btn-outline btn-sm">🔄 Actualiser</button>
+          <button data-on-click="disconnectFacebook()" style="background:rgba(239,68,68,.1);color:var(--red);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">🔌 Déconnecter</button>
         </div>
         <div id="fbPagesList" style="display:none;margin-top:14px">
           <div style="font-size:11px;color:var(--muted);margin-bottom:8px;font-weight:700;text-transform:uppercase;letter-spacing:.5px">Pages connectées</div>
@@ -362,7 +362,7 @@
         </div>
         <div style="margin-top:14px;padding:12px;background:var(--card2);border-radius:8px;font-size:12px;color:var(--muted)">
           <strong style="color:var(--text)">Webhook URL:</strong>
-          <code onclick="this.parentElement.querySelector('span').select?.();navigator.clipboard?.writeText(this.textContent);toast('✅ Copié!','ok')" style="color:var(--accent);cursor:pointer;margin-left:8px">https://orderconfidence.com/webhook</code>
+          <code data-on-click="this.parentElement.querySelector('span').select?.();navigator.clipboard?.writeText(this.textContent);toast('✅ Copié!','ok')" style="color:var(--accent);cursor:pointer;margin-left:8px">https://orderconfidence.com/webhook</code>
         </div>
       </div>
 
@@ -386,7 +386,7 @@
               <input id="b_igtoken" class="form-control" type="password" placeholder="نفس FB Token عادة"/></div>
             <div class="form-group"><label>📷 Instagram Page ID</label>
               <input id="b_igpage" class="form-control" placeholder="معرف حساب انستغرام"/></div>
-            <button class="btn-primary" onclick="saveBotSettings()">
+            <button class="btn-primary" data-on-click="saveBotSettings()">
               <span data-i18n="save">Enregistrer</span>
             </button>
           </div>
@@ -394,7 +394,7 @@
         <div class="col-md-6">
           <div class="table-wrap">
             <div class="table-head"><h5 data-i18n="bot_logs">Logs Bot</h5>
-              <button class="btn-outline btn-sm" onclick="loadBotLogs()">
+              <button class="btn-outline btn-sm" data-on-click="loadBotLogs()">
                 <i class="bi bi-arrow-clockwise"></i>
               </button>
             </div>
@@ -415,7 +415,7 @@
       <i class="bi bi-chat-dots"></i>
       <h5 data-i18n="locked_messages">المحادثات غير متاحة</h5>
       <p data-i18n="upgrade_messages">قم بالترقية إلى Pro أو Full</p>
-      <button class="btn-primary" style="margin-top:16px" onclick="showSection('plans')">
+      <button class="btn-primary" style="margin-top:16px" data-on-click="showSection('plans')">
         <span data-i18n="see_plans">Voir les abonnements</span>
       </button>
     </div>
@@ -432,7 +432,7 @@
         <div class="conv-chat-panel" id="convChatPanel" style="display:none">
           <div class="conv-chat-head">
             <div style="display:flex;align-items:center;gap:10px">
-              <button class="conv-back-btn" onclick="backToConvList()">←</button>
+              <button class="conv-back-btn" data-on-click="backToConvList()">←</button>
               <div>
                 <div id="convChatName" style="font-weight:700;font-size:14px">—</div>
                 <div id="convChatPlatform" style="font-size:11px;color:var(--muted)">—</div>
@@ -442,7 +442,7 @@
           <div class="conv-messages" id="convMessages"></div>
           <div class="conv-chat-input">
             <textarea id="convInput" data-i18n-placeholder="type_message" placeholder="اكتب رسالة..."></textarea>
-            <button class="btn-primary" id="convSendBtn" onclick="sendCustomerMessage()"><i class="bi bi-send"></i></button>
+            <button class="btn-primary" id="convSendBtn" data-on-click="sendCustomerMessage()"><i class="bi bi-send"></i></button>
           </div>
         </div>
       </div>
@@ -454,7 +454,7 @@
       <i class="bi bi-plug"></i>
       <h5 data-i18n="locked_integrations">ربط المتجر غير متاح</h5>
       <p data-i18n="upgrade_integrations">Passez au plan Pro ou Full</p>
-      <button class="btn-primary" style="margin-top:16px" onclick="showSection('plans')">
+      <button class="btn-primary" style="margin-top:16px" data-on-click="showSection('plans')">
         <span data-i18n="see_plans">Voir les abonnements</span>
       </button>
     </div>
@@ -471,7 +471,7 @@
             <input id="woo_key" class="form-control" type="password" placeholder="ck_..."/></div>
           <div class="form-group"><label data-i18n="woo_consumer_secret">Consumer Secret</label>
             <input id="woo_secret" class="form-control" type="password" placeholder="cs_..."/></div>
-          <button class="btn-primary" onclick="connectWoo()" id="wooConnectBtn">
+          <button class="btn-primary" data-on-click="connectWoo()" id="wooConnectBtn">
             <span data-i18n="woo_connect_btn">ربط المتجر</span>
           </button>
           <div id="wooConnectMsg" style="margin-top:10px;font-size:12px"></div>
@@ -482,10 +482,10 @@
             <div style="font-size:12px;color:var(--muted);margin-top:4px" id="wooStoreUrlDisplay"></div>
             <div style="font-size:11px;color:var(--muted);margin-top:4px" id="wooLastSyncDisplay"></div>
           </div>
-          <button class="btn-primary" onclick="syncWoo()" id="wooSyncBtn">
+          <button class="btn-primary" data-on-click="syncWoo()" id="wooSyncBtn">
             <span data-i18n="woo_sync_now">🔄 مزامنة الآن</span>
           </button>
-          <button class="btn-danger" style="margin-right:8px" onclick="disconnectWoo()">
+          <button class="btn-danger" style="margin-right:8px" data-on-click="disconnectWoo()">
             <span data-i18n="woo_disconnect">فك الربط</span>
           </button>
           <div id="wooSyncMsg" style="margin-top:10px;font-size:12px"></div>
@@ -499,7 +499,7 @@
       <i class="bi bi-person-badge"></i>
       <h5 data-i18n="locked_team">ميزة الفريق غير متاحة</h5>
       <p data-i18n="upgrade_team">قم بالترقية إلى Starter أو أعلى</p>
-      <button class="btn-primary" style="margin-top:16px" onclick="showSection('plans')">
+      <button class="btn-primary" style="margin-top:16px" data-on-click="showSection('plans')">
         <span data-i18n="see_plans">Voir les abonnements</span>
       </button>
     </div>
@@ -509,7 +509,7 @@
           <h5 data-i18n="nav_team">الفريق</h5>
           <div style="display:flex;align-items:center;gap:10px">
             <span id="teamCountLabel" style="font-size:12px;color:var(--muted)">—</span>
-            <button class="btn-primary btn-sm" id="addMemberBtn" onclick="openAddMemberModal()">
+            <button class="btn-primary btn-sm" id="addMemberBtn" data-on-click="openAddMemberModal()">
               <i class="bi bi-plus-lg"></i> <span data-i18n="add_member">إضافة عضو</span>
             </button>
           </div>
@@ -534,8 +534,8 @@
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
       <h4 class="mb-0" data-i18n="nav_plans">Abonnements</h4>
       <div style="display:flex;gap:6px">
-        <button class="lang-btn active" id="billMonthlyBtn" onclick="setBillingCycle('monthly')" data-i18n="bill_monthly">شهري</button>
-        <button class="lang-btn" id="billYearlyBtn" onclick="setBillingCycle('yearly')" data-i18n="bill_yearly">سنوي (وفّر شهرين)</button>
+        <button class="lang-btn active" id="billMonthlyBtn" data-on-click="setBillingCycle('monthly')" data-i18n="bill_monthly">شهري</button>
+        <button class="lang-btn" id="billYearlyBtn" data-on-click="setBillingCycle('yearly')" data-i18n="bill_yearly">سنوي (وفّر شهرين)</button>
       </div>
     </div>
     <div class="row g-3">
@@ -620,10 +620,10 @@
         <div class="table-wrap" style="padding:20px">
           <h5 style="margin-bottom:16px">Facebook / Meta</h5>
           <div id="fbStatus" style="margin-bottom:16px;font-size:13px;color:var(--muted)">—</div>
-          <button class="btn-primary" onclick="connectFacebook()">
+          <button class="btn-primary" data-on-click="connectFacebook()">
             <i class="bi bi-facebook"></i> <span data-i18n="connect_fb">Connecter Facebook</span>
           </button>
-          <button class="btn-danger" style="margin-left:8px" onclick="disconnectFacebook()">
+          <button class="btn-danger" style="margin-left:8px" data-on-click="disconnectFacebook()">
             <span data-i18n="disconnect">Déconnecter</span>
           </button>
         </div>
@@ -635,7 +635,7 @@
 
 <div id="addOrderModal" class="modal-overlay">
   <div class="modal-box">
-    <button class="modal-close" onclick="closeModal('addOrderModal')">✕</button>
+    <button class="modal-close" data-on-click="closeModal('addOrderModal')">✕</button>
     <h4 data-i18n="add_order">Ajouter une commande</h4>
     <div class="row g-2">
       <div class="col-6"><div class="form-group"><label data-i18n="client">Client</label><input id="o_name" class="form-control"/></div></div>
@@ -654,15 +654,15 @@
       <div class="col-12"><div class="form-group"><label data-i18n="notes">Notes</label><input id="o_notes" class="form-control"/></div></div>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
-      <button class="btn-outline" onclick="closeModal('addOrderModal')"><span data-i18n="cancel">Annuler</span></button>
-      <button class="btn-primary" onclick="addOrder()"><span data-i18n="add">Ajouter</span></button>
+      <button class="btn-outline" data-on-click="closeModal('addOrderModal')"><span data-i18n="cancel">Annuler</span></button>
+      <button class="btn-primary" data-on-click="addOrder()"><span data-i18n="add">Ajouter</span></button>
     </div>
   </div>
 </div>
 
 <div id="addProductModal" class="modal-overlay">
   <div class="modal-box">
-    <button class="modal-close" onclick="closeModal('addProductModal')">✕</button>
+    <button class="modal-close" data-on-click="closeModal('addProductModal')">✕</button>
     <h4 data-i18n="add_product">Ajouter un produit</h4>
     <div class="row g-2">
       <div class="col-12"><div class="form-group"><label data-i18n="product">Nom du produit</label><input id="p_name" class="form-control"/></div></div>
@@ -673,22 +673,22 @@
       <div class="col-4"><div class="form-group"><label>Prix vente</label><input id="p_sell" class="form-control" type="number" value="0"/></div></div>
       <div class="col-4"><div class="form-group"><label>Stock init</label><input id="p_init" class="form-control" type="number" value="0"/></div></div>
       <div class="col-12"><div class="form-group"><label>الصور (حتى 4) / Images</label>
-        <input type="file" accept="image/*" multiple class="form-control" onchange="addProductImages(this)"/>
+        <input type="file" accept="image/*" multiple class="form-control" data-on-change="addProductImages(this)"/>
         <div id="p_img_upload_status" style="font-size:12px;margin-top:6px"></div>
         <div id="p_img_thumbs" class="thumb-row"></div>
       </div></div>
       <div class="col-12"><div class="form-group"><label>Description</label><textarea id="p_desc" class="form-control" rows="2"></textarea></div></div>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
-      <button class="btn-outline" onclick="closeModal('addProductModal')"><span data-i18n="cancel">Annuler</span></button>
-      <button class="btn-primary" onclick="addProduct()"><span data-i18n="add">Ajouter</span></button>
+      <button class="btn-outline" data-on-click="closeModal('addProductModal')"><span data-i18n="cancel">Annuler</span></button>
+      <button class="btn-primary" data-on-click="addProduct()"><span data-i18n="add">Ajouter</span></button>
     </div>
   </div>
 </div>
 
 <div id="addCityModal" class="modal-overlay">
   <div class="modal-box">
-    <button class="modal-close" onclick="closeModal('addCityModal')">✕</button>
+    <button class="modal-close" data-on-click="closeModal('addCityModal')">✕</button>
     <h4 data-i18n="add_city">Ajouter une ville</h4>
     <div class="row g-2">
       <div class="col-12"><div class="form-group"><label data-i18n="city">Nom de la ville</label><input id="c_name" class="form-control"/></div></div>
@@ -701,21 +701,21 @@
       <div class="col-12"><div class="form-group"><label data-i18n="return_fee_shared">رسوم الإرجاع (مشتركة)</label><input id="c_ret" class="form-control" type="number" value="0"/></div></div>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
-      <button class="btn-outline" onclick="closeModal('addCityModal')"><span data-i18n="cancel">Annuler</span></button>
-      <button class="btn-primary" onclick="addCity()"><span data-i18n="add">Ajouter</span></button>
+      <button class="btn-outline" data-on-click="closeModal('addCityModal')"><span data-i18n="cancel">Annuler</span></button>
+      <button class="btn-primary" data-on-click="addCity()"><span data-i18n="add">Ajouter</span></button>
     </div>
   </div>
 </div>
 
 <div id="storeSettingsModal" class="modal-overlay">
   <div class="modal-box">
-    <button class="modal-close" onclick="closeModal('storeSettingsModal')">✕</button>
+    <button class="modal-close" data-on-click="closeModal('storeSettingsModal')">✕</button>
     <h4 data-i18n="store_settings">Paramètres boutique</h4>
     <div class="form-group"><label>Nom boutique</label><input id="ss_name" class="form-control"/></div>
     <div class="form-group"><label>Slogan</label><input id="ss_tagline" class="form-control"/></div>
     <div class="form-group"><label>Logo (emoji)</label><input id="ss_logo" class="form-control" value="🛒"/></div>
     <div class="form-group"><label>صورة اللوغو (اختياري — تُستعمل بدل الإيموجي إذا رُفعت)</label>
-      <input type="file" accept="image/*" class="form-control" onchange="uploadStoreLogoImage(this)"/>
+      <input type="file" accept="image/*" class="form-control" data-on-change="uploadStoreLogoImage(this)"/>
       <div id="ss_logo_preview" style="margin-top:8px"></div>
     </div>
     <div class="form-group"><label>العملة / Devise</label>
@@ -726,15 +726,15 @@
       </select>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
-      <button class="btn-outline" onclick="closeModal('storeSettingsModal')"><span data-i18n="cancel">Annuler</span></button>
-      <button class="btn-primary" onclick="saveStoreSettings()"><span data-i18n="save">Enregistrer</span></button>
+      <button class="btn-outline" data-on-click="closeModal('storeSettingsModal')"><span data-i18n="cancel">Annuler</span></button>
+      <button class="btn-primary" data-on-click="saveStoreSettings()"><span data-i18n="save">Enregistrer</span></button>
     </div>
   </div>
 </div>
 
 <div id="createLandingModal" class="modal-overlay">
   <div class="modal-box">
-    <button class="modal-close" onclick="closeModal('createLandingModal')">✕</button>
+    <button class="modal-close" data-on-click="closeModal('createLandingModal')">✕</button>
     <h4 data-i18n="create_landing">Créer une page</h4>
 
     <div id="lp_step1">
@@ -743,13 +743,13 @@
       <div class="form-group"><label data-i18n="landing_desc">Description du produit</label>
         <textarea id="lp_desc" class="form-control" rows="3"></textarea></div>
       <div class="form-group"><label data-i18n="landing_images">Images du produit (jusqu'à 4)</label>
-        <input type="file" accept="image/*" multiple class="form-control" onchange="addLandingImages(this)"/>
+        <input type="file" accept="image/*" multiple class="form-control" data-on-change="addLandingImages(this)"/>
         <div id="lp_img_upload_status" style="font-size:12px;margin-top:6px"></div>
         <div id="lp_img_thumbs" class="thumb-row"></div>
       </div>
       <div class="form-group">
         <label data-i18n="landing_cta_type">Le bouton redirige vers</label>
-        <select id="lp_cta_type" class="form-select" onchange="toggleLandingCtaFields()">
+        <select id="lp_cta_type" class="form-select" data-on-change="toggleLandingCtaFields()">
           <option value="store" data-i18n="landing_cta_store">🛍️ Ma boutique en ligne</option>
           <option value="whatsapp" data-i18n="landing_cta_whatsapp">💬 WhatsApp</option>
         </select>
@@ -759,8 +759,8 @@
         <input id="lp_wa_number" class="form-control" placeholder="+213..." type="tel"/>
       </div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
-        <button class="btn-outline" onclick="closeModal('createLandingModal')"><span data-i18n="cancel">Annuler</span></button>
-        <button class="btn-primary" id="lp_next_btn" onclick="lp_goToQuestions()"><span data-i18n="landing_next_btn">التالي: أسئلة احترافية</span></button>
+        <button class="btn-outline" data-on-click="closeModal('createLandingModal')"><span data-i18n="cancel">Annuler</span></button>
+        <button class="btn-primary" id="lp_next_btn" data-on-click="lp_goToQuestions()"><span data-i18n="landing_next_btn">التالي: أسئلة احترافية</span></button>
       </div>
     </div>
 
@@ -768,8 +768,8 @@
       <p style="font-size:12px;color:var(--muted);margin-bottom:14px" data-i18n="landing_questions_intro">جاوب على هاذ الأسئلة باش الذكاء الاصطناعي يصمملك صفحة احترافية أكثر (اختياري، كل ما جاوبت أكثر كانت الصفحة أقوى)</p>
       <div id="lp_questions"></div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
-        <button class="btn-outline" onclick="lp_backToStep1()"><span data-i18n="back">رجوع</span></button>
-        <button class="btn-primary" id="lp_generate_btn" onclick="generateLandingPage()"><span data-i18n="landing_generate_btn">صمم بالذكاء الاصطناعي</span></button>
+        <button class="btn-outline" data-on-click="lp_backToStep1()"><span data-i18n="back">رجوع</span></button>
+        <button class="btn-primary" id="lp_generate_btn" data-on-click="generateLandingPage()"><span data-i18n="landing_generate_btn">صمم بالذكاء الاصطناعي</span></button>
       </div>
     </div>
   </div>
@@ -777,7 +777,7 @@
 
 <div id="teamMemberModal" class="modal-overlay">
   <div class="modal-box">
-    <button class="modal-close" onclick="closeModal('teamMemberModal')">✕</button>
+    <button class="modal-close" data-on-click="closeModal('teamMemberModal')">✕</button>
     <h4 id="teamModalTitle" data-i18n="add_member">إضافة عضو</h4>
     <input type="hidden" id="tm_original_username" value=""/>
     <div class="form-group"><label data-i18n="member_username">اسم المستخدم</label><input id="tm_username" class="form-control" autocomplete="off"/></div>
@@ -795,8 +795,8 @@
       </label>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
-      <button class="btn-outline" onclick="closeModal('teamMemberModal')"><span data-i18n="cancel">Annuler</span></button>
-      <button class="btn-primary" onclick="saveTeamMember()"><span data-i18n="save">Enregistrer</span></button>
+      <button class="btn-outline" data-on-click="closeModal('teamMemberModal')"><span data-i18n="cancel">Annuler</span></button>
+      <button class="btn-primary" data-on-click="saveTeamMember()"><span data-i18n="save">Enregistrer</span></button>
     </div>
   </div>
 </div>
@@ -804,6 +804,7 @@
 <div class="toast-wrap" id="toastWrap"></div>
 
 <script src="/static/js/core.js"></script>
+<script src="/static/js/actions.js"></script>
 <script src="/static/js/auth.js"></script>
 <script src="/static/js/api.js"></script>
 <script src="/static/js/dashboard.js"></script>

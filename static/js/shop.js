@@ -86,9 +86,9 @@ function sh_renderCategories(){
   var toolbar = document.getElementById("sh-toolbar");
   if(!cats.length){ toolbar.style.display="none"; return; }
   toolbar.style.display = "flex";
-  box.innerHTML = '<span class="shop-chip'+(SHOP_CATEGORY===""?" active":"")+'" data-cat="" onclick="sh_filterCategory(this.dataset.cat)">الكل</span>' +
+  box.innerHTML = '<span class="shop-chip'+(SHOP_CATEGORY===""?" active":"")+'" data-cat="" data-on-click="sh_filterCategory(this.dataset.cat)">الكل</span>' +
     cats.map(function(c){
-      return '<span class="shop-chip'+(SHOP_CATEGORY===c?" active":"")+'" data-cat="'+esc(c)+'" onclick="sh_filterCategory(this.dataset.cat)">'+esc(c)+'</span>';
+      return '<span class="shop-chip'+(SHOP_CATEGORY===c?" active":"")+'" data-cat="'+esc(c)+'" data-on-click="sh_filterCategory(this.dataset.cat)">'+esc(c)+'</span>';
     }).join("");
 }
 
@@ -123,10 +123,10 @@ async function sh_trackOrder(){
             rateBlock = '<div class="rate-widget" data-order-id="'+esc(o.id)+'">'+
               '<div style="font-size:12px;margin-bottom:6px">⭐ قيّم هذا المنتج:</div>'+
               '<div class="rate-stars" data-value="0">'+
-                [1,2,3,4,5].map(function(n){ return '<span data-n="'+n+'" onclick="setRateStar(this,parseInt(this.dataset.n))">☆</span>'; }).join("")+
+                [1,2,3,4,5].map(function(n){ return '<span data-n="'+n+'" data-on-click="setRateStar(this,parseInt(this.dataset.n))">☆</span>'; }).join("")+
               '</div>'+
               '<textarea class="rate-comment" placeholder="تعليق (اختياري)"></textarea>'+
-              '<button class="btn-primary btn-sm" style="margin-top:8px" onclick="submitProductRating(this.closest(\'.rate-widget\').dataset.orderId,this)">إرسال التقييم</button>'+
+              '<button class="btn-primary btn-sm" style="margin-top:8px" data-on-click="submitProductRating(this.closest(\'.rate-widget\').dataset.orderId,this)">إرسال التقييم</button>'+
             '</div>';
           }
         }
@@ -207,9 +207,9 @@ function sh_renderGrid(q){
     var av  = Number(p.available||0);
     var dis = av<=0;
     var img = p.image
-      ? '<img src="'+esc(p.image)+'" onerror="this.style.display=\'none\'" style="width:100%;height:100%;object-fit:cover"/>'
+      ? '<img src="'+esc(p.image)+'" data-on-error="this.style.display=\'none\'" style="width:100%;height:100%;object-fit:cover"/>'
       : '📦';
-    return '<div class="shop-card" data-name="'+esc(p.name)+'" onclick="pdp_open(this.dataset.name)" style="cursor:pointer">'+
+    return '<div class="shop-card" data-name="'+esc(p.name)+'" data-on-click="pdp_open(this.dataset.name)" style="cursor:pointer">'+
       '<div class="shop-card-img">'+img+'</div>'+
       '<div class="shop-card-body">'+
         '<div class="shop-card-name">'+esc(p.name)+'</div>'+
@@ -220,7 +220,7 @@ function sh_renderGrid(q){
       '</div>'+
       '<div class="shop-card-footer">'+
         '<div class="shop-price">'+esc(p.sell||0)+' '+sh_cur()+'</div>'+
-        '<button class="shop-add-btn"'+(dis?' disabled':'')+' data-name="'+esc(p.name)+'" onclick="event.stopPropagation();sh_addToCart(this.dataset.name)">'+
+        '<button class="shop-add-btn"'+(dis?' disabled':'')+' data-name="'+esc(p.name)+'" data-on-click="event.stopPropagation();sh_addToCart(this.dataset.name)">'+
         (dis?'Rupture':'🛒 Ajouter')+'</button>'+
       '</div></div>';
   }).join("");
@@ -333,11 +333,11 @@ function sh_updateCartUI(){
           '<div class="cart-item-price">'+esc(c.sell||0)+' '+sh_cur()+'</div>'+
         '</div>'+
         '<div class="cart-qty">'+
-          '<button class="cart-qty-btn" data-name="'+esc(c.name)+'" onclick="sh_changeQty(this.dataset.name,-1)">−</button>'+
+          '<button class="cart-qty-btn" data-name="'+esc(c.name)+'" data-on-click="sh_changeQty(this.dataset.name,-1)">−</button>'+
           '<span style="font-weight:700;min-width:20px;text-align:center">'+c.qty+'</span>'+
-          '<button class="cart-qty-btn" data-name="'+esc(c.name)+'" onclick="sh_changeQty(this.dataset.name,1)">+</button>'+
+          '<button class="cart-qty-btn" data-name="'+esc(c.name)+'" data-on-click="sh_changeQty(this.dataset.name,1)">+</button>'+
         '</div>'+
-        '<button data-name="'+esc(c.name)+'" onclick="sh_removeFromCart(this.dataset.name)" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;padding:4px">🗑️</button>'+
+        '<button data-name="'+esc(c.name)+'" data-on-click="sh_removeFromCart(this.dataset.name)" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;padding:4px">🗑️</button>'+
       '</div>';
     }).join("");
   }

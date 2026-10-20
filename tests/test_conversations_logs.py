@@ -180,4 +180,5 @@ def test_frontend_conversation_polls_are_incremental_and_pause_when_hidden():
     for poller in ("startConvListPolling", "startConvPolling"):
         assert "document.hidden" in _fn(poller)
     assert "pollConversationMessages" in _fn("startConvPolling")
-    assert 'onclick="loadOlderConversations()"' in INDEX and 'onclick="loadOlderMessages()"' in INDEX
+    # F5: الأزرار كتستعمل data-on-click (نفس نص الـ handler)
+    assert 'data-on-click="loadOlderConversations()"' in INDEX and 'data-on-click="loadOlderMessages()"' in INDEX

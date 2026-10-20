@@ -128,6 +128,6 @@ def test_logout_clears_cached_orders():
 
 def test_frontend_load_older_and_chart_use_paging():
     assert "before:ORDERS_OLDEST" in _fn("loadOlderOrders").replace(" ", "")
-    assert re.search(r'onclick="loadOlderOrders\(\)"', INDEX)
+    assert re.search(r'data-on-click="loadOlderOrders\(\)"', INDEX)  # F5: data-on-click
     assert "createdAfter:" in _fn("loadTrendChart").replace(" ", "")
     assert "limit:" in _fn("loadOrders").replace(" ", "")

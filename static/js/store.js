@@ -31,11 +31,11 @@ async function loadStore(){
         return '<div class="store-card">'+
           '<div style="position:relative">'+
             (p.image
-              ? '<img src="'+esc(p.image)+'" alt="'+esc(p.name)+'" style="width:100%;height:160px;object-fit:cover" onerror="this.style.display=\'none\'"/>'
+              ? '<img src="'+esc(p.image)+'" alt="'+esc(p.name)+'" style="width:100%;height:160px;object-fit:cover" data-on-error="this.style.display=\'none\'"/>'
               : '<div style="height:160px;display:flex;align-items:center;justify-content:center;background:var(--card2);font-size:40px">📦</div>')+
             '<label style="position:absolute;bottom:8px;right:8px;background:var(--accent);color:#fff;padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer;font-weight:600;display:inline-flex;align-items:center;gap:4px">'+
               '📸 Changer'+
-              '<input type="file" accept="image/*" style="display:none" data-name="'+esc(p.name)+'" onchange="uploadStoreProductImage(this,this.dataset.name)"/>'+
+              '<input type="file" accept="image/*" style="display:none" data-name="'+esc(p.name)+'" data-on-change="uploadStoreProductImage(this,this.dataset.name)"/>'+
             '</label>'+
           '</div>'+
           '<div class="store-card-body">'+
@@ -55,7 +55,7 @@ function renderStoreLogoPreview(){
   var box = document.getElementById("ss_logo_preview");
   if(!box) return;
   box.innerHTML = currentStoreLogoImage
-    ? '<div class="thumb-item"><img src="'+esc(currentStoreLogoImage)+'"/><button class="rm" onclick="removeStoreLogoImage()">✕</button></div>'
+    ? '<div class="thumb-item"><img src="'+esc(currentStoreLogoImage)+'"/><button class="rm" data-on-click="removeStoreLogoImage()">✕</button></div>'
     : '';
 }
 
@@ -105,7 +105,7 @@ function renderLandingImageThumbs(){
   var wrap = document.getElementById("lp_img_thumbs");
   if(!wrap) return;
   wrap.innerHTML = currentLandingImages.map(function(url, i){
-    return '<div class="thumb-item"><img src="'+url+'"/><button class="rm" onclick="removeLandingImage('+i+')">✕</button></div>';
+    return '<div class="thumb-item"><img src="'+url+'"/><button class="rm" data-i="'+i+'" data-on-click="removeLandingImage(Number(this.dataset.i))">✕</button></div>';
   }).join("");
 }
 
@@ -251,7 +251,7 @@ function renderLandingList(list){
   if(!list || !list.length){ grid.innerHTML=""; empty.style.display="block"; return; }
   empty.style.display = "none";
   grid.innerHTML = list.map(function(p){
-    var img = (p.images&&p.images[0]) ? '<img src="'+esc(p.images[0])+'" style="width:100%;height:160px;object-fit:cover" onerror="this.style.display=\'none\'"/>'
+    var img = (p.images&&p.images[0]) ? '<img src="'+esc(p.images[0])+'" style="width:100%;height:160px;object-fit:cover" data-on-error="this.style.display=\'none\'"/>'
                                        : '<div style="height:160px;display:flex;align-items:center;justify-content:center;background:var(--card2);font-size:40px">🎯</div>';
     var pubBadge = p.published ? '<span class="badge bc">'+t("landing_published")+'</span>' : '<span class="badge bp">'+t("landing_unpublished")+'</span>';
     var igBadge  = p.instagramPostId ? '<span class="badge bi" style="margin-right:4px">📷 IG</span>' : '';
@@ -262,11 +262,11 @@ function renderLandingList(list){
         '<div style="font-size:11px;color:var(--muted);margin:4px 0">'+esc(p.created_at||"")+' · 👁️ '+esc(p.views||0)+' '+t("landing_views")+'</div>'+
         '<div style="margin-bottom:8px">'+pubBadge+' '+igBadge+'</div>'+
         '<div style="display:flex;gap:6px;flex-wrap:wrap" data-id="'+esc(p.id)+'" data-url="'+esc(p.publicUrl)+'">'+
-          '<button class="btn-outline btn-sm" onclick="window.open(this.closest(\'div[data-url]\').dataset.url,\'_blank\')"><i class="bi bi-eye"></i> '+t("landing_preview")+'</button>'+
-          '<button class="btn-outline btn-sm" onclick="copyLandingLink(this.closest(\'div[data-url]\').dataset.url)"><i class="bi bi-clipboard"></i> '+t("landing_copy_link")+'</button>'+
-          '<button class="btn-success" onclick="toggleLandingPublish(this.closest(\'div[data-id]\').dataset.id)">'+(p.published?'⏸️':'▶️')+'</button>'+
-          '<button class="btn-primary btn-sm" onclick="postLandingToInstagram(this.closest(\'div[data-id]\').dataset.id)"><i class="bi bi-instagram"></i> '+t("landing_post_ig")+'</button>'+
-          '<button class="btn-danger" onclick="deleteLandingPage(this.closest(\'div[data-id]\').dataset.id)"><i class="bi bi-trash"></i></button>'+
+          '<button class="btn-outline btn-sm" data-on-click="window.open(this.closest(\'div[data-url]\').dataset.url,\'_blank\')"><i class="bi bi-eye"></i> '+t("landing_preview")+'</button>'+
+          '<button class="btn-outline btn-sm" data-on-click="copyLandingLink(this.closest(\'div[data-url]\').dataset.url)"><i class="bi bi-clipboard"></i> '+t("landing_copy_link")+'</button>'+
+          '<button class="btn-success" data-on-click="toggleLandingPublish(this.closest(\'div[data-id]\').dataset.id)">'+(p.published?'⏸️':'▶️')+'</button>'+
+          '<button class="btn-primary btn-sm" data-on-click="postLandingToInstagram(this.closest(\'div[data-id]\').dataset.id)"><i class="bi bi-instagram"></i> '+t("landing_post_ig")+'</button>'+
+          '<button class="btn-danger" data-on-click="deleteLandingPage(this.closest(\'div[data-id]\').dataset.id)"><i class="bi bi-trash"></i></button>'+
         '</div>'+
       '</div></div>';
   }).join("");

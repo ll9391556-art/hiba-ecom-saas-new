@@ -123,8 +123,8 @@ function renderTeamTable(list){
       '<td style="white-space:normal;max-width:280px">'+permsHtml+'</td>'+
       '<td>'+statusBadge+'</td>'+
       '<td style="display:flex;gap:6px" data-user="'+esc(m.username)+'">'+
-        '<button class="btn-outline btn-sm" onclick="openEditMemberModal(this.closest(\'td\').dataset.user)"><i class="bi bi-pencil"></i></button>'+
-        '<button class="btn-danger" onclick="deleteTeamMember(this.closest(\'td\').dataset.user)"><i class="bi bi-trash"></i></button>'+
+        '<button class="btn-outline btn-sm" data-on-click="openEditMemberModal(this.closest(\'td\').dataset.user)"><i class="bi bi-pencil"></i></button>'+
+        '<button class="btn-danger" data-on-click="deleteTeamMember(this.closest(\'td\').dataset.user)"><i class="bi bi-trash"></i></button>'+
       '</td>'+
     '</tr>';
   }).join("");

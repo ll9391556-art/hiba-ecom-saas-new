@@ -63,7 +63,7 @@ tr:hover td{background:var(--card2)}
       <div><label>عدد مرات الاستعمال (0=بلا حد)</label><input id="c_max" type="number" value="0"/></div>
       <div><label>تاريخ الانتهاء (اختياري)</label><input id="c_exp" type="date"/></div>
     </div>
-    <button onclick="createCoupon()">إنشاء القسيمة</button>
+    <button data-on-click="createCoupon()">إنشاء القسيمة</button>
     <div id="createMsg" class="msg"></div>
   </div>
 
@@ -76,6 +76,11 @@ tr:hover td{background:var(--card2)}
 <script src="/static/js/core.js"></script>
 <script src="/static/js/api.js"></script>
 <script>
+registerActions({
+  "createCoupon()": function(event){ createCoupon(); },
+  "deleteCoupon(this.dataset.code)": function(event){ deleteCoupon(this.dataset.code); },
+  "toggleCoupon(this.dataset.code,this.dataset.active==='true')": function(event){ toggleCoupon(this.dataset.code,this.dataset.active==='true'); },
+});
 // API_URL / authToken / apiGet / apiPost / esc: من /static/js/core.js و api.js (Phase 4 / F4)
 
 async function loadCoupons(){
@@ -91,8 +96,8 @@ async function loadCoupons(){
         '<td>'+val+'</td><td>'+used+'</td>'+
         '<td><span class="badge '+(c.active?"b-on":"b-off")+'">'+(c.active?"فعّالة":"موقوفة")+'</span></td>'+
         '<td>'+
-          '<button style="padding:5px 12px;font-size:11px" data-code="'+esc(c.code)+'" onclick="toggleCoupon(this.dataset.code,'+(!c.active)+')">'+(c.active?"إيقاف":"تفعيل")+'</button> '+
-          '<button class="btn-danger" style="padding:5px 12px;font-size:11px" data-code="'+esc(c.code)+'" onclick="deleteCoupon(this.dataset.code)">حذف</button>'+
+          '<button style="padding:5px 12px;font-size:11px" data-code="'+esc(c.code)+'" data-active="'+(!c.active)+'" data-on-click="toggleCoupon(this.dataset.code,this.dataset.active===\'true\')">'+(c.active?"إيقاف":"تفعيل")+'</button> '+
+          '<button class="btn-danger" style="padding:5px 12px;font-size:11px" data-code="'+esc(c.code)+'" data-on-click="deleteCoupon(this.dataset.code)">حذف</button>'+
         '</td></tr>';
     }).join("")+'</tbody></table>';
 }

@@ -34,7 +34,7 @@ function renderCurrencyButtons(){
   var box = document.getElementById("currencyButtons");
   if(!box) return;
   box.innerHTML = ["DZD","EUR","USD"].map(function(code){
-    return '<button class="lang-btn'+(code===merchantCurrency?" active":"")+'" data-code="'+esc(code)+'" onclick="setMerchantCurrency(this.dataset.code)">'+esc(code)+'</button>';
+    return '<button class="lang-btn'+(code===merchantCurrency?" active":"")+'" data-code="'+esc(code)+'" data-on-click="setMerchantCurrency(this.dataset.code)">'+esc(code)+'</button>';
   }).join("");
 }
 
@@ -303,3 +303,26 @@ function toast(msg, type){
   setTimeout(function(){ d.remove(); }, 3500);
 }
 
+
+// =========================================================
+// EVENTS — بدل onclick="..." inline (Phase 4 / F5): data-on-<event>="نص الـ handler"
+// + جدول ACTIONS (static/js/actions.js أو registerActions فالصفحة). مستمع واحد لكل حدث
+// على document كيمشي من العنصر لفوق: كل عنصر عندو data-on-<event> كيتنفّذ (this = العنصر)،
+// ويوقف إذا الـ handler دار event.stopPropagation() — نفس سلوك الـ inline. error ديال
+// الصور ما كيصعدش، لذلك كيتسمع فمرحلة capture. بلا eval → يسمح بـ CSP صارمة من بعد.
+// =========================================================
+var ACTIONS = {};
+function registerActions(map){
+  for(var k in map) if(Object.prototype.hasOwnProperty.call(map, k)) ACTIONS[k] = map[k];
+}
+["click", "change", "input", "keydown", "error"].forEach(function(type){
+  var attr = "data-on-" + type;
+  document.addEventListener(type, function(event){
+    for(var el = event.target; el && el.nodeType === 1; el = el.parentNode){
+      if(!el.hasAttribute(attr)) continue;
+      var fn = ACTIONS[el.getAttribute(attr)];
+      if(fn && fn.call(el, event) === false) event.preventDefault();
+      if(event.cancelBubble || type === "error") break;
+    }
+  }, type === "error");
+});

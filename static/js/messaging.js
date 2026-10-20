@@ -96,7 +96,7 @@ function renderConversationsList(list){
     var dirIcon = c.lastDirection==="out" ? "↩️ " : "";
     var timeTxt = c.lastTimestamp ? new Date(c.lastTimestamp*1000).toLocaleString("fr-DZ",{hour:"2-digit",minute:"2-digit",day:"2-digit",month:"2-digit"}) : "";
     return '<div class="conv-item'+active+'" data-sid="'+esc(c.senderId)+'" data-platform="'+esc(c.platform)+'" data-name="'+esc(c.name||"")+'"'+
-      ' onclick="openConversation(this.dataset.sid,this.dataset.platform,this.dataset.name)">'+
+      ' data-on-click="openConversation(this.dataset.sid,this.dataset.platform,this.dataset.name)">'+
       '<div class="conv-avatar">'+icon+'</div>'+
       '<div class="conv-info">'+
         '<div class="conv-name">'+esc(c.name||c.senderId)+'</div>'+
@@ -105,7 +105,7 @@ function renderConversationsList(list){
       '<div class="conv-time">'+esc(timeTxt)+'</div>'+
     '</div>';
   }).join("") + (CONV_HAS_MORE
-    ? '<div style="text-align:center;padding:10px"><button class="btn-outline btn-sm" onclick="loadOlderConversations()">⬇️ المزيد / Plus</button></div>'
+    ? '<div style="text-align:center;padding:10px"><button class="btn-outline btn-sm" data-on-click="loadOlderConversations()">⬇️ المزيد / Plus</button></div>'
     : '');
 }
 function openConversation(senderId, platform, name){
@@ -185,7 +185,7 @@ function renderConversationMessages(items, keepScroll){
   if(!items.length){ box.innerHTML='<div class="empty-state"><i class="bi bi-chat"></i></div>'; return; }
   var prevHeight = box.scrollHeight, prevTop = box.scrollTop;
   box.innerHTML = (CONV_MSGS_HAS_MORE
-    ? '<div style="text-align:center;padding:6px"><button class="btn-outline btn-sm" onclick="loadOlderMessages()">⬆️ رسائل أقدم / Plus</button></div>'
+    ? '<div style="text-align:center;padding:6px"><button class="btn-outline btn-sm" data-on-click="loadOlderMessages()">⬆️ رسائل أقدم / Plus</button></div>'
     : '') + items.map(function(m){
     var cls = m.direction==="out" ? "msg-out" : "msg-in";
     var viaBadge = m.via==="manual" ? " 👤" : m.via==="bot" ? " 🤖" : "";

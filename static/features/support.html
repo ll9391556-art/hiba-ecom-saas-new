@@ -60,7 +60,7 @@ tr:hover td{background:var(--card2)}
       <option value="other">📋 أخرى</option>
     </select>
     <textarea id="s_message" placeholder="اشرحلنا مشكلتك أو اقتراحك بالتفصيل..."></textarea>
-    <button onclick="submitTicket()">إرسال</button>
+    <button data-on-click="submitTicket()">إرسال</button>
     <div id="submitMsg" class="msg"></div>
   </div>
 
@@ -73,6 +73,9 @@ tr:hover td{background:var(--card2)}
 <script src="/static/js/core.js"></script>
 <script src="/static/js/api.js"></script>
 <script>
+registerActions({
+  "submitTicket()": function(event){ submitTicket(); },
+});
 // API_URL / authToken / apiGet / apiPost / esc: من /static/js/core.js و api.js (Phase 4 / F4)
 
 var TYPE_LABELS = {bug:"🐛 مشكلة",suggestion:"💡 اقتراح",feature_request:"✨ طلب ميزة",other:"📋 أخرى"};

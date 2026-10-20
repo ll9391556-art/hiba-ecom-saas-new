@@ -62,7 +62,7 @@ var currentProductImages = [];
 function renderProductImageThumbs(){
   var wrap = document.getElementById("p_img_thumbs");
   wrap.innerHTML = currentProductImages.map(function(url, i){
-    return '<div class="thumb-item"><img src="'+url+'"/><button class="rm" onclick="removeProductImage('+i+')">✕</button></div>';
+    return '<div class="thumb-item"><img src="'+url+'"/><button class="rm" data-i="'+i+'" data-on-click="removeProductImage(Number(this.dataset.i))">✕</button></div>';
   }).join("");
 }
 

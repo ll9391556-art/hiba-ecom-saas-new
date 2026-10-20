@@ -42,16 +42,16 @@ padding:6px 12px;border-radius:20px;font-size:11px;cursor:pointer}
 
   <div class="chat-box">
     <div class="suggestions">
-      <span class="sugg-chip" onclick="askSuggested('كيف أزيد معدل تأكيد الطلبات؟')">كيف أزيد معدل التأكيد؟</span>
-      <span class="sugg-chip" onclick="askSuggested('شو المنتجات يلي لازم أعيد تخزينها؟')">مخزون منخفض</span>
-      <span class="sugg-chip" onclick="askSuggested('لخصلي أداء الفريق هالفترة')">أداء الفريق</span>
+      <span class="sugg-chip" data-on-click="askSuggested('كيف أزيد معدل تأكيد الطلبات؟')">كيف أزيد معدل التأكيد؟</span>
+      <span class="sugg-chip" data-on-click="askSuggested('شو المنتجات يلي لازم أعيد تخزينها؟')">مخزون منخفض</span>
+      <span class="sugg-chip" data-on-click="askSuggested('لخصلي أداء الفريق هالفترة')">أداء الفريق</span>
     </div>
     <div id="messages" class="messages">
       <div class="empty">اسأليني عن أي شي متعلق بمتجرك — مبيعات، مخزون، أداء الفريق، اقتراحات لتحسين العمل</div>
     </div>
     <div class="input-row">
-      <textarea id="msgInput" placeholder="اكتبي سؤالك هنا..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage();}"></textarea>
-      <button id="sendBtn" onclick="sendMessage()">إرسال</button>
+      <textarea id="msgInput" placeholder="اكتبي سؤالك هنا..." data-on-keydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage();}"></textarea>
+      <button id="sendBtn" data-on-click="sendMessage()">إرسال</button>
     </div>
   </div>
 </div>
@@ -59,6 +59,13 @@ padding:6px 12px;border-radius:20px;font-size:11px;cursor:pointer}
 <script src="/static/js/core.js"></script>
 <script src="/static/js/api.js"></script>
 <script>
+registerActions({
+  "askSuggested('شو المنتجات يلي لازم أعيد تخزينها؟')": function(event){ askSuggested('شو المنتجات يلي لازم أعيد تخزينها؟'); },
+  "askSuggested('كيف أزيد معدل تأكيد الطلبات؟')": function(event){ askSuggested('كيف أزيد معدل تأكيد الطلبات؟'); },
+  "askSuggested('لخصلي أداء الفريق هالفترة')": function(event){ askSuggested('لخصلي أداء الفريق هالفترة'); },
+  "if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage();}": function(event){ if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage();}; },
+  "sendMessage()": function(event){ sendMessage(); },
+});
 // API_URL / authToken / apiGet / apiPost / esc: من /static/js/core.js و api.js (Phase 4 / F4)
 
 function addBubble(role, text){

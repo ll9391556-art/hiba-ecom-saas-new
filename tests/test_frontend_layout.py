@@ -5,9 +5,9 @@ import re
 from tests.frontend import STATIC
 
 # ترتيب التحميل مهم: سكريبتات عادية (classic) تتشارك نفس النطاق العام، وكل ملف ينفّذ بالترتيب
-DASHBOARD_SCRIPTS = ["core.js", "auth.js", "api.js", "dashboard.js", "orders.js", "catalog.js", "store.js",
+DASHBOARD_SCRIPTS = ["core.js", "actions.js", "auth.js", "api.js", "dashboard.js", "orders.js", "catalog.js", "store.js",
                      "messaging.js", "settings.js", "ui.js", "theme.js", "main.js"]
-SHOP_SCRIPTS = ["core.js", "api.js", "shop.js", "theme.js", "shop-main.js"]
+SHOP_SCRIPTS = ["core.js", "actions.js", "api.js", "shop.js", "theme.js", "shop-main.js"]
 
 
 def _local_scripts(page):
@@ -73,3 +73,63 @@ def test_feature_pages_use_shared_helpers():
         inline = "".join(re.findall(r"<script>([\s\S]*?)</script>", html))
         for dup in ("var API_URL", "var authToken", "function apiGet", "function apiPost", "function esc("):
             assert dup not in inline, f"{page.name} still defines {dup}"
+
+
+# ── F5: بلا handlers inline؛ data-on-<event> + جدول ACTIONS ──
+_EVENT_ATTR = re.compile(r'\bdata-on-(click|change|input|keydown|error)="([^"]*)"')
+_INLINE_ATTR = re.compile(r'\bon(click|change|input|keydown|error|keyup|submit|load|focus|blur|mouseover)=\\?"')
+_TABLE_KEY = re.compile(r'^\s*("(?:[^"\\]|\\.)*"): function\(event\)\{', re.M)
+
+
+def _code_lines(text):
+    return [l for l in text.split("\n") if not l.lstrip().startswith("//")]
+
+
+def test_no_inline_event_handlers_left():
+    """onclick="..." وأمثالها ممنوعين (CSP مستقبلاً) — إلا زر الطباعة داخل نافذة بون الطلب
+    (وثيقة منفصلة بلا delegation)."""
+    hits = []
+    for path in sorted(STATIC.rglob("*.html")) + sorted(STATIC.rglob("*.js")):
+        for i, line in enumerate(_code_lines(path.read_text(encoding="utf-8")), 1):
+            if _INLINE_ATTR.search(line) and 'onclick=\\"window.print()\\"' not in line:
+                hits.append(f"{path.relative_to(STATIC)}:{i}")
+    assert hits == []
+
+
+def _used_keys(text, is_js):
+    keys = set()
+    for line in _code_lines(text):
+        for m in _EVENT_ATTR.finditer(line):
+            raw = m.group(2)
+            keys.add(raw.replace("\\'", "'") if is_js else raw)
+    return keys
+
+
+def _table_keys(text):
+    import json
+    return {json.loads(k) for k in _TABLE_KEY.findall(text)}
+
+
+def test_every_handler_has_an_action():
+    table = _table_keys((STATIC / "js" / "actions.js").read_text(encoding="utf-8"))
+    used = set()
+    for page in ("index.html", "shop.html"):
+        html = (STATIC / page).read_text(encoding="utf-8")
+        markup = re.sub(r"<script>[\s\S]*?</script>", "", html)
+        used |= _used_keys(markup, False)
+    for js in sorted((STATIC / "js").glob("*.js")):
+        used |= _used_keys(js.read_text(encoding="utf-8"), True)
+    assert used and sorted(used - table) == []
+    for page in sorted((STATIC / "features").glob("*.html")):
+        html = page.read_text(encoding="utf-8")
+        inline = "".join(re.findall(r"<script>([\s\S]*?)</script>", html))
+        need = _used_keys(re.sub(r"<script>[\s\S]*?</script>", "", html), False) | _used_keys(inline, True)
+        assert sorted(need - _table_keys(inline)) == [], page.name
+
+
+def test_pages_load_actions_after_core():
+    for page, scripts in (("index.html", DASHBOARD_SCRIPTS), ("shop.html", SHOP_SCRIPTS)):
+        got, _ = _local_scripts(page)
+        assert got[:2] == ["core.js", "actions.js"], page
+    core = (STATIC / "js" / "core.js").read_text(encoding="utf-8")
+    assert "function registerActions(" in core and 'document.addEventListener(type' in core
