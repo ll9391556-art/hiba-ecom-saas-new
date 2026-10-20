@@ -28,9 +28,9 @@ def handled(app, monkeypatch):
     calls = []
     bot = {"User_ID": "u1", "plan": "pro", "page_id_FB": "PAGE1",
            "Page_ID_instgram": "IG1", "instgram_access_token": "ig-tok"}
-    monkeypatch.setattr(app, "_executor", SyncExecutor())
-    monkeypatch.setattr(app, "get_user_settings", lambda cid: bot if cid == "IG1" else None)
-    monkeypatch.setattr(app, "process_bg", lambda sid, txt, *a, **kw: calls.append((sid, txt, a)))
+    monkeypatch.setattr("services.bot._executor", SyncExecutor())
+    monkeypatch.setattr("services.bot.get_user_settings", lambda cid: bot if cid == "IG1" else None)
+    monkeypatch.setattr("services.bot.process_bg", lambda sid, txt, *a, **kw: calls.append((sid, txt, a)))
     return calls
 
 

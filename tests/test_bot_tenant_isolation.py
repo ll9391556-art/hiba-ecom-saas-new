@@ -81,9 +81,9 @@ def wa_calls(app, monkeypatch):
 
     bots = {"PNID_A": {**A, "whtsapp_token": "wa-tok-a"}, "PNID_B": {**B, "whtsapp_token": "wa-tok-b"}}
     calls = []
-    monkeypatch.setattr(app, "_executor", SyncExecutor())
-    monkeypatch.setattr(app, "get_user_settings", lambda cid: bots.get(cid))
-    monkeypatch.setattr(app, "process_bg", lambda sid, txt, bot, *a, **kw: calls.append(bot["User_ID"]))
+    monkeypatch.setattr("services.bot._executor", SyncExecutor())
+    monkeypatch.setattr("services.bot.get_user_settings", lambda cid: bots.get(cid))
+    monkeypatch.setattr("services.bot.process_bg", lambda sid, txt, bot, *a, **kw: calls.append(bot["User_ID"]))
     return calls
 
 
