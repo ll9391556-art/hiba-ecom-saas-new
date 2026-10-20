@@ -15,7 +15,7 @@ py -3.14 -m venv .venv
 .venv\Scripts\python.exe -m pip install "flask==3.0.3" "flask-cors==4.0.1" "requests==2.32.3" bcrypt PyJWT cryptography -r requirements-dev.txt
 .venv\Scripts\python.exe -m pytest -q                                              # all tests
 .venv\Scripts\python.exe -m pytest tests/test_smoke.py::test_health_returns_200 -q # single test
-.venv\Scripts\python.exe -m py_compile app.py features/*.py tests/*.py              # syntax check
+.venv\Scripts\python.exe -m py_compile app.py core/*.py services/*.py features/*.py tests/*.py  # syntax check
 ```
 
 There is no linter configured.
@@ -29,7 +29,12 @@ Deployment: production runs Python 3.10 in Docker (`Dockerfile`), so keep code c
 
 ## Architecture
 
-**Backend layout.** Almost everything lives in `app.py` (~3400 lines): config, auth decorators, Firebase helpers, all core routes, HTML templates for `/admin`, `/privacy`, `/lp/<id>` and the OAuth popup pages, plus the bot pipeline. `features/*_api.py` are Blueprints that import helpers *from* `app` (`from app import require_auth, _fb_get, ...`) and are registered at the very bottom of `app.py`, so any helper a blueprint needs must be defined above that point. `/api/shipping/*` is defined in both `shipping_api.py` and `assistant_api.py`; the `shipping_bp` copy is registered first.
+**Backend layout** (being split out of `app.py` in Phase 4; see the plan in the PR history):
+- `core/` — no business logic, no Flask app: `config.py` (env, secrets fail-fast, logging setup, constants, `PLANS`), `db.py` (`_fb_*` helpers, retry, `_fb_query`/`_fb_keys`), `http.py` (`ok_json`/`err_json`, arg parsing), `security.py` (JWT, `require_*` decorators, passwords, local + Firebase-backed rate limits, Fernet, SSRF/DNS pinning), `util.py` (`_safe_int`, `_cents`, `_mask_id`), `audit.py` (`log_audit_entry`).
+- `services/` — business logic: `orders.py` (indexed order fields, `_save_order`/`_patch_order`, running totals, pricing/profit, storefront cache), `users.py` (user record/plan, usage caps, name/uid/channel indexes, lifetime counter, bot-settings save, channel settings cache), `coupons.py` (the single coupon check), `bot.py` (webhook verification and handling, Gemini, history, bot orders, Meta send/media, bot executor).
+- `app.py` (~2,600 lines) still holds the Flask app, all core routes, and the HTML for `/admin`, `/privacy`, `/lp/<id>` and the OAuth popups. It re-exports every name from `core/` and `services/`, so `features/*_api.py` Blueprints (registered at the bottom of `app.py`) keep doing `from app import ...`.
+- Layering rule (enforced by `tests/test_architecture.py`): `core/` and `services/` never import `app` or `features`; `app.py` has no function-level `features` imports. New shared code goes in `core/`/`services/`, not in `app.py`.
+- `tests/route_snapshot.json` pins every (URL rule, methods) pair; refactors must leave it unchanged (update it only when intentionally adding or removing a route).
 
 **Firebase data model** (paths built with f-strings; product, city and coupon *names* are used as keys):
 - `users/{username}` — owner account **and** bot settings in one node: `Password` (bcrypt), `User_ID`, `plan`, `source`, Gemini key, FB/IG/WhatsApp tokens and channel IDs. `uid_index/{uid}` → username. `uname_index/{lowercase}` → users key and `team_uname_index/{lowercase}` → team_users key (login, case-insensitive uniqueness); `counters/lifetimeAccounts` (transaction). Nothing outside `/api/admin/rebuildIndexes` and `listClients` may read `/users` or `/team_users` whole; after adding an index, write it on every create/rename and add it to `_rebuild_user_indexes`.
@@ -48,7 +53,7 @@ Deployment: production runs Python 3.10 in Docker (`Dockerfile`), so keep code c
 - `/api/saas` is a generic Firebase get/set/update/push proxy restricted by `_path_allowed`. It decodes the JWT itself instead of using `require_auth`.
 - Plans and feature flags live in `PLANS`. Monthly caps are enforced via `_under_cap` / `_increment_usage`.
 
-**Bot pipeline.** `/webhook` → `verify_sig` (HMAC) → `handle()` on `_executor` → `get_user_settings(channel_id)` → `process_bg` → `ask_gemini` (prompt asks for order JSON between `###JSON_START###` and `###JSON_END###`) → `extract_json` / `validate_order` → `save_order_from_bot`.
+**Bot pipeline** (`services/bot.py`). `/webhook` → `verify_sig` (HMAC) → `submit_webhook` → `handle_webhook_payload` on `_executor` → `get_user_settings(channel_id)` → `process_bg` → `ask_gemini` (prompt asks for order JSON between `###JSON_START###` and `###JSON_END###`) → `extract_json` / `validate_order` → `save_order_from_bot`.
 
 **Per-process state.** Caches, rate limits and bot-order dedupe are module-level dicts, so they are per gunicorn worker. Cleanup daemon threads start at import time in every worker; the keepalive does not (it lives in `gunicorn.conf.py`).
 
@@ -64,7 +69,7 @@ Deployment: production runs Python 3.10 in Docker (`Dockerfile`), so keep code c
 - Always structure smooth scrolling with `lenis`. Use `gsap` (with `ScrollTrigger`) for scroll triggers, timeline animations and landing-page hero reveals.
 - **Loading the libraries:** Flask serves only `static/`, so `node_modules/` is not reachable from the browser and there is no bundler. Load the versions pinned in `package-lock.json` (gsap 3.15.0, lenis 1.3.27) the same way Chart.js is loaded in `index.html`: an exact-version jsDelivr URL (`gsap@3.15.0/dist/gsap.min.js`, `gsap@3.15.0/dist/ScrollTrigger.min.js`, `lenis@1.3.27/dist/lenis.min.js` plus `lenis.css`) with an SRI `integrity` hash. Alternatively, copy those `dist` files into `static/`.
 - **Where pages are built:**
-  - Public landing pages (`/lp/<id>`) are rendered server-side by `_build_landing_html` in `app.py` as one Python f-string, so literal CSS/JS braces must be doubled (`{{ }}`) and every dynamic value must pass through `_esc()`.
+  - Public landing pages (`/lp/<id>`) are rendered server-side by `_build_landing_html` in `app.py` (not yet moved) as one Python f-string, so literal CSS/JS braces must be doubled (`{{ }}`) and every dynamic value must pass through `_esc()`.
   - The storefront and dashboard share `static/index.html`.
   - Keep the existing `@media (prefers-reduced-motion: reduce)` handling for any new animation.
 - **Media tools:** media creation and editing goes through Python tools (FFmpeg, MoviePy, Whisper). None of them are installed or listed in `requirements.txt` yet. Adding them changes the deployed image (Whisper pulls in PyTorch), so confirm with the owner before adding them to production requirements. Heavy processing should not run inside the gunicorn request cycle (120 s timeout).
@@ -74,8 +79,9 @@ Deployment: production runs Python 3.10 in Docker (`Dockerfile`), so keep code c
 - `tests/fakes.py` injects in-memory `firebase_admin` (db, storage, credentials) and `google.genai` modules into `sys.modules` before `app` is imported. The fake DB mirrors RTDB path rules (rejects `[].?#$`, drops empty segments, prunes empty dicts and `None`). Gemini calls fail unless a test sets `fakes.GEMINI_RESPONDER["fn"]`.
 - The fake supports `order_by_child`/`order_by_key` queries (`equal_to`, `start_at`, `end_at`, `limit_to_first/last`) and `get(shallow=True)`. Like the real REST API, `order_by_child` on a child without `.indexOn` in `database.rules.json` raises "Index not defined" — so a new query needs its index added to that file (and to the Firebase console). Every read is logged in `fakes.READS`, so tests can assert a route never downloads a whole node.
 - App code queries through `_fb_query(path, child_or_"$key", ...)`. `_fb_get/_fb_put/_fb_patch/_fb_delete/_fb_query` retry once on transient errors; `_fb_push` doesn't (not idempotent).
+- **Patch where the code looks the name up.** `app.py` re-exports moved names, so `monkeypatch.setattr(app, "x", ...)` only affects code still in `app.py`. Code in a module sees that module's binding: patch `"core.db.sleep"` (retry), `"services.orders._now_ms"` (order timestamps; deliberately not re-exported), `"services.bot._executor"`, `"services.bot.get_user_settings"`, `"services.bot.process_bg"`.
 - `tests/conftest.py` forces dummy env vars and blocks all sockets (`fakes.NetworkBlocked`). It resets the DB and the module-level caches before each test, and provides the `client`, `db`, `seed_owner()` and `seed_member(owner, perms=...)` fixtures, which return `headers` with a valid Bearer token.
 
 ## Ongoing security work
 
-`AUDIT_REPORT.md` (Arabic) lists findings by ID (SEC-, BUG-, DEP-, PERF-, ARC-, INFO-xxx). Fixes are being applied in phases on the `security-fixes` branch, with one commit per ID (`fix(security): SEC-001 ...`) and a test that fails before the fix. The owner approves each phase before the next one starts. Line numbers in the report may be stale, so verify each finding against the current code first.
+`AUDIT_REPORT.md` (Arabic) lists findings by ID (SEC-, BUG-, DEP-, PERF-, ARC-, INFO-xxx). Fixes are applied in phases, each on its own branch from `origin/main` (merged by PR), with one commit per ID (`fix(security): SEC-001 ...`) and a test that fails before the fix. The owner approves each phase before the next one starts. Line numbers in the report may be stale, so verify each finding against the current code first.
