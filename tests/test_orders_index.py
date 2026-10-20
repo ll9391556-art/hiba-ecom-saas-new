@@ -143,7 +143,7 @@ def test_track_order_uses_index_not_full_read(client, db, store, clock):
 
 
 def test_track_order_reports_failure_instead_of_empty(client, app, store, monkeypatch):
-    monkeypatch.setattr(app, "_fb_query", lambda *a, **k: None)
+    monkeypatch.setattr("routes.public._fb_query", lambda *a, **k: None)
     r = client.get(f"/api/trackOrder?userId={store['uid']}&phone=0555123456")
     assert r.status_code == 503
 

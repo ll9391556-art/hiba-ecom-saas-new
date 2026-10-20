@@ -144,6 +144,16 @@ from services.bot import (
     handle_webhook_payload,
     submit_webhook,
 )
+from services.landing import (
+    LANDING_ID_PREFIX,
+    _new_landing_id,
+    _landing_uid_from_id,
+    _sanitize_image_url,
+    DEFAULT_LANDING_QUESTIONS,
+    _generate_landing_questions,
+    _generate_landing_copy,
+    _build_landing_html,
+)
 from core.util import _safe_int, _cents, _mask_id
 from core.security import (
     _encrypt_secret, _decrypt_secret, issue_token, decode_token, _extract_bearer,
@@ -242,39 +252,6 @@ _init_firebase()
 # ── Plans ─────────────────────────────────────────────────
 # PLANS والثوابت فـ core/config.py
 
-
-# ── Frontend ──────────────────────────────────────────────
-@app.route("/", methods=["GET"])
-def serve_index():
-    return send_from_directory("static", "index.html")
-
-@app.route("/healthz", methods=["GET"])
-def healthz():
-    """liveness فقط — ديما 200 بلا Firebase. هادا اللي يتحط فـ Render Health Check Path، باش
-    انقطاع قصير لـ Firebase ما يخليش Render يعاود يشغّل الخدمة ولا يفشّل deploy."""
-    return jsonify({"ok": True, "service": "OrderFlow"}), 200
-
-_health_cache = {}
-_HEALTH_TTL   = 30
-
-@app.route("/health", methods=["GET"])
-def health():
-    """فحص عميق: قراءة shallow صغيرة من Firebase (النتيجة محفوظة 30 ثانية). 503 إذا طاح."""
-    now = time.time()
-    cached = _health_cache.get("result")
-    if not cached or now - cached[0] >= _HEALTH_TTL:
-        try:
-            _fb_call(lambda: _firebase_ref("health").get(shallow=True))
-            firebase_ok = True
-        except Exception as e:
-            logging.warning(f"/health: Firebase check failed ({type(e).__name__})")
-            firebase_ok = False
-        cached = (now, firebase_ok)
-        _health_cache["result"] = cached
-    firebase_ok = cached[1]
-    body = {"ok": firebase_ok, "firebase": firebase_ok, "service": "OrderFlow",
-            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S")}
-    return jsonify(body), (200 if firebase_ok else 503)
 
 @app.route("/admin", methods=["GET"])
 def admin_page():
@@ -473,194 +450,6 @@ async function changePlan(userId, username, plan){
 </body>
 </html>""", 200
 
-@app.route("/privacy", methods=["GET"])
-def privacy_page():
-    return """<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>OrderFlow AI — Privacy Policy & Terms</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Segoe UI',Arial,sans-serif;background:#0d1b2e;color:#e8edf5;line-height:1.8}
-.header{background:#0a1628;border-bottom:1px solid rgba(255,255,255,.08);padding:20px 0;text-align:center}
-.header h1{font-size:28px;font-weight:800;color:#2563eb}
-.header p{font-size:13px;color:#8899bb;margin-top:4px}
-.container{max-width:860px;margin:0 auto;padding:40px 20px}
-.section{background:#111f35;border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:28px;margin-bottom:24px}
-h2{font-size:18px;font-weight:700;color:#60a5fa;margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,.07)}
-h3{font-size:14px;font-weight:700;color:#e8edf5;margin:16px 0 8px}
-p,li{font-size:13px;color:#94a3b8;margin-bottom:8px}
-ul{padding-left:20px}
-li{margin-bottom:6px}
-.badge{display:inline-block;background:#1e3a5f;color:#60a5fa;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;margin-bottom:16px}
-.contact-box{background:#0f2a4a;border:1px solid #1e3a5f;border-radius:10px;padding:16px;margin-top:12px}
-.contact-box a{color:#60a5fa;text-decoration:none;font-weight:700}
-.contact-box a:hover{text-decoration:underline}
-.highlight{color:#10b981;font-weight:700}
-.footer{text-align:center;padding:30px;color:#475569;font-size:12px;border-top:1px solid rgba(255,255,255,.07);margin-top:20px}
-.tag{display:inline-block;background:rgba(37,99,235,.15);color:#60a5fa;padding:2px 8px;border-radius:4px;font-size:11px;margin:2px}
-.product-box{background:#0a1628;border-radius:10px;padding:20px;margin-top:12px}
-.product-box .feature{display:flex;align-items:flex-start;gap:10px;margin-bottom:10px}
-.product-box .feature .icon{font-size:18px;flex-shrink:0}
-.product-box .feature p{margin:0;font-size:13px;color:#94a3b8}
-.product-box .feature strong{color:#e8edf5}
-</style>
-</head>
-<body>
-
-<div class="header">
-  <h1>📦 OrderFlow AI</h1>
-  <p>Complete E-Commerce Automation Platform — orderconfidence.com</p>
-</div>
-
-<div class="container">
-
-  <div class="section">
-    <span class="badge">🚀 About Our Platform</span>
-    <h2>What is OrderFlow AI?</h2>
-    <p>OrderFlow AI is a complete SaaS (Software as a Service) platform designed specifically for e-commerce businesses in Algeria and the Arab world. We automate the entire sales management workflow, from order intake to delivery tracking.</p>
-    <div class="product-box">
-      <div class="feature"><div class="icon">📦</div><div><p><strong>Order Management</strong> — Track all orders with real-time status updates (Pending, Confirmed, Delivered, Refused)</p></div></div>
-      <div class="feature"><div class="icon">🤖</div><div><p><strong>AI Bot (WhatsApp & Facebook)</strong> — Gemini-powered chatbot that automatically responds to customers and creates orders from conversations</p></div></div>
-      <div class="feature"><div class="icon">🛒</div><div><p><strong>Online Store</strong> — Each merchant gets a public catalog page with cart functionality for customers</p></div></div>
-      <div class="feature"><div class="icon">📊</div><div><p><strong>Dashboard & Analytics</strong> — Real-time profits, confirmation rates, top products, and low stock alerts</p></div></div>
-      <div class="feature"><div class="icon">🏙️</div><div><p><strong>City & Shipping Management</strong> — Configure shipping costs per city with automatic profit calculation</p></div></div>
-    </div>
-    <p style="margin-top:16px">Our platform serves Algerian e-commerce sellers who use Facebook, Instagram, and WhatsApp to sell products. We help them organize orders, automate responses, and grow their business.</p>
-    <div style="margin-top:12px">
-      <span class="tag">E-Commerce</span>
-      <span class="tag">Order Management</span>
-      <span class="tag">AI Chatbot</span>
-      <span class="tag">WhatsApp Business</span>
-      <span class="tag">Facebook Messenger</span>
-      <span class="tag">Instagram DM</span>
-    </div>
-  </div>
-
-  <div class="section">
-    <span class="badge">🛡️ Privacy Policy</span>
-    <h2>Privacy Policy</h2>
-    <p><strong>Effective Date:</strong> June 17, 2026 &nbsp;|&nbsp; <strong>Last Updated:</strong> June 17, 2026</p>
-
-    <h3>1. Information We Collect</h3>
-    <p>When merchants connect their Facebook or Instagram pages to OrderFlow AI, we collect:</p>
-    <ul>
-      <li>Facebook Page ID and access tokens (to receive and send messages)</li>
-      <li>Instagram Business Account ID and access tokens</li>
-      <li>Customer messages sent to connected pages (for AI bot processing only)</li>
-      <li>Order information provided by customers during conversations (name, phone, city, product)</li>
-    </ul>
-
-    <h3>2. How We Use Your Data</h3>
-    <ul>
-      <li><span class="highlight">Order Processing:</span> Customer messages are processed by our AI to extract order details and create orders in the merchant's dashboard</li>
-      <li><span class="highlight">Automated Responses:</span> Our AI bot responds to customers on behalf of merchants</li>
-      <li><span class="highlight">Analytics:</span> We calculate profits, confirmation rates, and stock levels for merchants</li>
-      <li><span class="highlight">We do NOT sell, share, or transfer</span> any data to third parties</li>
-    </ul>
-
-    <h3>3. Data Storage</h3>
-    <ul>
-      <li>All data is stored securely in <strong>Google Firebase</strong> (Europe West region)</li>
-      <li>Facebook access tokens are stored encrypted and used solely to communicate with Meta APIs</li>
-      <li>Chat histories are stored per-user and accessible only to the merchant</li>
-      <li>Merchants can delete their data at any time by contacting us</li>
-    </ul>
-
-    <h3>4. Meta Platform Data</h3>
-    <ul>
-      <li>We access Facebook and Instagram APIs only with explicit merchant permission via OAuth</li>
-      <li>We only request permissions necessary for order automation: <code>pages_messaging</code>, <code>instagram_manage_messages</code>, <code>pages_read_engagement</code></li>
-      <li>We do not access personal profiles, friend lists, or any data beyond page messages</li>
-      <li>Merchants can disconnect their Facebook/Instagram at any time from the Settings page</li>
-    </ul>
-
-    <h3>5. Data Retention</h3>
-    <p>We retain merchant data for as long as the account is active. Upon account deletion request, all associated data is permanently removed within 30 days.</p>
-
-    <h3>6. Security</h3>
-    <p>We implement industry-standard security measures including HTTPS encryption, Firebase security rules, and token-based authentication to protect your data.</p>
-  </div>
-
-  <div class="section">
-    <span class="badge">📋 Terms of Service</span>
-    <h2>Terms of Service</h2>
-    <p><strong>Effective Date:</strong> June 17, 2026</p>
-
-    <h3>1. Acceptance</h3>
-    <p>By using OrderFlow AI, you agree to these terms. If you do not agree, please discontinue use of our platform.</p>
-
-    <h3>2. Permitted Use</h3>
-    <ul>
-      <li>OrderFlow AI is intended for legitimate e-commerce businesses</li>
-      <li>Users must comply with Meta's Platform Policies when using the bot features</li>
-      <li>Users must not use the platform to send spam, misleading messages, or violate customer privacy</li>
-      <li>Each merchant is responsible for the content of automated messages sent through their account</li>
-    </ul>
-
-    <h3>3. Subscription Plans</h3>
-    <ul>
-      <li><strong>Free:</strong> Basic order management and dashboard — 0 DZD</li>
-      <li><strong>Starter:</strong> Includes online store — one-time payment</li>
-      <li><strong>Pro:</strong> Includes AI Bot (WhatsApp + Facebook) — monthly subscription</li>
-      <li><strong>Full:</strong> All features, lifetime access — one-time payment</li>
-    </ul>
-    <p>Plan upgrades are managed by the platform administrator. Contact us to change your plan.</p>
-
-    <h3>4. Limitation of Liability</h3>
-    <p>OrderFlow AI provides tools for order management and automation. We are not responsible for business losses, customer disputes, or issues arising from how merchants use our platform.</p>
-
-    <h3>5. Account Termination</h3>
-    <p>We reserve the right to suspend or terminate accounts that violate these terms or Meta's policies.</p>
-
-    <h3>6. Changes to Terms</h3>
-    <p>We may update these terms periodically. Continued use of the platform constitutes acceptance of updated terms.</p>
-  </div>
-
-  <div class="section">
-    <span class="badge">🗑️ Data Deletion</span>
-    <h2>Data Deletion Request</h2>
-    <p>In compliance with Meta's Platform Policy, users can request deletion of all their data from our system.</p>
-    <p>To request data deletion:</p>
-    <ul>
-      <li>Send an email to <strong style="color:#60a5fa">orderflowai927@gmail.com</strong> with the subject "Data Deletion Request"</li>
-      <li>Include your username or User ID</li>
-      <li>We will confirm deletion within <strong>30 days</strong></li>
-    </ul>
-    <p>You can also disconnect Facebook/Instagram at any time from <strong>Settings → Facebook/Meta → Déconnecter</strong> in the app.</p>
-  </div>
-
-  <div class="section">
-    <span class="badge">📞 Contact Us</span>
-    <h2>Contact Information</h2>
-    <p>For questions about privacy, data, or our platform:</p>
-    <div class="contact-box">
-      <p>📧 <strong>Email:</strong> <a href="mailto:orderflowai927@gmail.com">orderflowai927@gmail.com</a></p>
-      <p>🌐 <strong>Website:</strong> <a href="https://orderconfidence.com">https://orderconfidence.com</a></p>
-      <p>📦 <strong>Platform:</strong> OrderFlow AI — E-Commerce Management SaaS</p>
-      <p>📍 <strong>Location:</strong> Algeria</p>
-    </div>
-    <p style="margin-top:16px;font-size:12px;color:#475569">
-      We typically respond to all inquiries within 48 hours.
-    </p>
-  </div>
-
-</div>
-
-<div class="footer">
-  © 2026 OrderFlow AI — orderconfidence.com &nbsp;|&nbsp;
-  <a href="mailto:orderflowai927@gmail.com" style="color:#60a5fa">orderflowai927@gmail.com</a>
-</div>
-
-</body>
-</html>""", 200
-
-@app.route("/terms", methods=["GET"])
-def terms_redirect():
-    from flask import redirect
-    return redirect("/privacy")
 
 # ── Auth ──────────────────────────────────────────────────
 @app.route("/api/login", methods=["POST"])
@@ -888,75 +677,6 @@ def api_get_orders():
     return jsonify(body)
 
 
-@app.route("/api/addOrder", methods=["POST"])
-def api_add_order():
-    """مسار عام (الزبون يطلب من صفحة المتجر بلا حساب) — لذلك مقيّد بـ:
-    1) التحقق أن userId ينتمي فعلاً لتاجر مسجّل (يمنع تعبئة uid عشوائي غير موجود).
-    2) Rate limit حسب IP+هاتف لمنع الإغراق الآلي بطلبات وهمية يستهلك سقف التاجر الشهري.
-    3) whitelist صارم لحقول الزبون + فرض status="Pending" + حساب total سيرفرياً فقط."""
-    body = request.get_json(silent=True) or {}
-    uid  = str(body.get("userId") or "").strip()
-    raw  = body.get("data") or {}
-    if not uid or not raw: return err_json("Missing fields")
-
-    if not _get_user_record(uid):
-        return err_json("Invalid store", 404)
-
-    # request.remote_addr مُصحَّح عبر ProxyFix (بروكسي موثوق واحد) بدل هيدر خام قابل للتزوير.
-    # حد مشترك بين الـ workers: لكل IP فهاد المتجر + سقف للمتجر كامل. سلة بعدة منتجات
-    # (طلب لكل منتج) تدوز — الحد القديم ip:phone كل 15 ثانية كان يرفض المنتج الثاني.
-    client_ip = request.remote_addr or ""
-    if _any_shared_limited(("order_ip_store", f"{client_ip}|{uid}"), ("order_store", uid)):
-        return err_json("محاولات كثيرة جداً — انتظر قليلاً وحاول من جديد", 429)
-
-    if not _under_cap(uid, "orderCount", "orderCap"):
-        return err_json("تم الوصول للحد الشهري من الطلبات لهذه الخطة — يرجى التواصل لترقية الخطة", 429)
-
-    # whitelist صارم — لا نقبل من الزبون غير الموثوق أي حقل غير هذه القائمة (خصوصاً
-    # status/profit/id/total التي يجب أن تُحسب أو تُفرض من السيرفر فقط).
-    ALLOWED_CUSTOMER_FIELDS = {"name", "phone", "city", "product", "qty", "address", "deliveryType", "source", "couponCode", "discountApplied"}
-    d = {k: v for k, v in raw.items() if k in ALLOWED_CUSTOMER_FIELDS}
-
-    order_id       = f"ORD-{int(time.time() * 1000)}"
-    d["id"]        = order_id
-    d["date"]      = time.strftime("%Y-%m-%d %H:%M")
-    d["status"]    = "Pending"  # ثابت دائماً — غير قابل للتعديل من الزبون بتاتاً
-    d["profit"]    = 0
-    d["source"]    = d.get("source") or "manual"
-    d["deliveryType"] = d.get("deliveryType") if d.get("deliveryType") in ("home", "desk") else "home"
-    d["date_sent"] = ""
-    d["date_delivered"] = ""
-    try:
-        d["qty"] = max(1, int(d.get("qty", 1)))
-    except Exception:
-        d["qty"] = 1
-    p_data = _fb_get(f"data/{uid}/products/{d.get('product')}")
-    c_data = _fb_get(f"data/{uid}/cities/{d.get('city')}")
-    # "total" يُحسب سيرفرياً دائماً — لا يُقبل من الزبون بتاتاً.
-    if p_data and c_data:
-        ship_cust, _ = _ship_values(c_data, d["deliveryType"])
-        d["total"] = (float(p_data.get("sell", 0)) * d["qty"]) + ship_cust
-    else:
-        d["total"] = 0
-               # الخصم يُعاد حسابه بالكامل هنا من قاعدة الكوبونات — discountApplied القادم
-    # من الزبون لا يُستعمل نهائياً، يُتجاهل تماماً حتى لو أُرسل.
-    applied_coupon = None
-    if d.get("couponCode"):
-        discount_amount, applied_coupon = _validate_and_apply_coupon(uid, d.get("couponCode"), d["total"])
-        if applied_coupon:
-            d["total"] = max(0, round(d["total"] - discount_amount, 2))
-            d["couponCode"] = applied_coupon
-            d["discountApplied"] = discount_amount
-        else:
-            d.pop("couponCode", None)
-            d.pop("discountApplied", None)
-
-    _save_order(uid, order_id, d)
-    _increment_usage(uid, "orderCount")
-    if applied_coupon:
-        _increment_coupon_usage(uid, applied_coupon)
-    return ok_json({"orderId": order_id})
-
 @app.route("/api/updateStatus", methods=["POST"])
 @require_auth
 @require_perm("orders")
@@ -1026,43 +746,6 @@ def api_get_products():
         products.append(p)
     return ok_json(products)
 
-def _compute_store_products(uid):
-    products_raw = _fb_get(f"data/{uid}/products") or {}
-    stats        = _get_stats(uid)
-    sales        = _sold_by_name(stats)
-    ratings      = stats.get("ratings") or {}
-    result = []
-    for p in products_raw.values():
-        if not isinstance(p, dict) or not p.get("name"): continue
-        stock     = _stock_fields(p, sales.get(p["name"], 0))
-        sold, available, stat = stock["sold"], stock["available"], stock["stat"]
-        images = p.get("images") or ([p["image"]] if p.get("image") else [])
-        r = ratings.get(_agg_key(p["name"])) if isinstance(ratings, dict) else None
-        avg_rating = rating_count = 0
-        if isinstance(r, dict) and _safe_int(r.get("count")):
-            rating_count = _safe_int(r.get("count"))
-            avg_rating   = round(_safe_int(r.get("sum")) / rating_count, 1)
-        result.append({"name": p.get("name",""), "category": p.get("category",""),
-                        "size": p.get("size",""), "colors": p.get("colors",""),
-                        "sell": float(p.get("sell",0)), "available": available, "stat": stat, "sold": sold,
-                        "description": p.get("description",""), "image": p.get("image",""), "images": images,
-                        "visible": p.get("visible","yes"), "created_at": p.get("created_at", 0),
-                        "avgRating": avg_rating, "ratingCount": rating_count})
-    result.sort(key=lambda x: {"In Stock":0,"Low Stock":1,"Out of Stock":2}.get(x["stat"],0))
-    return result
-
-@app.route("/api/getStoreProducts", methods=["GET"])
-def api_get_store_products():
-    uid = request.args.get("userId", "").strip()
-    if not uid: return err_json("Missing userId")
-    with _store_products_cache_lock:
-        cached = _store_products_cache.get(uid)
-        if cached and time.time() - cached["ts"] < _STORE_CACHE_TTL:
-            return ok_json(cached["data"])
-    result = _compute_store_products(uid)
-    with _store_products_cache_lock:
-        _store_products_cache[uid] = {"data": result, "ts": time.time()}
-    return ok_json(result) 
 
 @app.route("/api/addProduct", methods=["POST"])
 @require_auth
@@ -1108,73 +791,6 @@ def api_delete_product():
     log_audit_entry(uid, request.auth_member_username or "owner", f"حذف منتج {name}")
     return ok_json(True)
 
-@app.route("/api/trackOrder", methods=["GET"])
-def api_track_order():
-    uid   = request.args.get("userId", "").strip()
-    phone = re.sub(r"\D", "", request.args.get("phone", ""))
-    if not uid or not phone: return err_json("Missing userId or phone")
-    client_ip = request.remote_addr or ""
-    if _any_shared_limited(("track_ip", client_ip), ("track_ip_store", f"{client_ip}|{uid}")):
-        return err_json("محاولات كثيرة جداً — حاول بعد قليل", 429)
-    # استعلام بالفهرس phoneDigits — قبل: تنزيل كل طلبات المتجر فكل طلب عام
-    found = _fb_query(f"data/{uid}/orders", "phoneDigits", equal_to=phone)
-    if found is None:
-        return err_json("تعذّر البحث حالياً — حاول بعد قليل", 503)
-    result = []
-    for o in found.values():
-        if not isinstance(o, dict): continue
-        if o.get("phoneDigits") == phone:
-            result.append({"id": o.get("id",""), "product": o.get("product",""),
-                            "qty": o.get("qty",1), "status": o.get("status",""),
-                            "date": o.get("date",""), "total": o.get("total",0),
-                            "city": o.get("city",""), "rated": bool(o.get("rated", False))})
-    result.sort(key=lambda x: x.get("date",""), reverse=True)
-    return ok_json(result)
-
-@app.route("/api/submitRating", methods=["POST"])
-def api_submit_rating():
-    body    = request.get_json(silent=True) or {}
-    uid     = str(body.get("userId") or "").strip()
-    order_id= str(body.get("orderId") or "").strip()
-    phone   = re.sub(r"\D", "", str(body.get("phone") or ""))
-    comment = str(body.get("comment") or "").strip()[:500]
-    try:
-        rating = int(body.get("rating"))
-    except Exception:
-        return err_json("Invalid rating")
-    if not uid or not order_id or not phone: return err_json("Missing fields")
-    if rating < 1 or rating > 5: return err_json("Rating must be between 1 and 5")
-    order = _fb_get(f"data/{uid}/orders/{order_id}")
-    if not order: return err_json("Order not found", 404)
-    if re.sub(r"\D", "", str(order.get("phone",""))) != phone:
-        return err_json("Unauthorized", 403)
-    if order.get("status") != "Delivered":
-        return err_json("Order not yet delivered")
-    if order.get("rated"):
-        return err_json("Order already rated")
-    product = order.get("product", "")
-    if not product: return err_json("Invalid order")
-    _fb_push(f"data/{uid}/ratings/{product}", {
-        "rating": rating, "comment": comment, "date": time.strftime("%Y-%m-%d %H:%M"),
-        "orderId": order_id,
-    })
-    _patch_order(uid, order_id, {"rated": True})
-    _add_rating_to_stats(uid, product, rating)
-    return ok_json(True)
-
-@app.route("/api/getProductRatings", methods=["GET"])
-def api_get_product_ratings():
-    uid     = request.args.get("userId", "").strip()
-    product = request.args.get("product", "").strip()
-    if not uid or not product: return err_json("Missing fields")
-    raw = _fb_get(f"data/{uid}/ratings/{product}") or {}
-    items = []
-    if isinstance(raw, dict):
-        for v in raw.values():
-            if isinstance(v, dict):
-                items.append({"rating": v.get("rating", 0), "comment": v.get("comment", ""), "date": v.get("date", "")})
-    items.sort(key=lambda x: x.get("date", ""), reverse=True)
-    return ok_json(items)
 
 # ── Cities ────────────────────────────────────────────────
 @app.route("/api/getCities", methods=["GET"])
@@ -1190,20 +806,6 @@ def api_get_cities():
             cities.append(v)
     return ok_json(cities)
 
-@app.route("/api/getStoreCities", methods=["GET"])
-def api_get_store_cities():
-    uid = request.args.get("userId", "").strip()
-    if not uid: return err_json("Missing userId")
-    raw    = _fb_get(f"data/{uid}/cities") or {}
-    cities = []
-    for k, v in raw.items():
-        if isinstance(v, dict):
-            cities.append({
-                "name": v.get("name", k),
-                "custShip": float(v.get("custShip", 0)),
-                "deskCust": float(v.get("deskCust", 0)),
-            })
-    return ok_json(cities)
 
 @app.route("/api/addCity", methods=["POST"])
 @require_auth
@@ -1279,12 +881,6 @@ def api_get_dashboard():
                     "refuseRate": round(ref/tot*100) if tot else 0,
                     "topProducts": top_products, "lowStock": low_stock})
 
-# ── Store Settings ────────────────────────────────────────
-@app.route("/api/getStoreSettings", methods=["GET"])
-def api_get_store_settings():
-    uid = request.args.get("userId","").strip()
-    if not uid: return err_json("Missing userId")
-    return ok_json(_fb_get(f"data/{uid}/storeSettings") or {})
 
 _STORE_TEXT_LIMITS = {"name": 120, "tagline": 300, "logo": 32, "lang": 8}
 _STORE_CURRENCIES  = ("DZD", "EUR", "USD")
@@ -1331,375 +927,6 @@ def api_update_store_settings():
             _fb_put(f"data/{uid}/storeSettings", patch)
     return ok_json(True)
 
-# ── Landing Pages (صفحات هبوط) ─────────────────────────────
-LANDING_ID_PREFIX = "LP"
-
-def _new_landing_id(uid):
-    return f"{LANDING_ID_PREFIX}{uid}T{int(time.time()*1000)}"
-
-def _landing_uid_from_id(page_id):
-    try:
-        page_id = str(page_id or "")
-        if not page_id.startswith(LANDING_ID_PREFIX):
-            return None
-        rest = page_id[len(LANDING_ID_PREFIX):]
-        uid_part, sep, _ = rest.partition("T")
-        return uid_part if (uid_part and sep) else None
-    except Exception:
-        return None
-
-def _sanitize_image_url(u):
-    """يقبل فقط روابط https/http حقيقية — يمنع حقن HTML/سكربت عبر حقل 'صورة'
-    الذي يُدرج لاحقاً داخل صفحة الهبوط العامة (/lp/<id>)."""
-    u = str(u or "").strip()
-    if not re.match(r'^https?://[^\s"\'<>]+$', u, re.IGNORECASE):
-        return ""
-    return u
-
-DEFAULT_LANDING_QUESTIONS = [
-    {"id": "audience",       "question": "شكون الزبون المستهدف بالضبط؟ (مثلاً: نساء 25-40 سنة، رياضيين، عائلات...)"},
-    {"id": "painPoint",      "question": "شنو أكبر مشكل أو حاجة يحلّها المنتج للزبون؟"},
-    {"id": "mainBenefit",    "question": "شنو أهم فائدة أو ميزة تحب تبرزها فالصفحة؟"},
-    {"id": "differentiator", "question": "شنو يميزك عن المنتجات المشابهة الموجودة فالسوق؟"},
-    {"id": "offer",          "question": "كاين عرض أو تخفيض حالياً؟ (اذكر السعر الأصلي والسعر الحالي إذا كاين)"},
-    {"id": "guarantee",      "question": "شنو الضمانات اللي تقدمها؟ (دفع عند الاستلام، استرجاع، ضمان جودة...)"},
-    {"id": "socialProof",    "question": "عندك عدد مبيعات أو تقييمات تحب تبرزها كثقة اجتماعية؟"},
-    {"id": "urgency",        "question": "تحب تضيف إحساس بالإلحاح؟ (كمية محدودة، عرض لمدة محدودة...)"},
-]
-
-def _generate_landing_questions(bot_settings, name, description, category=""):
-    api_key = str(bot_settings.get("Gemini_api_key") or "").strip()
-    if not api_key:
-        return DEFAULT_LANDING_QUESTIONS
-    try:
-        prompt = f"""أنت خبير تسويق متخصص فصفحات الهبوط (Landing Pages) عالية التحويل لمتاجر التجارة الإلكترونية بالجزائر والعالم العربي.
-منتج التاجر: {name}
-الوصف: {description or 'غير محدد'}
-الفئة: {category or 'غير محددة'}
-
-اطرح 6 أسئلة قصيرة ومباشرة بالدارجة الجزائرية/العربية على التاجر، الهدف منها جمع المعلومات الضرورية لبناء صفحة هبوط احترافية عالية التحويل (تشمل: الجمهور المستهدف، المشكل اللي يحله المنتج، الميزة التنافسية، العرض/السعر، الضمانات، والثقة الاجتماعية/الإلحاح).
-رد فقط بمصفوفة JSON بهذا الشكل بالضبط، بلا أي نص إضافي قبلها أو بعدها:
-[{{"id":"معرف_قصير_بالإنجليزية","question":"نص السؤال"}}, ...]"""
-        contents = [types.Part.from_text(text=prompt)]
-        cfg = types.GenerateContentConfig(temperature=0.5, max_output_tokens=500)
-        text, _ = _gemini_generate_with_fallback(api_key, contents, cfg, "landing_questions")
-        cleaned = text.strip().strip("`")
-        if cleaned.lower().startswith("json"):
-            cleaned = cleaned[4:].strip()
-        parsed = json.loads(cleaned)
-        if isinstance(parsed, list) and len(parsed) >= 3:
-            out = []
-            for i, q in enumerate(parsed[:8]):
-                if isinstance(q, dict) and q.get("question"):
-                    out.append({"id": str(q.get("id") or f"q{i+1}"), "question": str(q["question"])[:200]})
-            if out:
-                return out
-    except Exception as e:
-        logging.warning(f"landing/questions: تعذّر توليد أسئلة عبر Gemini، استُعملت الأسئلة الافتراضية: {e}")
-    return DEFAULT_LANDING_QUESTIONS
-
-def _generate_landing_copy(api_key, name, description, answers):
-    answers = answers if isinstance(answers, dict) else {}
-    fallback = {
-        "headline": name,
-        "subheadline": answers.get("mainBenefit", "") or "",
-        "description": description,
-        "benefits": [],
-        "urgencyText": answers.get("urgency", "") or "",
-        "guaranteeText": answers.get("guarantee", "") or "",
-        "faq": [],
-    }
-    if not api_key:
-        return fallback
-    try:
-        answers_text = "\n".join(f"- {k}: {v}" for k, v in answers.items() if str(v or "").strip())
-        prompt = f"""أنت كاتب إعلانات (Copywriter) خبير فصفحات الهبوط عالية التحويل لمتاجر التجارة الإلكترونية بالجزائر
-(أسلوب صفحات الهبوط الأكثر انتشاراً ونجاحاً حالياً بسوق الدروبشيبينغ: عنوان قوي يلمس المشكل مباشرة، فوائد قصيرة
-بشكل نقاط مع إيموجي مناسب، ثقة اجتماعية، إحساس بالإلحاح عند الاقتضاء، ضمانات واضحة (خصوصاً الدفع عند الاستلام)،
-وأسئلة شائعة تبدد شكوك الزبون قبل الطلب).
-
-منتج: {name}
-وصف التاجر: {description or 'غير محدد'}
-معلومات إضافية زوّدها التاجر:
-{answers_text or 'لا توجد'}
-
-ابنيلي محتوى صفحة الهبوط بصيغة JSON فقط (بلا أي نص إضافي قبلها أو بعدها)، بهذا الشكل بالضبط:
-{{
-  "headline": "عنوان قوي وجذاب (سطر واحد قصير)",
-  "subheadline": "جملة ثانية توضح الفائدة الرئيسية (قصيرة)",
-  "description": "وصف تسويقي مُعاد صياغته (3-5 أسطر)",
-  "benefits": ["فائدة 1 مع إيموجي مناسب", "فائدة 2", "فائدة 3", "فائدة 4"],
-  "urgencyText": "جملة قصيرة تخلق إحساس بالإلحاح إذا سمحت المعلومات المزوّدة بذلك، وإلا اتركها فارغة",
-  "guaranteeText": "جملة ضمان (دفع عند الاستلام / استرجاع...) إذا زوّد التاجر معلومات، وإلا اتركها فارغة",
-  "faq": [{{"q":"سؤال شائع 1","a":"جواب قصير"}}, {{"q":"سؤال شائع 2","a":"جواب قصير"}}, {{"q":"سؤال شائع 3","a":"جواب قصير"}}]
-}}
-استعمل نفس لغة الوصف الأصلي (عربي أو فرنسي أو دارجة)، ولا تخترع معلومات غير موجودة (مثلاً لا تذكر مدة استرجاع محددة إذا التاجر ما زوّدهاش)."""
-        contents = [types.Part.from_text(text=prompt)]
-        cfg = types.GenerateContentConfig(temperature=0.6, max_output_tokens=900)
-        text, _ = _gemini_generate_with_fallback(api_key, contents, cfg, "landing_copy_full")
-        cleaned = text.strip().strip("`")
-        if cleaned.lower().startswith("json"):
-            cleaned = cleaned[4:].strip()
-        parsed = json.loads(cleaned)
-        if isinstance(parsed, dict):
-            for key in ("headline", "subheadline", "description", "urgencyText", "guaranteeText"):
-                if parsed.get(key):
-                    fallback[key] = str(parsed[key])[:400]
-            if isinstance(parsed.get("benefits"), list):
-                fallback["benefits"] = [str(b)[:120] for b in parsed["benefits"] if str(b or "").strip()][:6]
-            if isinstance(parsed.get("faq"), list):
-                faq = []
-                for item in parsed["faq"][:5]:
-                    if isinstance(item, dict) and item.get("q") and item.get("a"):
-                        faq.append({"q": str(item["q"])[:150], "a": str(item["a"])[:300]})
-                fallback["faq"] = faq
-    except Exception as e:
-        logging.warning(f"landing/generate: تعذّر توليد محتوى كامل عبر Gemini، استُعمل fallback بسيط: {e}")
-    return fallback
-
-def _build_landing_html(uid, page):
-    """يبني صفحة هبوط HTML عامة. كل قيمة نصية غير ثابتة تمر عبر _esc() قبل الإدراج —
-    بما فيها روابط الصور (images) و og:image، لمنع Stored XSS يطال زوّار الصفحة."""
-    store    = _fb_get(f"data/{uid}/storeSettings") or {}
-    store_name = store.get("name", "Boutique")
-    images   = [img for img in (page.get("images") or []) if _sanitize_image_url(img)]
-    imgs_html = "".join(
-        f'<div class="lp-slide{" active" if i == 0 else ""}"><img src="{_esc(img)}" loading="lazy" alt=""/></div>'
-        for i, img in enumerate(images)
-    ) or '<div class="lp-slide active lp-noimg">📦</div>'
-    dots_html = "".join(
-        f'<span class="lp-dot{" active" if i == 0 else ""}" data-i="{i}"></span>' for i in range(len(images))
-    )
-    gallery_pill = (
-        f'<div class="lp-gallery-pill"><span class="lp-gallery-dots">{dots_html}</span>'
-        f'<span class="lp-gallery-count">1/{len(images)}</span></div>'
-        if len(images) > 1 else ""
-    )
-
-    cta_type = page.get("ctaType", "store")
-    if cta_type == "whatsapp":
-        wa_number  = re.sub(r"\D", "", page.get("whatsappNumber", ""))
-        wa_text    = quote(f"مرحباً، أريد أطلب: {page.get('name','')}")
-        cta_href   = f"https://wa.me/{wa_number}?text={wa_text}"
-        cta_label  = "💬 اطلب عبر واتساب"
-        cta_target = ' target="_blank" rel="noopener"'
-    else:
-        cta_href   = f"/?store={uid}"
-        cta_label  = "🛍️ اطلب الآن من المتجر"
-        cta_target = ""
-
-    name         = _esc(page.get("name", ""))
-    headline     = _esc(page.get("headline") or page.get("name", ""))
-    subheadline  = _esc(page.get("subheadline", ""))
-    desc_raw     = page.get("description", "") or ""
-    desc_html    = _esc(desc_raw).replace("\n", "<br/>")
-    desc_meta    = re.sub(r"\s+", " ", desc_raw)[:150]
-    benefits     = [b for b in (page.get("benefits") or []) if str(b or "").strip()]
-    urgency_text = str(page.get("urgencyText") or "").strip()
-    guarantee    = str(page.get("guaranteeText") or "").strip()
-    faq          = [f for f in (page.get("faq") or []) if isinstance(f, dict) and f.get("q") and f.get("a")]
-
-    urgency_html = (
-        f'<div class="lp-urgency"><span class="lp-pulse-dot"></span>{_esc(urgency_text)}</div>'
-        if urgency_text else ""
-    )
-
-    benefits_html = ""
-    if benefits:
-        items = "".join(
-            f'<div class="lp-benefit"><span class="lp-benefit-ico">✓</span><span>{_esc(b)}</span></div>'
-            for b in benefits
-        )
-        benefits_html = f'<div class="lp-section"><div class="lp-benefits">{items}</div></div>'
-
-    guarantee_html = (
-        f'<div class="lp-guarantee"><span class="lp-guarantee-ico">🛡️</span>{_esc(guarantee)}</div>'
-        if guarantee else ""
-    )
-
-    faq_html = ""
-    if faq:
-        rows = "".join(
-            f'<details class="lp-faq-item"><summary><span>{_esc(f["q"])}</span>'
-            f'<span class="lp-faq-plus"></span></summary>'
-            f'<p>{_esc(f["a"])}</p></details>'
-            for f in faq
-        )
-        faq_html = f'<div class="lp-section"><h2 class="lp-h2">أسئلة شائعة</h2>{rows}</div>'
-
-    subheadline_html = f'<p class="lp-sub">{subheadline}</p>' if subheadline else ""
-
-    return f"""<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>{name} — {_esc(store_name)}</title>
-<meta name="description" content="{_esc(desc_meta)}"/>
-<meta property="og:title" content="{name}"/>
-<meta property="og:description" content="{_esc(desc_meta)}"/>
-{f'<meta property="og:image" content="{_esc(images[0])}"/>' if images else ''}
-<link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@700;800;900&family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet"/>
-<style>
-:root{{
-  --accent:#3b82f6; --accent2:#7dd3fc; --amber:#fbbf24; --good:#22c55e;
-  --bg:#070c18; --bg2:#0d1b2e; --text:#eef2fb; --muted:#94a3c4;
-  --glass:rgba(255,255,255,.05); --glass-bd:rgba(255,255,255,.10);
-}}
-*{{box-sizing:border-box;margin:0;padding:0}}
-html{{background:var(--bg)}}
-body{{
-  font-family:'Tajawal',Arial,sans-serif;background:var(--bg);color:var(--text);
-  min-height:100vh;overflow-x:hidden;position:relative;
-}}
-.lp-glow{{position:fixed;border-radius:50%;filter:blur(70px);opacity:.35;z-index:0;pointer-events:none}}
-.lp-glow-a{{width:340px;height:340px;background:var(--accent);top:-120px;right:-90px}}
-.lp-glow-b{{width:300px;height:300px;background:var(--amber);bottom:10%;left:-110px;opacity:.18}}
-.lp-page{{position:relative;z-index:1;max-width:520px;margin:0 auto;padding-bottom:112px}}
-
-.lp-urgency{{display:flex;align-items:center;justify-content:center;gap:8px;
-  background:linear-gradient(90deg,#7f1d1d,#b91c1c 55%,#dc2626);color:#fff;text-align:center;
-  font-size:12.5px;font-weight:700;padding:10px 14px;letter-spacing:.2px}}
-.lp-pulse-dot{{width:7px;height:7px;border-radius:50%;background:#fff;flex:none;
-  animation:lpPulse 1.4s ease-in-out infinite}}
-@keyframes lpPulse{{0%,100%{{opacity:1;transform:scale(1)}}50%{{opacity:.35;transform:scale(1.6)}}}}
-
-.lp-eyebrow{{display:flex;justify-content:center;padding:18px 20px 0}}
-.lp-eyebrow span{{background:var(--glass);border:1px solid var(--glass-bd);backdrop-filter:blur(8px);
-  color:var(--accent2);font-size:11.5px;font-weight:700;padding:6px 14px;border-radius:999px;letter-spacing:.2px}}
-
-.lp-stage{{padding:22px 26px 46px;perspective:1400px}}
-.lp-card-3d{{
-  position:relative;border-radius:26px;overflow:hidden;
-  border:1px solid rgba(255,255,255,.12);
-  box-shadow:0 40px 70px -24px rgba(59,130,246,.55), 0 16px 30px -12px rgba(0,0,0,.65),
-    inset 0 1px 0 rgba(255,255,255,.08);
-  transform:rotateX(6deg) rotateY(-7deg);
-  animation:lpFloat 5.5s ease-in-out infinite;
-  background:var(--bg2);
-}}
-@keyframes lpFloat{{
-  0%,100%{{transform:rotateX(6deg) rotateY(-7deg) translateY(0)}}
-  50%{{transform:rotateX(3deg) rotateY(-3deg) translateY(-10px)}}
-}}
-.lp-slider{{position:relative;width:100%;height:360px;overflow:hidden;background:var(--bg2)}}
-.lp-slide{{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .5s ease}}
-.lp-slide.active{{opacity:1}}
-.lp-slide img{{width:100%;height:100%;object-fit:cover}}
-.lp-noimg{{font-size:80px;opacity:.3}}
-
-.lp-gallery-pill{{position:absolute;left:50%;bottom:-19px;transform:translateX(-50%);
-  display:flex;align-items:center;gap:10px;background:rgba(13,27,46,.85);border:1px solid var(--glass-bd);
-  backdrop-filter:blur(10px);border-radius:999px;padding:7px 14px;
-  box-shadow:0 10px 24px -8px rgba(0,0,0,.6);z-index:2}}
-.lp-gallery-dots{{display:flex;gap:5px}}
-.lp-dot{{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.25)}}
-.lp-dot.active{{background:var(--accent2)}}
-.lp-gallery-count{{font-size:10.5px;color:var(--muted);font-weight:700}}
-
-.lp-body{{padding:14px 22px 0}}
-.lp-headline{{font-family:'Cairo',sans-serif;font-weight:900;font-size:25px;line-height:1.42;
-  letter-spacing:-.01em;margin-bottom:8px;
-  background:linear-gradient(90deg,#ffffff,var(--accent2));-webkit-background-clip:text;
-  background-clip:text;-webkit-text-fill-color:transparent}}
-.lp-sub{{font-size:14.5px;color:var(--accent2);font-weight:700;margin-bottom:14px}}
-.lp-body p{{font-size:14px;color:var(--muted);line-height:1.85}}
-
-.lp-guarantee{{margin-top:18px;display:flex;align-items:center;gap:9px;
-  background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.3);color:var(--good);
-  border-radius:14px;padding:12px 15px;font-size:13px;font-weight:700;
-  box-shadow:0 10px 22px -14px rgba(34,197,94,.6)}}
-.lp-guarantee-ico{{font-size:16px;flex:none}}
-
-.lp-section{{padding:26px 22px 0}}
-.lp-h2{{font-family:'Cairo',sans-serif;font-size:16.5px;font-weight:800;margin-bottom:12px}}
-
-.lp-benefits{{display:grid;grid-template-columns:1fr 1fr;gap:10px}}
-.lp-benefit{{display:flex;align-items:flex-start;gap:8px;background:var(--glass);border:1px solid var(--glass-bd);
-  backdrop-filter:blur(10px);border-radius:14px;padding:12px 12px;font-size:12.8px;line-height:1.5;
-  box-shadow:0 12px 24px -18px rgba(0,0,0,.7)}}
-.lp-benefit-ico{{flex:none;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;
-  font-size:11px;font-weight:900;color:#04101f;
-  background:linear-gradient(135deg,var(--accent2),var(--accent))}}
-
-.lp-faq-item{{background:var(--glass);border:1px solid var(--glass-bd);backdrop-filter:blur(10px);
-  border-radius:14px;padding:14px 16px;margin-bottom:9px;box-shadow:0 12px 24px -18px rgba(0,0,0,.7)}}
-.lp-faq-item summary{{cursor:pointer;font-size:13.5px;font-weight:700;list-style:none;
-  display:flex;align-items:center;justify-content:space-between;gap:10px}}
-.lp-faq-item summary::-webkit-details-marker{{display:none}}
-.lp-faq-plus{{flex:none;width:20px;height:20px;border-radius:50%;background:rgba(59,130,246,.18);
-  color:var(--accent2);position:relative}}
-.lp-faq-plus::before,.lp-faq-plus::after{{content:"";position:absolute;background:var(--accent2);
-  top:50%;left:50%;transform:translate(-50%,-50%)}}
-.lp-faq-plus::before{{width:9px;height:2px}}
-.lp-faq-plus::after{{width:2px;height:9px;transition:transform .2s ease}}
-.lp-faq-item[open] .lp-faq-plus::after{{transform:translate(-50%,-50%) rotate(90deg) scaleY(0)}}
-.lp-faq-item p{{margin-top:9px;font-size:12.8px;color:var(--muted);line-height:1.75}}
-
-.lp-brand{{text-align:center;padding:30px 10px 6px;font-size:11px;color:var(--muted);letter-spacing:.3px}}
-
-.lp-cta-fixed{{position:fixed;bottom:0;left:0;right:0;z-index:5;padding:14px 20px 18px;
-  background:linear-gradient(180deg,rgba(7,12,24,0),rgba(7,12,24,.92) 35%,var(--bg))}}
-.lp-cta-inner{{max-width:520px;margin:0 auto}}
-.lp-cta-btn{{display:block;width:100%;text-align:center;padding:15px;border-radius:14px;
-  font-weight:800;font-size:15.5px;text-decoration:none;color:#04101f;
-  background:linear-gradient(135deg,var(--accent2),var(--accent));
-  box-shadow:0 16px 34px -12px rgba(59,130,246,.75), inset 0 1px 0 rgba(255,255,255,.5);
-  animation:lpGlow 2.6s ease-in-out infinite}}
-@keyframes lpGlow{{
-  0%,100%{{box-shadow:0 16px 34px -12px rgba(59,130,246,.75), inset 0 1px 0 rgba(255,255,255,.5)}}
-  50%{{box-shadow:0 16px 44px -8px rgba(59,130,246,1), inset 0 1px 0 rgba(255,255,255,.6)}}
-}}
-@media (prefers-reduced-motion: reduce){{
-  .lp-card-3d,.lp-cta-btn,.lp-pulse-dot{{animation:none}}
-}}
-</style>
-</head>
-<body>
-<div class="lp-glow lp-glow-a"></div>
-<div class="lp-glow lp-glow-b"></div>
-<div class="lp-page">
-  {urgency_html}
-  <div class="lp-eyebrow"><span>🛍️ {_esc(store_name)}</span></div>
-  <div class="lp-stage">
-    <div class="lp-card-3d">
-      <div class="lp-slider" id="lpSlider">{imgs_html}</div>
-      {gallery_pill}
-    </div>
-  </div>
-  <div class="lp-body">
-    <h1 class="lp-headline">{headline}</h1>
-    {subheadline_html}
-    <p>{desc_html}</p>
-    {guarantee_html}
-  </div>
-  {benefits_html}
-  {faq_html}
-  <div class="lp-brand">{_esc(store_name)} — {name}</div>
-</div>
-<div class="lp-cta-fixed"><div class="lp-cta-inner">
-  <a class="lp-cta-btn" href="{cta_href}"{cta_target}>{cta_label}</a>
-</div></div>
-<script>
-(function(){{
-  var slides = document.querySelectorAll('.lp-slide');
-  var dots   = document.querySelectorAll('.lp-dot');
-  var countEl = document.querySelector('.lp-gallery-count');
-  var idx = 0;
-  function show(i){{
-    slides.forEach(function(s,j){{ s.classList.toggle('active', j===i); }});
-    dots.forEach(function(d,j){{ d.classList.toggle('active', j===i); }});
-    if(countEl) countEl.textContent = (i+1) + '/' + slides.length;
-    idx = i;
-  }}
-  dots.forEach(function(d){{ d.addEventListener('click', function(){{ show(parseInt(d.dataset.i)); }}); }});
-  if(slides.length>1){{ setInterval(function(){{ show((idx+1)%slides.length); }}, 4000); }}
-}})();
-</script>
-</body>
-</html>"""
 
 @app.route("/api/landing/questions", methods=["POST"])
 @require_auth
@@ -1843,22 +1070,6 @@ def api_landing_post_instagram():
         logging.error(f"landing/postToInstagram: {e}")
         return err_json("خطأ فالاتصال بإنستغرام")
 
-@app.route("/lp/<page_id>", methods=["GET"])
-def landing_page_public_view(page_id):
-    uid = _landing_uid_from_id(page_id)
-    if not uid:
-        return "رابط غير صالح", 404
-    page = _fb_get(f"data/{uid}/landingPages/{page_id}")
-    if not page or not isinstance(page, dict):
-        return "الصفحة غير موجودة", 404
-    if not page.get("published", True):
-        return "هذه الصفحة غير منشورة حالياً", 404
-    try:
-        _fb_patch(f"data/{uid}/landingPages/{page_id}", {"views": int(page.get("views", 0)) + 1})
-    except Exception:
-        pass
-    html = _build_landing_html(uid, page)
-    return html, 200, {"Content-Type": "text/html; charset=utf-8"}
 
 # ── WooCommerce Integration ───────────────────────────────
 @app.route("/api/woo/connect", methods=["POST"])
@@ -2403,195 +1614,6 @@ def api_saas():
         return err_json(str(e), 500)
 
 
-# رسالة ثابتة لكل أخطاء الربط — نص الاستثناء (فيه URL كامل بـ client_secret/access_token)
-# ما يتعرضش للمستخدم ولا يتسجّل أبداً.
-_OAUTH_FAIL_MSG = "تعذّر إكمال الربط مع فيسبوك — حاول مرة أخرى"
-_OAUTH_STATE_BAD_MSG = "انتهت صلاحية طلب الربط أو أنه غير صالح — أعد المحاولة من لوحة التحكم"
-
-# ── ربط state بالمتصفح (SEC-004) ──
-# getOAuthState يولّد nonce عشوائي: يتحط فكوكي HttpOnly، والـ hash ديالو فالـ state
-# وفـ oauth_pending/{uid} (خانة وحدة لكل تاجر). /callback يقبل غير إلا الكوكي مطابقة
-# والخانة موجودة، ويمسحها (استعمال واحد). هكا state مسروق أو مبعوث لضحية ما يخدمش
-# فمتصفح آخر.
-_OAUTH_COOKIE    = "of_oauth_nonce"
-_OAUTH_STATE_TTL = 600
-
-def _nonce_hash(nonce):
-    return hashlib.sha256(str(nonce).encode("utf-8")).hexdigest()
-
-class _NonceRejected(Exception):
-    pass
-
-def _consume_oauth_nonce(uid, nh):
-    """يستهلك oauth_pending/{uid} ذرّياً إذا كان مطابق وما انتهاش — يرجّع True مرة وحدة فقط.
-    firebase-admin يرفض None فالـ transaction (ما يمسحش)، لذلك نكتبو علامة "مستعمل" بلا nh،
-    ومحاولة ربط جديدة تكتب فوقها. عند عدم التطابق نوقفو الـ transaction بلا ما نكتبو."""
-    def _txn(cur):
-        if (isinstance(cur, dict) and int(cur.get("exp", 0) or 0) > time.time()
-                and hmac.compare_digest(str(cur.get("nh", "")).encode(), nh.encode())):
-            return {"used": int(time.time())}
-        raise _NonceRejected()
-    try:
-        _firebase_ref(f"oauth_pending/{uid}").transaction(_txn)
-        return True
-    except _NonceRejected:
-        return False
-    except Exception as e:
-        logging.error(f"OAuth nonce consume failed: {type(e).__name__}")
-        return False
-
-@app.route("/callback", methods=["GET"])
-def fb_oauth_callback():
-    resp = make_response(_fb_oauth_callback_page())
-    # الكوكي ما تبقاش بعد أي محاولة (نجاح ولا فشل)
-    resp.delete_cookie(_OAUTH_COOKIE, path="/callback", secure=True, httponly=True, samesite="Lax")
-    return resp
-
-def _fb_oauth_callback_page():
-    code  = request.args.get("code")
-    state = request.args.get("state")
-    error = request.args.get("error")
-    if error: return _oauth_error_page("تم إلغاء الربط أو رفضه من فيسبوك")
-    if not code or not state: return _oauth_error_page("Missing code or state")
-    # التحقق من state + كوكي المتصفح قبل أي نداء لفيسبوك — توكن جلسة (أو أي نوع آخر) ما يتقبلش هنا
-    sd    = decode_token(unquote(state), typ="oauth_state") or {}
-    uid   = str(sd.get("uid","") or "").strip()
-    uname = str(sd.get("uname","") or "").strip()
-    if not uid:
-        logging.error("OAuth state verification failed")
-        return _oauth_error_page(_OAUTH_FAIL_MSG)
-    nh = str(sd.get("nh", "") or "")
-    cookie_nonce = request.cookies.get(_OAUTH_COOKIE, "")
-    if not (nh and cookie_nonce and hmac.compare_digest(_nonce_hash(cookie_nonce).encode(), nh.encode())
-            and _consume_oauth_nonce(uid, nh)):
-        logging.warning("OAuth state rejected: browser nonce missing, mismatched or already used")
-        return _oauth_error_page(_OAUTH_STATE_BAD_MSG)
-    try:
-        r1 = requests.get("https://graph.facebook.com/v19.0/oauth/access_token",
-            params={"client_id":FB_APP_ID,"client_secret":FB_APP_SECRET_OAUTH,
-                    "redirect_uri":REDIRECT_URI,"code":code}, timeout=15)
-        if not r1.ok:
-            logging.error(f"OAuth code exchange failed: HTTP {r1.status_code}")
-            return _oauth_error_page(_OAUTH_FAIL_MSG)
-        short_token = r1.json().get("access_token")
-        if not short_token: raise ValueError("No access_token")
-        r2 = requests.get("https://graph.facebook.com/v19.0/oauth/access_token",
-            params={"grant_type":"fb_exchange_token","client_id":FB_APP_ID,
-                    "client_secret":FB_APP_SECRET_OAUTH,"fb_exchange_token":short_token}, timeout=15)
-        if not r2.ok:
-            logging.error(f"OAuth long-lived token exchange failed: HTTP {r2.status_code}")
-            return _oauth_error_page(_OAUTH_FAIL_MSG)
-        long_token = r2.json().get("access_token", short_token)
-        r3 = requests.get("https://graph.facebook.com/v19.0/me/accounts",
-            params={"access_token":long_token,"fields":"id,name,access_token,instagram_business_account"},
-            timeout=15)
-        if not r3.ok:
-            logging.error(f"OAuth /me/accounts failed: HTTP {r3.status_code}")
-            return _oauth_error_page(_OAUTH_FAIL_MSG)
-        pages = r3.json().get("data",[]) or []
-        logging.info(f"📘 FB /me/accounts pages received: {len(pages)}")
-        fb_page_id = ig_page_id = ig_token = ""
-        fb_token   = long_token
-        pages_info = []
-        for page in pages:
-            fb_page_id = page.get("id","")
-            fb_token   = page.get("access_token") or long_token
-            pages_info.append({"type":"facebook","id":fb_page_id,"name":page.get("name","")})
-            ig = page.get("instagram_business_account")
-            if ig:
-                ig_page_id = ig.get("id","")
-                ig_token   = page.get("access_token") or long_token
-                pages_info.append({"type":"instagram","id":ig_page_id,"name":f"{page.get('name','')} (IG)"})
-            else:
-                logging.warning(f"⚠️ Page '{page.get('name','')}' has NO instagram_business_account linked")
-        _fb_patch(f"data/{uid}/fbTokens", {
-            "fb_access_token":fb_token,"fb_page_id":fb_page_id,
-            "instgram_access_token":ig_token,"Page_ID_instgram":ig_page_id,
-            "pages":pages_info,"connected":True,"updated_at":time.strftime("%Y-%m-%dT%H:%M:%S"),
-        })
-        if uname:
-            _fb_patch(f"users/{uname}", {
-                "fb_access_token":fb_token,"page_id_FB":fb_page_id,
-                "instgram_access_token":ig_token,"Page_ID_instgram":ig_page_id,
-            })
-            try:
-                if fb_page_id: _fb_put(f"channel_index/{fb_page_id}", uname)
-                if ig_page_id: _fb_put(f"channel_index/{ig_page_id}", uname)
-            except Exception as e:
-                logging.error(f"channel_index update failed: {e}")
-        logging.info(f"✅ OAuth OK UID={uid}")
-        ph = "".join(f"<div style='display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12px'>"
-                     f"<span>{'📷' if p['type']=='instagram' else '📘'}</span>"
-                     f"<span>{_esc(p.get('name','—'))}</span></div>" for p in pages_info)
-        return f"""<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"/><title>تم الربط</title>
-<style>body{{margin:0;font-family:Arial;background:#0a1628;color:#e8edf5;display:flex;align-items:center;justify-content:center;min-height:100vh;}}</style></head>
-<body><div style="text-align:center;padding:40px;background:rgba(15,32,68,.92);border:1px solid rgba(0,214,143,.3);border-radius:16px;max-width:340px">
-<div style="font-size:56px">✅</div><h2 style="color:#00d68f">تم الربط بنجاح!</h2>
-<p style="color:#8899bb;font-size:13px">جاري إغلاق النافذة...</p>
-{('<div style="margin-top:16px;background:rgba(255,255,255,.04);border-radius:10px;padding:12px">' + ph + '</div>') if ph else ''}
-</div><script>{_post_to_opener_js('{type:"FB_AUTH_SUCCESS"}')}
-setTimeout(()=>window.close(),2500);</script></body></html>"""
-    except Exception as err:
-        logging.error(f"OAuth error: {type(err).__name__}"); return _oauth_error_page(_OAUTH_FAIL_MSG)
-
-def _js_str(v):
-    """نص JSON آمن داخل <script> — json.dumps وحده ما يهرّبش </script>."""
-    return json.dumps(str(v)).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
-
-def _post_to_opener_js(msg_js):
-    """postMessage لكل origin فـ ALLOWED_ORIGINS (أبداً "*"). المتصفح يتجاهل بصمت الـ origin
-    اللي ما يطابقش النافذة الأم، والرسالة ما فيها حتى توكن — الواجهة تعاود تجيب من السيرفر."""
-    targets = ",".join(_js_str(o) for o in _ALLOWED_ORIGINS)
-    return (f"[{targets}].forEach(function(o){{try{{window.opener&&"
-            f"window.opener.postMessage({msg_js},o);}}catch(e){{}}}});")
-
-def _oauth_error_page(msg):
-    return f"""<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"/><title>فشل</title>
-<style>body{{margin:0;font-family:Arial;background:#0a1628;color:#e8edf5;display:flex;align-items:center;justify-content:center;min-height:100vh;}}</style></head>
-<body><div style="text-align:center;padding:40px;background:rgba(15,32,68,.92);border:1px solid rgba(255,77,109,.3);border-radius:16px;max-width:340px">
-<div style="font-size:56px">❌</div><h2 style="color:#ff4d6d">فشل الربط</h2>
-<p style="color:#8899bb;font-size:12px;word-break:break-all">{_esc(msg)}</p>
-</div><script>{_post_to_opener_js('{type:"FB_AUTH_ERROR",message:' + _js_str(msg) + '}')}
-setTimeout(()=>window.close(),4000);</script></body></html>"""
-
-@app.route("/api/getOAuthState", methods=["GET"])
-@require_auth
-@require_owner
-def api_get_oauth_state():
-    nonce = secrets.token_urlsafe(32)
-    nh    = _nonce_hash(nonce)
-    exp   = int(time.time()) + _OAUTH_STATE_TTL
-    # خانة وحدة لكل تاجر: محاولة ربط جديدة تلغي القديمة
-    _fb_put(f"oauth_pending/{request.auth_uid}", {"nh": nh, "exp": exp})
-    state = jwt.encode({
-        "uid": request.auth_uid, "uname": request.auth_username, "typ": "oauth_state",
-        "nh": nh, "exp": exp,
-    }, JWT_SECRET, algorithm=JWT_ALGO)
-    resp = ok_json({"state": state})
-    resp.set_cookie(_OAUTH_COOKIE, nonce, max_age=_OAUTH_STATE_TTL, path="/callback",
-                    secure=True, httponly=True, samesite="Lax")
-    return resp
-
-@app.route("/fb-status", methods=["GET"])
-@require_auth
-@require_owner
-def fb_status():
-    uid  = request.auth_uid
-    data = _fb_get(f"data/{uid}/fbTokens")
-    if data and isinstance(data,dict) and data.get("connected"):
-        return jsonify({"connected":True,"updated_at":data.get("updated_at","—"),"pages":data.get("pages",[])})
-    return jsonify({"connected":False})
-
-@app.route("/fb-disconnect", methods=["POST"])
-@require_auth
-@require_owner
-def fb_disconnect():
-    uid = request.auth_uid
-    _fb_patch(f"data/{uid}/fbTokens", {"connected":False,"fb_access_token":"",
-        "instgram_access_token":"","pages":[],"updated_at":time.strftime("%Y-%m-%dT%H:%M:%S")})
-    return jsonify({"status":"ok"})
-
-
 @app.after_request
 def security_headers(resp):
     resp.headers["X-Content-Type-Options"] = "nosniff"
@@ -2604,27 +1626,52 @@ def limit_size():
         abort(413)
 
 
-@app.route("/webhook", methods=["GET", "POST"])
-def webhook():
-    if request.method == "GET":
-        # ... كود التحقق (hub.verify_token) يبقى كما هو ...
-        if VERIFY_TOKEN and hmac.compare_digest(request.args.get("hub.verify_token") or "", VERIFY_TOKEN):
-            return request.args.get("hub.challenge", ""), 200
-        return "Forbidden", 403
+# ── Blueprints: routes/ (مسارات منقولة من app.py فـ Phase 4) — قبل features/
+from routes.public import (
+    serve_index,
+    healthz,
+    _health_cache,
+    _HEALTH_TTL,
+    health,
+    privacy_page,
+    terms_redirect,
+    api_add_order,
+    _compute_store_products,
+    api_get_store_products,
+    api_track_order,
+    api_submit_rating,
+    api_get_product_ratings,
+    api_get_store_cities,
+    api_get_store_settings,
+    landing_page_public_view,
+)
+from routes.oauth import (
+    _OAUTH_FAIL_MSG,
+    _OAUTH_STATE_BAD_MSG,
+    _OAUTH_COOKIE,
+    _OAUTH_STATE_TTL,
+    _nonce_hash,
+    _NonceRejected,
+    _consume_oauth_nonce,
+    fb_oauth_callback,
+    _fb_oauth_callback_page,
+    _js_str,
+    _post_to_opener_js,
+    _oauth_error_page,
+    api_get_oauth_state,
+    fb_status,
+    fb_disconnect,
+)
+from routes.webhook import (
+    webhook,
+)
+import routes.public as _routes_public
+import routes.oauth as _routes_oauth
+import routes.webhook as _routes_webhook
+app.register_blueprint(_routes_public.bp)
+app.register_blueprint(_routes_oauth.bp)
+app.register_blueprint(_routes_webhook.bp)
 
-    # القراءة الخام للبيانات هي أهم خطوة
-    raw_body = request.get_data() 
-    
-    if not verify_sig(raw_body, request.headers):
-        # fail-closed: الطلب يترفض وما يتعالجش — object يبيّن أنو منتج (page/instagram/whatsapp) فشل
-        logging.error(f"❌ رفض webhook: توقيع غير صالح (403) | object={_webhook_object(raw_body)}")
-        return "Forbidden", 403
-    
-    data = request.get_json(silent=True)
-    if not data: return "Bad Request", 400
-    logging.info(f"📩 webhook RECEIVED: object={data.get('object')} | entries={len(data.get('entry',[]))}")
-    submit_webhook(data)
-    return "OK", 200
 from features.discounts_api import discounts_bp
 from features.tracking_api import tracking_bp
 from features.support_api import support_bp

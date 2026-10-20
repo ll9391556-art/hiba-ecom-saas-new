@@ -35,8 +35,8 @@ def _imports(path):
 
 
 def test_lower_layers_never_import_app_or_features():
-    """core/ (ثم services/) ما يستوردوش app ولا features — هادا اللي يمنع الاستيراد الدائري."""
-    for layer in ("core", "services"):
+    """core/ وservices/ وroutes/ ما يستوردوش app ولا features — هادا اللي يمنع الاستيراد الدائري."""
+    for layer in ("core", "services", "routes"):
         for path in sorted((ROOT / layer).glob("*.py")) if (ROOT / layer).exists() else []:
             bad = {"app", "features"} & set(_imports(path))
             assert not bad, f"{path.name} imports {bad}"
