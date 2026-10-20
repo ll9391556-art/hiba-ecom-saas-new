@@ -63,3 +63,13 @@ def test_dashboard_scripts_only_touch_dashboard_elements():
 
 def test_shop_scripts_only_touch_shop_elements():
     assert _unguarded_missing_ids("shop.html", SHOP_SCRIPTS) == []
+
+
+def test_feature_pages_use_shared_helpers():
+    """F4 — صفحات features/ كتستعمل core.js + api.js بدل نسخها الخاصة."""
+    for page in sorted((STATIC / "features").glob("*.html")):
+        scripts, html = _local_scripts(f"features/{page.name}")
+        assert scripts[:2] == ["core.js", "api.js"], page.name
+        inline = "".join(re.findall(r"<script>([\s\S]*?)</script>", html))
+        for dup in ("var API_URL", "var authToken", "function apiGet", "function apiPost", "function esc("):
+            assert dup not in inline, f"{page.name} still defines {dup}"

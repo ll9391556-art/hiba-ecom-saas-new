@@ -73,22 +73,10 @@ tr:hover td{background:var(--card2)}
   </div>
 </div>
 
+<script src="/static/js/core.js"></script>
+<script src="/static/js/api.js"></script>
 <script>
-var API_URL = "https://orderconfidence.com/api";
-var authToken = localStorage.getItem("of_token");
-
-async function apiGet(path, params){
-  var url = API_URL+path+(params?("?"+new URLSearchParams(params)):"");
-  var r = await fetch(url, {headers:{"Authorization":"Bearer "+authToken}});
-  return r.json();
-}
-async function apiPost(path, body){
-  var r = await fetch(API_URL+path, {method:"POST",
-    headers:{"Content-Type":"application/json","Authorization":"Bearer "+authToken},
-    body:JSON.stringify(body)});
-  return r.json();
-}
-function esc(s){ return String(s??"").replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); }
+// API_URL / authToken / apiGet / apiPost / esc: من /static/js/core.js و api.js (Phase 4 / F4)
 
 async function loadCoupons(){
   var box = document.getElementById("couponsBox");
