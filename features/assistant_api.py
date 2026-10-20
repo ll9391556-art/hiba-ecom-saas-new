@@ -12,7 +12,7 @@ import requests as _requests
 from flask import Blueprint, request
 from google.genai import types
 from app import (
-    require_auth, require_owner, require_perm, _fb_get, _fb_push, _fb_list, _fb_put, _fb_patch,
+    require_auth, require_owner, require_perm, _fb_get, _fb_push, _fb_list, _fb_put, _fb_patch, _patch_order,
     _gemini_generate_with_fallback, _usage_month_key, ok_json, err_json,
     _encrypt_secret, _decrypt_secret, _validate_and_pin_store_url, _request_with_pinned_dns,
 )
@@ -304,7 +304,7 @@ def create_shipment():
     except Exception:
         pass
 
-    _fb_patch(f"data/{uid}/orders/{order_id}", {
+    _patch_order(uid, order_id, {
         "shippingProvider": "yalidine",
         "shippingTracking": tracking_id,
         "shippingCreatedAt": time.strftime("%Y-%m-%d %H:%M"),
