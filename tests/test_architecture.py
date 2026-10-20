@@ -22,6 +22,34 @@ def test_every_route_is_registered_once(app):
     assert dupes == []
 
 
+def _imports(path):
+    import ast
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    out = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            out += [a.name.split(".")[0] for a in node.names]
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            out.append(node.module.split(".")[0])
+    return out
+
+
+def test_lower_layers_never_import_app_or_features():
+    """core/ (ثم services/) ما يستوردوش app ولا features — هادا اللي يمنع الاستيراد الدائري."""
+    for layer in ("core", "services"):
+        for path in sorted((ROOT / layer).glob("*.py")) if (ROOT / layer).exists() else []:
+            bad = {"app", "features"} & set(_imports(path))
+            assert not bad, f"{path.name} imports {bad}"
+
+
+def test_app_has_no_function_level_feature_imports():
+    import ast
+    tree = ast.parse((ROOT / "app.py").read_text(encoding="utf-8"))
+    nested = [n for f in ast.walk(tree) if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef))
+              for n in ast.walk(f) if isinstance(n, ast.ImportFrom) and (n.module or "").startswith("features")]
+    assert nested == []
+
+
 def test_shipping_routes_served_by_shipping_blueprint(app):
     adapter = app.app.url_map.bind("localhost")
     for path, method in (("/api/shipping/status", "GET"), ("/api/shipping/connect", "POST"),

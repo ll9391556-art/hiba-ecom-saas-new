@@ -207,7 +207,7 @@ def test_recalc_does_not_wipe_totals_when_read_fails(client, app, db, shop, scen
     real_get = fakes.FakeReference.get
     monkeypatch.setattr(fakes.FakeReference, "get", lambda self, *a, **k: (_ for _ in ()).throw(UnavailableError())
                         if self.path.endswith("/orders") else real_get(self, *a, **k))
-    monkeypatch.setattr(app, "sleep", lambda s: None)
+    monkeypatch.setattr("core.db.sleep", lambda s: None)  # retry يعيش فـ core.db
     assert client.post("/api/recalcStats", headers=shop["headers"]).status_code == 503
     assert db.get(f"data/{uid}/stats") == stats
 

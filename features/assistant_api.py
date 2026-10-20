@@ -17,18 +17,11 @@ from app import (
     _fb_query, _get_stats, _sold_by_name, _stock_fields, _safe_int,
 )
 
+from core.audit import log_audit_entry  # noqa: F401 — كان معرّف هنا (توافق)
+
 assistant_bp = Blueprint("assistant", __name__)
 
 
-# ── تسجيل تدقيق (Audit Log) — دالة تُستدعى من نقاط حساسة بالكود الأصلي ──
-def log_audit_entry(uid, actor, action, details=""):
-    try:
-        _fb_push(f"data/{uid}/auditLog", {
-            "actor": actor, "action": action, "details": details,
-            "timestamp": time.time(), "date": time.strftime("%Y-%m-%d %H:%M:%S"),
-        })
-    except Exception as e:
-        logging.error(f"log_audit_entry: {e}")
 
 
 def _latest(path, n):

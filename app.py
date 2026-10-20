@@ -30,6 +30,13 @@ from google.genai import types
 from time import sleep
 from markupsafe import escape as _esc
 
+# Phase 4: الطبقات المشتركة فـ core/ — app.py يعاود يصدّر نفس الأسماء، باش features/*
+# والاختبارات (`from app import ...`) يبقاو خدامين بلا تبديل.
+from core.db import (_FB_TRANSIENT_ERRORS, _fb_is_transient, _fb_call, _fb_get, _fb_query, _fb_keys,
+                     _fb_put, _fb_patch, _fb_delete, _fb_push, _fb_list, _firebase_ref)
+from core.http import ok_json, err_json, _opt_int_arg, _opt_float_arg
+from core.audit import log_audit_entry
+
 app = Flask(__name__, static_folder="static")
 
 # ── ثقة بروكسي عكسي (X-Forwarded-For) ──────────────────────
@@ -364,93 +371,17 @@ def _init_firebase():
 
 _init_firebase()
 
-# ── إعادة المحاولة (INFO-004) ──
-# قبل: _firebase_ref كان يعاود db.reference() — وهي ما تتصلش بالشبكة أصلاً، فالفشل الحقيقي
-# (.get/.set) ما كانش يتعاود أبداً. دابا: محاولة ثانية وحدة بعد 0.5 ثانية، غير على الأخطاء
-# المؤقتة (انقطاع، timeout، 5xx). push ما يتعاودش: ماشي idempotent (نسخة مكررة).
-_FB_TRANSIENT_ERRORS = {"UnavailableError", "InternalError", "DeadlineExceededError", "UnknownError"}
 
-def _fb_is_transient(e):
-    return (isinstance(e, (requests.ConnectionError, requests.Timeout))
-            or type(e).__name__ in _FB_TRANSIENT_ERRORS)
 
-def _fb_call(fn):
-    try:
-        return fn()
-    except Exception as e:
-        if not _fb_is_transient(e):
-            raise
-        logging.warning(f"Firebase transient error ({type(e).__name__}) — retrying once")
-        sleep(0.5)
-        return fn()
 
-def _fb_get(path):
-    try:
-        return _fb_call(lambda: _firebase_ref(path).get())
-    except Exception as e:
-        logging.error(f"_fb_get({path}): {e}"); return None
 
-def _fb_query(path, order_by, *, equal_to=None, start_at=None, end_at=None, limit_last=None):
-    """استعلام RTDB بدل تنزيل العقدة كاملة. order_by: اسم child (لازم يكون فـ ".indexOn" ف
-    database.rules.json، وإلا Firebase يرفض) أو "$key". يرجّع dict مرتّب ({} إذا ما كاين والو)،
-    أو None عند الخطأ — باش المستدعي يفرّق بين "فارغ" و"فشل"."""
-    def run():
-        ref = _firebase_ref(path)
-        q = ref.order_by_key() if order_by == "$key" else ref.order_by_child(order_by)
-        if equal_to is not None: q = q.equal_to(equal_to)
-        if start_at is not None: q = q.start_at(start_at)
-        if end_at is not None:   q = q.end_at(end_at)
-        if limit_last:           q = q.limit_to_last(int(limit_last))
-        return q.get()
-    try:
-        return _fb_call(run) or {}
-    except Exception as e:
-        logging.error(f"_fb_query({path}, {order_by}): {e}"); return None
 
-def _fb_keys(path):
-    """مفاتيح الأبناء فقط (REST ?shallow=true) بلا تنزيل المحتوى. None عند الخطأ."""
-    try:
-        data = _fb_call(lambda: _firebase_ref(path).get(shallow=True))
-    except Exception as e:
-        logging.error(f"_fb_keys({path}): {e}"); return None
-    return list(data.keys()) if isinstance(data, dict) else []
 
-def _fb_put(path, data):
-    try:
-        _fb_call(lambda: _firebase_ref(path).set(data))
-        return True
-    except Exception as e:
-        logging.error(f"_fb_put({path}): {e}"); return False
 
-def _fb_patch(path, data):
-    try:
-        _fb_call(lambda: _firebase_ref(path).update(data))
-        return True
-    except Exception as e:
-        logging.error(f"_fb_patch({path}): {e}"); return False
 
-def _fb_delete(path):
-    try:
-        _fb_call(lambda: _firebase_ref(path).delete())
-        return True
-    except Exception as e:
-        logging.error(f"_fb_delete({path}): {e}"); return False
 
-def _fb_push(path, data):
-    try:
-        new_ref = _firebase_ref(path).push(data)
-        return new_ref.key
-    except Exception as e:
-        logging.error(f"_fb_push({path}): {e}"); return None
 
-def _fb_list(path):
-    data = _fb_get(path)
-    if not data or not isinstance(data, dict): return []
-    return list(reversed(list(data.values())))
 
-def _firebase_ref(path):
-    # db.reference() محلي (ما يتصلش بالشبكة) — يرمي غير على مسار غير صالح، فما كاينش علاش نعاودو
-    return db.reference(path)
 
 def _mask_id(v):
     """للسجلات فقط: آخر 4 أحرف من معرّف الزبون (فواتساب = رقم هاتفه)."""
@@ -508,11 +439,7 @@ def _cleanup_shared_limits(now=None):
             if _safe_int(w, current) < current - 1:
                 _fb_delete(f"ratelimits/{bucket}/{w}")
 
-def ok_json(data):
-    return jsonify({"status": "ok", "data": data})
 
-def err_json(msg, code=400):
-    return jsonify({"status": "error", "message": msg}), code
 
 def is_rate_limited(user_id, platform="fb", window=2):
     key = f"{platform}:{user_id}"
@@ -1349,7 +1276,6 @@ def api_team_delete_member():
     _fb_delete(f"team_users/{username}")
     if _fb_get(f"team_uname_index/{_uname_key(username)}") == username:
         _fb_delete(f"team_uname_index/{_uname_key(username)}")
-    from features.assistant_api import log_audit_entry
     log_audit_entry(uid, request.auth_member_username or "owner", f"حذف عضو فريق {username}")
     return ok_json(True)
 
@@ -1619,9 +1545,6 @@ def _recompute_aggregates(uid):
 _ORDERS_PAGE_MAX         = 500
 _ORDERS_CURSOR_MARGIN_MS = 30_000  # تداخل آمن: كتابة بطيئة (retry) ما تضيعش من الـ polling
 
-def _opt_int_arg(name):
-    v = str(request.args.get(name, "") or "").strip()
-    return int(v) if v else None   # ValueError على قيمة غير رقمية
 
 @app.route("/api/getOrders", methods=["GET"])
 @require_auth
@@ -1813,7 +1736,6 @@ def api_update_status():
             profit = _calc_order_profit(p_data, c_data, order.get("qty", 1), delivery_type, status, order.get("profit", 0))
     order["profit"] = profit
     _save_order(uid, oid, order, before=before)
-    from features.assistant_api import log_audit_entry
     log_audit_entry(uid, request.auth_member_username or "owner",
                      "تغيير حالة طلب", f"الطلب {oid} → {status}")
     return ok_json(True)
@@ -1935,7 +1857,6 @@ def api_delete_product():
     name = str(d.get("name") or "").strip()
     if not name: return err_json("Missing fields")
     _fb_delete(f"data/{uid}/products/{name}")
-    from features.assistant_api import log_audit_entry
     log_audit_entry(uid, request.auth_member_username or "owner", f"حذف منتج {name}")
     return ok_json(True)
 
@@ -2965,9 +2886,6 @@ def api_get_conversations():
         body["reset"] = True
     return jsonify(body)
 
-def _opt_float_arg(name):
-    v = str(request.args.get(name, "") or "").strip()
-    return float(v) if v else None   # ValueError على قيمة غير رقمية
 
 @app.route("/api/getConversationMessages", methods=["GET"])
 @require_auth
