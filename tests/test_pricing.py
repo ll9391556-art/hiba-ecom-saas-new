@@ -374,3 +374,24 @@ def test_shipping_ui_is_coming_soon():
     assert "shipping.html" not in nav and 'data-i18n="soon"' in nav and "nav-item disabled" in nav
     page = (STATIC / "features" / "shipping.html").read_text(encoding="utf-8")
     assert "<input" not in page and "/shipping/connect" not in page and "قريبًا" in page
+
+
+# ── الفريق غير فـ business: الأعضاء الحاليين عند باقة أخرى يتوقفو بلا مسح ──
+def _member_login(client, username="member1"):
+    return client.post("/api/login", json={"username": username, "password": "dummy-pass-123"})
+
+
+def test_members_of_a_plan_without_team_cannot_log_in(client, db, seed_owner, seed_member):
+    owner = seed_owner(plan="pro")
+    seed_member(owner)
+    r = _member_login(client)
+    assert r.status_code == 403 and "Business" in r.get_json()["message"]
+    assert db.get("team_users/member1/active") is True and db.get(f"data/{owner['uid']}/teamMembers/member1")
+    assert _set_plan(client, owner, "business").status_code == 200
+    assert _member_login(client).status_code == 200
+
+
+@pytest.mark.parametrize("plan", ["business", "enterprise", "lifetime"])
+def test_members_keep_working_on_team_plans(client, seed_owner, seed_member, plan):
+    seed_member(seed_owner(plan=plan))
+    assert _member_login(client).status_code == 200
