@@ -18,7 +18,7 @@
   /* الخط والمقاسات */
   --font:'Readex Pro',system-ui,-apple-system,'Segoe UI',Tahoma,Arial,sans-serif;
   --r-btn:14px;--r-field:14px;--r-card:22px;--r-pill:999px;
-  --h-btn:48px;--h-field:48px;
+  --h-btn:48px;--h-btn-sm:40px;--h-field:48px;
   --focus-ring:0 0 0 3px rgba(59,43,255,.22);
   --shadow:0 8px 24px rgba(11,11,31,.08);
 

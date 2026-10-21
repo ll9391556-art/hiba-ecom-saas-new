@@ -162,6 +162,34 @@ def test_static_pages_have_favicon():
             assert link in html, f"{name}: {link}"
 
 
+# ── 4. الأزرار ──
+BUTTONS = [".btn-primary", ".btn-volt", ".btn-outline", ".btn-danger", ".btn-success"]
+
+
+def test_buttons_follow_identity():
+    rules = _rules(_read(APP_CSS))
+    for sel in BUTTONS + [".btn-sm", ".lang-btn"]:
+        r = rules[sel]
+        assert r.get("border-radius") == "var(--r-btn)", sel
+    for sel in BUTTONS:
+        r = rules[sel]
+        assert _px(r["font-size"]) >= 16 and r["font-family"] == "inherit", sel
+        # الكبار 48px؛ حذف/تأكيد داخل الجداول مضغوطين (40px)، كيما .btn-sm
+        assert r["min-height"] == ("var(--h-btn-sm)" if sel in (".btn-danger", ".btn-success") else "var(--h-btn)"), sel
+    assert rules[".btn-sm"]["min-height"] == "var(--h-btn-sm)" and _px(rules[".btn-sm"]["font-size"]) >= 14
+    assert rules[".btn-primary"]["background"] == "var(--brand)"
+    assert rules[".btn-primary:hover"]["background"] == "var(--brand-dark)"
+    assert rules[".btn-volt"]["background"] == "var(--volt)" and rules[".btn-volt"]["color"] == "var(--ink)"
+    assert rules[".btn-outline"]["border"] == "2px solid var(--ink)"
+    assert _rules(_read(TOKENS))[":root"]["--r-btn"] == "14px"
+
+
+def test_reduced_motion_is_respected():
+    css = _read(APP_CSS)
+    block = css[css.index("@media (prefers-reduced-motion: reduce)"):]
+    assert "transition:none" in block and "transform:none" in block
+
+
 def test_body_text_is_at_least_16px():
     body = _rules(_read(APP_CSS))["body"]
     assert body["font-family"] == "var(--font)"
