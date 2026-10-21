@@ -252,6 +252,31 @@ def test_feature_page_fields_are_16px():
             assert rules[sel].get("border-radius") == "var(--r-field)", f"{name} {sel}"
 
 
+# ── 7. بلا وضع داكن ──
+def test_theme_is_always_light():
+    theme = _read(STATIC / "js" / "theme.js")
+    assert re.search(r"^var DARK_MODE = false;", theme, re.M)
+    assert "of_theme" not in theme and "setProperty" not in theme
+    for fn in ("function applyTheme(", "function toggleTheme("):  # main.js و shop-main.js و actions.js يناديوهم
+        assert fn in theme
+    index = _page("index.html")
+    toggle = re.search(r'<div class="theme-toggle" hidden[^>]*>([\s\S]*?)</div>\s*</div>\s*</div>', index)
+    assert toggle and all(f'id="{i}"' in toggle.group(1) for i in ("themeLabel", "themePill", "themeDot"))
+
+
+def test_no_dark_backgrounds_left():
+    css = _read(APP_CSS).lower()
+    for dark in DARK + ("rgba(10,22,40", "rgba(37,99,235", "rgba(255,255,255,.02)"):
+        assert dark not in css, dark
+    rules = _rules(css)
+    for sel in (".modal-overlay", ".cart-overlay", ".pdp-overlay"):  # ستار فاتح، ماشي أسود
+        alpha = float(re.search(r"rgba\(11,11,31,([\d.]+)\)", rules[sel]["background"]).group(1))
+        assert alpha <= .5, sel
+    assert "currentcolor" in rules[".spinner"]["border"]  # يبان فوق الأبيض والأزرار
+    for name in FEATURE_PAGES:
+        assert not any(d in _page(name).lower() for d in DARK), name
+
+
 def test_body_text_is_at_least_16px():
     body = _rules(_read(APP_CSS))["body"]
     assert body["font-family"] == "var(--font)"
