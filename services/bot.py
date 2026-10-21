@@ -9,7 +9,9 @@ import hmac
 import json
 import logging
 import os
+import html
 import re
+import unicodedata
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -353,6 +355,24 @@ def _fmt_price(value):
     return sign + f"{whole:,}".replace(",", " ") + frac
 
 
+# أسماء/فئات المنتجات يكتبوهم التاجر أو أعضاء الفريق (وتجي من WooCommerce): قبل ما يدخلو
+# للـ prompt نحيّدو HTML والأسطر الجديدة والحروف الخفية (باش اسم ما يزيدش "تعليمات")، ونحدّو الطول.
+_PROMPT_NAME_MAX     = 80
+_PROMPT_CATEGORY_MAX = 40
+_HTML_TAG = re.compile(r"<[^>]*>")
+
+
+def _clean_prompt_text(value, max_len):
+    if value is None:
+        return ""
+    s = _HTML_TAG.sub(" ", str(value))
+    s = _HTML_TAG.sub(" ", html.unescape(s))
+    s = "".join(" " if unicodedata.category(ch) in ("Cc", "Zl", "Zp") else ch
+                for ch in s if unicodedata.category(ch) != "Cf")
+    s = " ".join(s.split())
+    return s if len(s) <= max_len else s[:max_len - 1].rstrip() + "…"
+
+
 def get_products_text(bot_settings, currency=None):
     try:
         uid      = bot_settings.get("User_ID")
@@ -360,7 +380,7 @@ def get_products_text(bot_settings, currency=None):
         if products and isinstance(products, dict):
             symbol = (currency or _store_currency(uid))[0]
             sold = _sold_by_name(_get_stats(uid))
-            lines = [f"- {p.get('name','?')}: {_fmt_price(p.get('sell'))} {symbol} | stock:{_stock_fields(p, sold.get(p.get('name',''), 0))['available']} | {p.get('category','')}".strip()
+            lines = [f"- {_clean_prompt_text(p.get('name','?'), _PROMPT_NAME_MAX)}: {_fmt_price(p.get('sell'))} {symbol} | stock:{_stock_fields(p, sold.get(p.get('name',''), 0))['available']} | {_clean_prompt_text(p.get('category',''), _PROMPT_CATEGORY_MAX)}".strip()
                      for p in products.values() if isinstance(p,dict)]
             if lines: return "\n".join(lines)
     except Exception: pass
