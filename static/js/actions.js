@@ -107,7 +107,6 @@ registerActions({
   "uploadStoreProductImage(this,this.dataset.name)": function(event){ uploadStoreProductImage(this,this.dataset.name); },
   "window.open('/static/features/assistant.html','_blank')": function(event){ window.open('/static/features/assistant.html','_blank'); },
   "window.open('/static/features/discounts.html','_blank')": function(event){ window.open('/static/features/discounts.html','_blank'); },
-  "window.open('/static/features/shipping.html','_blank')": function(event){ window.open('/static/features/shipping.html','_blank'); },
   "window.open('/static/features/support.html','_blank')": function(event){ window.open('/static/features/support.html','_blank'); },
   "window.open('/static/features/tracking.html','_blank')": function(event){ window.open('/static/features/tracking.html','_blank'); },
   "window.open(document.getElementById('storeLinkInput').value,'_blank')": function(event){ window.open(document.getElementById('storeLinkInput').value,'_blank'); },

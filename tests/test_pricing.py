@@ -351,3 +351,26 @@ def test_dashboard_warns_before_and_during_grace(client):
     assert "SUBSCRIPTION = r.data.subscription" in DASH
     admin = client.get("/admin").get_data(as_text=True)
     assert 'id="newDurationLocal"' in admin and "duration" in admin
+
+
+# ── F. الشحن: "قريبًا" — حتى إعداد ما يتحفظ ما دام الربط ما خدامش ──
+def test_shipping_endpoints_say_coming_soon(client, db, seed_owner):
+    owner = seed_owner(plan="business")
+    r = client.post("/api/shipping/connect", headers=owner["headers"],
+                    json={"provider": "yalidine", "apiId": "dummy-id", "apiToken": "dummy-token"})
+    assert r.status_code == 503 and "قريب" in r.get_json()["message"]
+    assert db.get(f"data/{owner['uid']}/integrations/shipping") is None
+    db.set(f"data/{owner['uid']}/orders/ORD-1", {"id": "ORD-1", "status": "Confirmed"})
+    r = client.post("/api/shipping/createShipment", headers=owner["headers"], json={"orderId": "ORD-1"})
+    assert r.status_code == 503
+    # اللي ربط من قبل يقدر يشوف الحالة ويفك الربط
+    assert client.get("/api/shipping/status", headers=owner["headers"]).status_code == 200
+    assert client.post("/api/shipping/disconnect", headers=owner["headers"], json={}).status_code == 200
+
+
+def test_shipping_ui_is_coming_soon():
+    html = (STATIC / "index.html").read_text(encoding="utf-8")
+    nav = html[html.index('data-i18n="nav_shipping"') - 400:html.index('data-i18n="nav_shipping"') + 200]
+    assert "shipping.html" not in nav and 'data-i18n="soon"' in nav and "nav-item disabled" in nav
+    page = (STATIC / "features" / "shipping.html").read_text(encoding="utf-8")
+    assert "<input" not in page and "/shipping/connect" not in page and "قريبًا" in page
