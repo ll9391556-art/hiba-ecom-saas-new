@@ -19,7 +19,7 @@ import requests
 from google import genai
 from google.genai import types
 
-from core.config import _GEMINI_MODELS, _JSON_END, _JSON_START, MAX_HISTORY_TURNS, PLANS
+from core.config import _GEMINI_MODELS, _JSON_END, _JSON_START, CURRENCY_SYMBOLS_PY, MAX_HISTORY_TURNS, PLANS
 from core.db import _fb_get, _fb_keys, _fb_patch, _fb_put, _fb_query, _firebase_ref
 from core.security import _cleanup_shared_limits
 from core.util import _mask_id
@@ -322,13 +322,27 @@ def _log_conversation(uid, sender_id, direction, text, platform, via="", page_id
         logging.error(f"_log_conversation: {e}")
 
 
-def get_products_text(bot_settings):
+# عملة ردود البوت = عملة إعدادات المتجر (الافتراضي دج). قبل: الأسعار كانت تدخل للـ prompt
+# أرقام بلا عملة، وGemini كان يخمّن ("درهم" مع الدارجة).
+_CURRENCY_NAMES = {"DZD": "الدينار الجزائري", "EUR": "اليورو", "USD": "الدولار الأمريكي"}
+
+
+def _store_currency(uid):
+    """(الرمز، الاسم) لعملة المتجر — DZD إذا ما كانتش أو قيمة مجهولة."""
+    code = str((_fb_get(f"data/{uid}/storeSettings/currency") if uid else None) or "DZD").upper()
+    if code not in CURRENCY_SYMBOLS_PY:
+        code = "DZD"
+    return CURRENCY_SYMBOLS_PY[code], _CURRENCY_NAMES[code]
+
+
+def get_products_text(bot_settings, currency=None):
     try:
         uid      = bot_settings.get("User_ID")
         products = _fb_get(f"data/{uid}/products") if uid else None
         if products and isinstance(products, dict):
+            symbol = (currency or _store_currency(uid))[0]
             sold = _sold_by_name(_get_stats(uid))
-            lines = [f"- {p.get('name','?')}: {p.get('sell','?')} | stock:{_stock_fields(p, sold.get(p.get('name',''), 0))['available']} | {p.get('category','')}".strip()
+            lines = [f"- {p.get('name','?')}: {p.get('sell','?')} {symbol} | stock:{_stock_fields(p, sold.get(p.get('name',''), 0))['available']} | {p.get('category','')}".strip()
                      for p in products.values() if isinstance(p,dict)]
             if lines: return "\n".join(lines)
     except Exception: pass
@@ -458,11 +472,13 @@ def ask_gemini(sender_id, user_message, bot_settings,
     merchant_uid = str(bot_settings.get("User_ID","") or "")
     try:
         instructions = bot_settings.get("AI_instructions","أنت مساعد مبيعات ذكي.")
-        products     = get_products_text(bot_settings)
+        currency     = _store_currency(merchant_uid)
+        products     = get_products_text(bot_settings, currency)
         history_text = history_to_text(get_history(sender_id, merchant_uid))
         req_format = '{"product":"اسم المنتج","quantity":"الكمية","name":"اسم العميل","phone":"رقم الهاتف","city":"المدينة","delivery_type":"منزل أو مكتب الاستلام","address":"العنوان"}'
         system_text = f"""أنت مساعد مبيعات لمتجر إلكتروني. مهمتك مساعدة العملاء في الطلب.
 رد بنفس لغة العميل (عربي أو فرنسي).
+العملة: {currency[0]} ({currency[1]}). اكتب كل الأسعار بهذه العملة وبهذا الشكل: 9 500 {currency[0]}. لا تستعمل درهم ولا أي عملة أخرى.
 اجمع من العميل بشكل ودي: الاسم الكامل، الهاتف، المدينة، اسم المنتج، الكمية، العنوان، **ونوع التوصيل الذي يفضّله العميل بنفسه (توصيل للمنزل، أو توصيل لمكتب الاستلام/Stop Desk)** — اسأله بوضوح عن هذا الخيار ولا تفترضه أبداً من نفسك. لا تكتب تأكيد الطلب قبل جمع كل هذه المعلومات.
 تعليمات إضافية من المتجر:
 {instructions}
