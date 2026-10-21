@@ -526,3 +526,19 @@ def test_shop_page_shows_store_unavailable():
     shop = page_source("shop.html")
     fn = shop[shop.index("async function loadShopData("):]
     assert "store_unavailable" in fn[:fn.index("\n}\n")]
+
+
+def test_store_settings_say_if_the_store_is_open(client, store_owner):
+    free, paid = store_owner("free"), store_owner("starter", username="paid", uid="5005")
+    get = lambda o: client.get("/api/getStoreSettings", query_string={"userId": o["uid"]}).get_json()["data"]
+    assert get(free)["storeOpen"] is False and get(paid)["storeOpen"] is True
+
+
+def test_shop_asks_settings_first_and_skips_closed_stores():
+    """متجر مسدود: الواجهة ما تطلبش المنتجات/الولايات (403 = خطأ فالـ console)."""
+    shop = page_source("shop.html")
+    fn = shop[shop.index("async function loadShopData("):]
+    fn = fn[:fn.index("\n}\n")]
+    assert fn.index("/getStoreSettings") < fn.index("/getStoreProducts")
+    assert "storeOpen===false" in fn.replace(" ", "")
+    assert fn.index("storeOpen") < fn.index("/getStoreProducts")

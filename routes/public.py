@@ -354,7 +354,9 @@ def api_get_store_cities():
 def api_get_store_settings():
     uid = request.args.get("userId","").strip()
     if not uid: return err_json("Missing userId")
-    return ok_json(_fb_get(f"data/{uid}/storeSettings") or {})
+    settings = _fb_get(f"data/{uid}/storeSettings") or {}
+    # storeOpen: صفحة المتجر تعرف من الأول إذا الباقة فيها متجر، بلا ما تطلب المنتجات (403)
+    return ok_json({**settings, "storeOpen": _store_feature(uid)})
 
 
 @bp.route("/lp/<page_id>", methods=["GET"])
