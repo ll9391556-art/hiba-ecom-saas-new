@@ -70,6 +70,8 @@ async function loadUserPlan(){
       TEAM_COUNT = r.data.teamCount || 0;
       var navPlansEl = document.getElementById("navPlans");
       if(navPlansEl) navPlansEl.style.display = (USER_SOURCE==="fiverr") ? "none" : "flex";
+      var exportBtn = document.getElementById("exportOrdersBtn");
+      if(exportBtn) exportBtn.style.display = planHas("export") ? "inline-flex" : "none";
       var navTeamEl = document.getElementById("navTeam");
       if(navTeamEl) navTeamEl.style.display = (currentRole==="owner" && planHas("team")) ? "flex" : "none";
       renderCurrencyButtons();

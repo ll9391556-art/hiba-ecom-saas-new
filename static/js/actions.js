@@ -39,6 +39,7 @@ registerActions({
   "loadOlderConversations()": function(event){ loadOlderConversations(); },
   "loadOlderMessages()": function(event){ loadOlderMessages(); },
   "loadOlderOrders()": function(event){ loadOlderOrders(); },
+  "exportOrders()": function(event){ exportOrders(); },
   "logout()": function(event){ logout(); },
   "lp_backToStep1()": function(event){ lp_backToStep1(); },
   "lp_goToQuestions()": function(event){ lp_goToQuestions(); },

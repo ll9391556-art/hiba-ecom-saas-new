@@ -198,6 +198,9 @@
             <option>Pending</option><option>Confirmed</option>
             <option>Delivered</option><option>Refused</option><option>No Answer</option>
           </select>
+          <button class="btn-outline btn-sm" id="exportOrdersBtn" style="display:none" data-on-click="exportOrders()">
+            <i class="bi bi-file-earmark-spreadsheet"></i> <span data-i18n="export_excel">Excel</span>
+          </button>
           <button class="btn-primary btn-sm" data-on-click="openModal('addOrderModal')">
             <i class="bi bi-plus-lg"></i> <span data-i18n="add_order">Ajouter</span>
           </button>

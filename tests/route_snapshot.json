@@ -80,6 +80,10 @@
   "methods": "POST"
  },
  {
+  "rule": "/api/exportOrders",
+  "methods": "GET"
+ },
+ {
   "rule": "/api/getBotSettings",
   "methods": "GET"
  },

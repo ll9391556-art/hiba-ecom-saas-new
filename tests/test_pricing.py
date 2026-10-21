@@ -417,3 +417,52 @@ def test_coupons_follow_the_plan(client, db, seed_owner, plan, allowed):
 def app_discount(uid, code):
     from services.coupons import _validate_and_apply_coupon
     return _validate_and_apply_coupon(uid, code, 1000.0)[0]
+
+
+# ── تصدير الطلبات (Excel = CSV UTF-8 بـ BOM، فاصل ;) من Starter وفوق ──
+def _export(client, owner, **q):
+    return client.get("/api/exportOrders", query_string=q, headers=owner["headers"])
+
+
+def _seed_orders(db, uid, rows):
+    for i, o in enumerate(rows):
+        db.set(f"data/{uid}/orders/ORD-{i}", {"id": f"ORD-{i}", "status": "Pending", **o})
+
+
+def test_export_orders_csv(client, db, seed_owner):
+    owner = seed_owner(plan="starter")
+    now = _now()
+    _seed_orders(db, owner["uid"], [
+        {"name": "أمينة; \"B\"", "phone": "0555123456", "city": "Alger", "product": "Sac", "qty": 2,
+         "total": 5400, "createdAt": now - DAY, "updatedAt": now - DAY},
+        {"name": "=HYPERLINK(\"x\")", "phone": "0666", "createdAt": now - 2 * DAY, "updatedAt": now},
+        {"name": "قديم", "createdAt": now - 200 * DAY, "updatedAt": now},
+    ])
+    fakes.READS.clear()
+    r = _export(client, owner)
+    assert r.status_code == 200 and r.mimetype == "text/csv"
+    assert "attachment" in r.headers["Content-Disposition"] and ".csv" in r.headers["Content-Disposition"]
+    raw = r.get_data()
+    assert raw.startswith(b"\xef\xbb\xbf")
+    lines = raw.decode("utf-8-sig").splitlines()
+    assert lines[0].split(";")[:3] == ["ID", "Date", "Nom / الاسم"] and len(lines) == 3  # 90 يوم افتراضياً
+    assert lines[1].startswith("ORD-0;") and '"أمينة; ""B"""' in lines[1] and ";0555123456;" in lines[1]
+    assert "'=HYPERLINK" in lines[2]                    # CSV injection
+    assert ("get", f"/data/{owner['uid']}/orders", {}) not in fakes.READS
+    r = _export(client, owner, **{"from": now - 365 * DAY, "to": now})
+    assert len(r.get_data().decode("utf-8-sig").splitlines()) == 4
+    assert _export(client, owner, **{"from": "x"}).status_code == 400
+
+
+def test_export_needs_the_plan_and_the_orders_permission(client, seed_owner, seed_member):
+    assert _export(client, seed_owner(plan="free")).status_code == 403
+    biz = seed_owner(username="biz", uid="3003", plan="business")
+    member = seed_member(biz, perms={"products": True})
+    assert _export(client, member).status_code == 403
+
+
+def test_export_button_shows_only_with_the_feature():
+    assert 'data-on-click="exportOrders()"' in DASH and 'id="exportOrdersBtn"' in DASH
+    fn = DASH[DASH.index("async function exportOrders("):]
+    assert "/exportOrders" in fn[:fn.index("\n}\n")] and "Authorization" in fn[:fn.index("\n}\n")]
+    assert 'planHas("export")' in DASH

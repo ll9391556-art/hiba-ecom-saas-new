@@ -253,3 +253,23 @@ async function printOrderSlip(orderId){
   w.document.close();
 }
 
+// تصدير الطلبات (آخر 90 يوم) لملف CSV يتحل فـ Excel — التوكن فالهيدر، لهذا fetch + blob
+async function exportOrders(){
+  try{
+    var r = await fetch(API_URL + "/exportOrders", {headers: {"Authorization": "Bearer " + authToken}});
+    if(!r.ok){
+      var err = {};
+      try{ err = await r.json(); }catch(e){}
+      toast("❌ " + (err.message || r.status), "err");
+      return;
+    }
+    var blob = await r.blob();
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    var m = /filename="([^"]+)"/.exec(r.headers.get("Content-Disposition") || "");
+    a.download = m ? m[1] : "orders.csv";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }catch(e){ toast("Erreur réseau", "err"); }
+}
