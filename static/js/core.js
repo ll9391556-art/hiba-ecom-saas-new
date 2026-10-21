@@ -20,6 +20,7 @@ var currentPlan  = "free";
 var currentRole  = "owner";
 var merchantCurrency = "DZD";
 var BOT_LAUNCHED = false;
+var PLAN_FEATURES = {};
 var PLAN_USAGE = {};
 var USER_SOURCE = "local";
 var LIFETIME_SLOTS_LEFT = null;
@@ -93,7 +94,12 @@ var I18N = {
     woo_connect_btn:"Connecter la boutique",woo_connected:"Connecté",woo_sync_now:"🔄 Synchroniser maintenant",
     woo_disconnect:"Déconnecter",woo_last_sync:"Dernière synchro",
     bot_coming_soon_title:"🚀 Bientôt disponible",bot_coming_soon_desc:"Nous activons l'assistant IA officiellement (en attente de l'approbation Meta pour Instagram). Vous serez informé dès son lancement !",
-    bill_monthly:"Mensuel",bill_yearly:"Annuel (économisez 2 mois)",
+    unit_month:"DZD/mois",unit_year:"DZD/an",or_yearly:"ou",plan_early:"Premiers marchands",
+    pf_products:"Produits et stock",pf_cities:"Wilayas et livraison",pf_all_free:"Tout Free",pf_tracking:"Suivi des commandes",
+    pf_export:"Export Excel",pf_templates2:"2 modèles de boutique",pf_templates_all:"Tous les modèles",pf_landing:"Landing pages",
+    pf_coupons:"Coupons de réduction",pf_team:"Comptes d'équipe",pf_bot_1500:"Bot AI — 1 500 réponses/mois",
+    pf_bot_5000:"Bot AI — 5 000 réponses/mois",pf_early_pro:"Pro complet pendant 1 an",pf_early_slots:"Réservé aux 50 premiers marchands",
+    plan_payment:"Paiement par BaridiMob ou CCP — le plan est activé par l'administration après paiement.",
     pf_orders:"Gestion des commandes",pf_dashboard:"Tableau de bord",pf_store:"Boutique en ligne",pf_bot:"Bot AI",
     pf_all_starter:"Tout Starter",pf_woo:"Connexion WooCommerce",pf_all_pro:"Tout Pro",pf_vip:"Support VIP",
     pf_bot_soon:"Bot AI (bientôt)",pf_all_inclusive:"Tout inclus + WooCommerce",
@@ -152,7 +158,12 @@ var I18N = {
     woo_connect_btn:"ربط المتجر",woo_connected:"متصل",woo_sync_now:"🔄 مزامنة الآن",
     woo_disconnect:"فك الربط",woo_last_sync:"آخر مزامنة",
     bot_coming_soon_title:"🚀 البوت قريباً",bot_coming_soon_desc:"نعمل دروك على تفعيل المساعد الذكي رسمياً (بانتظار موافقة Meta على إنستغرام). راح نخبرك أول واحد وقت يطلع!",
-    bill_monthly:"شهري",bill_yearly:"سنوي (وفّر شهرين)",
+    unit_month:"DZD/شهر",unit_year:"DZD/سنة",or_yearly:"أو",plan_early:"أوائل التجار",
+    pf_products:"المنتجات والمخزون",pf_cities:"الولايات والتوصيل",pf_all_free:"كل ميزات Free",pf_tracking:"تتبع الطلبات",
+    pf_export:"تصدير Excel",pf_templates2:"قالبين للمتجر",pf_templates_all:"كل القوالب",pf_landing:"صفحات هبوط",
+    pf_coupons:"كوبونات تخفيض",pf_team:"حسابات الفريق",pf_bot_1500:"بوت AI — 1,500 رد/شهر",
+    pf_bot_5000:"بوت AI — 5,000 رد/شهر",pf_early_pro:"Pro كاملة لمدة عام",pf_early_slots:"لأول 50 تاجر فقط",
+    plan_payment:"الدفع عبر BaridiMob أو CCP — بعد الدفع تتفعّل الباقة من الإدارة.",
     pf_orders:"إدارة الطلبات",pf_dashboard:"لوحة تحكم",pf_store:"متجر عام",pf_bot:"بوت AI",
     pf_all_starter:"كل ميزات Starter",pf_woo:"ربط WooCommerce",pf_all_pro:"كل ميزات Pro",pf_vip:"دعم VIP",
     pf_bot_soon:"بوت AI (قريباً)",pf_all_inclusive:"كل ما سبق + WooCommerce",
@@ -211,7 +222,12 @@ var I18N = {
     woo_connect_btn:"Connect Store",woo_connected:"Connected",woo_sync_now:"🔄 Sync Now",
     woo_disconnect:"Disconnect",woo_last_sync:"Last sync",
     bot_coming_soon_title:"🚀 Coming Soon",bot_coming_soon_desc:"We're officially activating the AI assistant soon (pending Meta's approval for Instagram). You'll be the first to know when it launches!",
-    bill_monthly:"Monthly",bill_yearly:"Yearly (save 2 months)",
+    unit_month:"DZD/month",unit_year:"DZD/year",or_yearly:"or",plan_early:"Early merchants",
+    pf_products:"Products and stock",pf_cities:"Wilayas and delivery",pf_all_free:"All Free features",pf_tracking:"Order tracking",
+    pf_export:"Excel export",pf_templates2:"2 store templates",pf_templates_all:"All templates",pf_landing:"Landing pages",
+    pf_coupons:"Discount coupons",pf_team:"Team accounts",pf_bot_1500:"AI Bot — 1,500 replies/month",
+    pf_bot_5000:"AI Bot — 5,000 replies/month",pf_early_pro:"Full Pro for 1 year",pf_early_slots:"First 50 merchants only",
+    plan_payment:"Pay by BaridiMob or CCP — the admin activates your plan after payment.",
     pf_orders:"Order management",pf_dashboard:"Dashboard",pf_store:"Online store",pf_bot:"AI Bot",
     pf_all_starter:"All Starter features",pf_woo:"WooCommerce connection",pf_all_pro:"All Pro features",pf_vip:"VIP support",
     pf_bot_soon:"AI Bot (coming soon)",pf_all_inclusive:"All included + WooCommerce",

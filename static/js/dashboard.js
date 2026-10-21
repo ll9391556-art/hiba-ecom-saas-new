@@ -61,6 +61,7 @@ async function loadUserPlan(){
       currentPlan = r.data.plan;
       merchantCurrency = r.data.currency || "DZD";
       BOT_LAUNCHED = !!r.data.botLaunched;
+      PLAN_FEATURES = r.data.features || {};
       PLAN_USAGE = r.data.usage || {};
       USER_SOURCE = r.data.source || "local";
       LIFETIME_SLOTS_LEFT = r.data.lifetimeSlotsLeft;
@@ -78,30 +79,13 @@ async function loadUserPlan(){
   }catch(e){}
 }
 
+// الميزات جاية من PLANS فالسيرفر (features فـ /api/getUserPlan) — ما كاينش نسخة ثانية هنا
 function planHas(feature){
-  var features = {
-    free:       {bot:false,store:false,landing:false,integrations:false,team:false},
-    starter:    {bot:false,store:true, landing:true, integrations:false,team:true},
-    pro:        {bot:true, store:true, landing:true, integrations:true, team:true},
-    enterprise: {bot:true, store:true, landing:true, integrations:true, team:true},
-    full:       {bot:true, store:true, landing:true, integrations:true, team:true},
-    lifetime:   {bot:true, store:true, landing:true, integrations:true, team:true}
-  };
-  return (features[currentPlan]||features.free)[feature]||false;
-}
-
-function setBillingCycle(cycle){
-  var isYearly = cycle==="yearly";
-  document.getElementById("billMonthlyBtn").classList.toggle("active", !isYearly);
-  document.getElementById("billYearlyBtn").classList.toggle("active", isYearly);
-  document.querySelectorAll(".price-m").forEach(function(el){ el.style.display = isYearly?"none":"inline"; });
-  document.querySelectorAll(".price-y").forEach(function(el){ el.style.display = isYearly?"inline":"none"; });
-  document.querySelectorAll(".unit-m").forEach(function(el){ el.style.display = isYearly?"none":"inline"; });
-  document.querySelectorAll(".unit-y").forEach(function(el){ el.style.display = isYearly?"inline":"none"; });
+  return !!(PLAN_FEATURES && PLAN_FEATURES[feature]);
 }
 
 function highlightCurrentPlan(){
-  ["free","starter","pro","enterprise","full","lifetime"].forEach(function(p){
+  ["free","starter","pro","business","early","lifetime"].forEach(function(p){
     var el = document.getElementById("plan_"+p);
     if(el) el.classList.toggle("current", p===currentPlan);
   });

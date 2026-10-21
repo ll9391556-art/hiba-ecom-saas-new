@@ -94,10 +94,26 @@ else:
 if _IS_PRODUCTION and _boot_problems:
     raise RuntimeError("Refusing to start in production: " + "; ".join(_boot_problems))
 
+# الباقات (design/PLAN.md — المهمة 1). الدفع يدوي (BaridiMob/CCP) والأدمين يفعّل الباقة.
+# price بالدينار: monthly/yearly. integrations = WooCommerce. templates = عدد قوالب المتجر.
+# الميزات: dashboard/orders (مع المنتجات والولايات) للكل؛ store متجر عام؛ tracking تتبع الطلب؛
+# export تصدير الطلبات؛ coupons؛ landing صفحات هبوط؛ bot + botMsgCap ردود/شهر؛ team؛ vip دعم.
+_FREE_FEATURES = {"dashboard": True, "orders": True, "store": False, "tracking": False, "export": False,
+                  "templates": 0, "bot": False, "landing": False, "integrations": False, "coupons": False,
+                  "team": False, "vip": False}
+_STARTER_FEATURES = {**_FREE_FEATURES, "store": True, "tracking": True, "export": True, "templates": 2}
+_PRO_FEATURES = {**_STARTER_FEATURES, "bot": True, "botMsgCap": 1500, "landing": True, "integrations": True,
+                 "coupons": True, "templates": "all"}
+_BUSINESS_FEATURES = {**_PRO_FEATURES, "botMsgCap": 5000, "team": True, "vip": True}
+
 PLANS = {
-    "free":       {"bot": False, "store": False, "landing": False, "dashboard": True, "orders": True, "integrations": False, "team": False, "label": "Free"},
-    "starter":    {"bot": False, "store": True,  "landing": True,  "dashboard": True, "orders": True, "integrations": False, "team": True,  "label": "Starter"},
-    "pro":        {"bot": True,  "store": True,  "landing": True,  "dashboard": True, "orders": True, "integrations": True,  "team": True,  "label": "Pro"},
+    "free":       {**_FREE_FEATURES,     "label": "Free",     "price": {"monthly": 0}},
+    "starter":    {**_STARTER_FEATURES,  "label": "Starter",  "price": {"monthly": 1500}},
+    "pro":        {**_PRO_FEATURES,      "label": "Pro",      "price": {"monthly": 2900, "yearly": 24900}},
+    "business":   {**_BUSINESS_FEATURES, "label": "Business", "price": {"monthly": 4900}},
+    # أوائل التجار: Pro كاملة بسعر سنوي، لأول EARLY_MAX_SLOTS تاجر، تفعيل يدوي من الأدمين
+    "early":      {**_PRO_FEATURES,      "label": "Early",    "price": {"yearly": 19900}},
+    # ── باقات قديمة: يبقاو يخدمو للمشتركين الحاليين ──
     "enterprise": {"bot": True,  "store": True,  "landing": True,  "dashboard": True, "orders": True, "integrations": True,  "team": True,  "label": "Enterprise"},
     "full":       {"bot": True,  "store": True,  "landing": True,  "dashboard": True, "orders": True, "integrations": True,  "team": True,  "label": "Full",
                     "orderCap": 300, "botMsgCap": 3000},

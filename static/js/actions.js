@@ -65,8 +65,6 @@ registerActions({
   "saveStoreSettings()": function(event){ saveStoreSettings(); },
   "saveTeamMember()": function(event){ saveTeamMember(); },
   "sendCustomerMessage()": function(event){ sendCustomerMessage(); },
-  "setBillingCycle('monthly')": function(event){ setBillingCycle('monthly'); },
-  "setBillingCycle('yearly')": function(event){ setBillingCycle('yearly'); },
   "setLang('AR')": function(event){ setLang('AR'); },
   "setLang('EN')": function(event){ setLang('EN'); },
   "setLang('FR')": function(event){ setLang('FR'); },

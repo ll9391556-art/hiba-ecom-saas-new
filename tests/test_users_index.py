@@ -47,7 +47,7 @@ def test_unknown_user_is_rejected_without_reading_all_users(client, seed_owner):
 
 
 def test_member_login_case_insensitive_via_team_index(client, db, seed_owner):
-    owner = seed_owner()
+    owner = seed_owner(plan="business")  # الفريق غير فـ business (المهمة 1)
     r = client.post("/api/team/addMember", headers=owner["headers"],
                     json={"username": "Karim", "password": "dummy-pass-123", "name": "K"})
     assert r.status_code == 200
@@ -59,7 +59,7 @@ def test_member_login_case_insensitive_via_team_index(client, db, seed_owner):
 
 
 def test_usernames_are_unique_ignoring_case(client, db, seed_owner):
-    owner = seed_owner()
+    owner = seed_owner(plan="business")  # الفريق غير فـ business (المهمة 1)
     _create_client(client, "Amina")
     assert _create_client(client, "amina").status_code == 409
     add = lambda u: client.post("/api/team/addMember", headers=owner["headers"],
@@ -71,7 +71,7 @@ def test_usernames_are_unique_ignoring_case(client, db, seed_owner):
 
 
 def test_delete_member_removes_team_index(client, db, seed_owner):
-    owner = seed_owner()
+    owner = seed_owner(plan="business")  # الفريق غير فـ business (المهمة 1)
     client.post("/api/team/addMember", headers=owner["headers"],
                 json={"username": "Karim", "password": "dummy-pass-123"})
     assert client.post("/api/team/deleteMember", headers=owner["headers"],

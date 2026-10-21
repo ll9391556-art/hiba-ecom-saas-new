@@ -533,19 +533,17 @@
   <div id="sec_plans" class="section">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
       <h4 class="mb-0" data-i18n="nav_plans">Abonnements</h4>
-      <div style="display:flex;gap:6px">
-        <button class="lang-btn active" id="billMonthlyBtn" data-on-click="setBillingCycle('monthly')" data-i18n="bill_monthly">شهري</button>
-        <button class="lang-btn" id="billYearlyBtn" data-on-click="setBillingCycle('yearly')" data-i18n="bill_yearly">سنوي (وفّر شهرين)</button>
-      </div>
     </div>
     <div class="row g-3">
       <div class="col-md-3">
         <div class="plan-card" id="plan_free">
           <div style="font-size:28px">🆓</div>
           <h5 style="margin:8px 0">Free</h5>
-          <div class="plan-price">0 <small>DZD</small></div>
-          <div class="plan-feature ok"><i class="bi bi-check-lg"></i><span data-i18n="pf_orders">إدارة الطلبات</span></div>
+          <div class="plan-price"><span data-price="free-monthly">0</span> <small>DZD</small></div>
           <div class="plan-feature ok"><i class="bi bi-check-lg"></i><span data-i18n="pf_dashboard">لوحة تحكم</span></div>
+          <div class="plan-feature ok"><i class="bi bi-check-lg"></i><span data-i18n="pf_orders">إدارة الطلبات</span></div>
+          <div class="plan-feature ok"><i class="bi bi-check-lg"></i><span data-i18n="pf_products">المنتجات والمخزون</span></div>
+          <div class="plan-feature ok"><i class="bi bi-check-lg"></i><span data-i18n="pf_cities">الولايات والتوصيل</span></div>
           <div class="plan-feature no"><i class="bi bi-x-lg"></i><span data-i18n="pf_store">متجر عام</span></div>
           <div class="plan-feature no"><i class="bi bi-x-lg"></i><span data-i18n="pf_bot">بوت AI</span></div>
         </div>
@@ -554,10 +552,12 @@
         <div class="plan-card" id="plan_starter">
           <div style="font-size:28px">🚀</div>
           <h5 style="margin:8px 0">Starter</h5>
-          <div class="plan-price"><span class="price-m">2,900</span><span class="price-y" style="display:none">29,000</span> <small><span class="unit-m">DZD/شهر</span><span class="unit-y" style="display:none">DZD/سنة</span></small></div>
-          <div class="plan-feature ok"><i class="bi bi-check-lg"></i><span data-i18n="pf_orders">إدارة الطلبات</span></div>
-          <div class="plan-feature ok"><i class="bi bi-check-lg"></i><span data-i18n="pf_dashboard">لوحة تحكم</span></div>
+          <div class="plan-price"><span data-price="starter-monthly">1,500</span> <small data-i18n="unit_month">DZD/شهر</small></div>
+          <div class="plan-feature ok"><i class="bi bi-check-lg"></i><span data-i18n="pf_all_free">كل ميزات Free</span></div>
           <div class="plan-feature ok"><i class="bi bi-check-lg"></i><span data-i18n="pf_store">متجر عام</span></div>
+          <div class="plan-feature ok"><i class="bi bi-check-lg"></i><span data-i18n="pf_tracking">تتبع الطلبات</span></div>
+          <div class="plan-feature ok"><i class="bi bi-check-lg"></i><span data-i18n="pf_export">تصدير Excel</span></div>
+          <div class="plan-feature ok"><i class="bi bi-check-lg"></i><span data-i18n="pf_templates2">قالبين للمتجر</span></div>
           <div class="plan-feature no"><i class="bi bi-x-lg"></i><span data-i18n="pf_bot">بوت AI</span></div>
         </div>
       </div>
@@ -565,20 +565,37 @@
         <div class="plan-card" id="plan_pro">
           <div style="font-size:28px">⚡</div>
           <h5 style="margin:8px 0">Pro</h5>
-          <div class="plan-price"><span class="price-m">4,900</span><span class="price-y" style="display:none">49,000</span> <small><span class="unit-m">DZD/شهر</span><span class="unit-y" style="display:none">DZD/سنة</span></small></div>
+          <div class="plan-price"><span data-price="pro-monthly">2,900</span> <small data-i18n="unit_month">DZD/شهر</small></div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:8px"><span data-i18n="or_yearly">أو</span> <strong data-price="pro-yearly">24,900</strong> <span data-i18n="unit_year">DZD/سنة</span></div>
           <div class="plan-feature ok"><i class="bi bi-check-lg"></i><span data-i18n="pf_all_starter">كل ميزات Starter</span></div>
+          <div class="plan-feature ok"><i class="bi bi-check-lg"></i><span data-i18n="pf_bot_1500">بوت AI — 1,500 رد/شهر</span></div>
           <div class="plan-feature ok"><i class="bi bi-check-lg"></i><span data-i18n="pf_woo">ربط WooCommerce</span></div>
-          <div class="plan-feature ok"><i class="bi bi-check-lg"></i><span data-i18n="pf_bot">بوت AI</span></div>
+          <div class="plan-feature ok"><i class="bi bi-check-lg"></i><span data-i18n="pf_landing">صفحات هبوط</span></div>
+          <div class="plan-feature ok"><i class="bi bi-check-lg"></i><span data-i18n="pf_coupons">كوبونات تخفيض</span></div>
+          <div class="plan-feature ok"><i class="bi bi-check-lg"></i><span data-i18n="pf_templates_all">كل القوالب</span></div>
         </div>
       </div>
       <div class="col-md-3">
-        <div class="plan-card" id="plan_enterprise">
+        <div class="plan-card" id="plan_business">
           <div style="font-size:28px">💎</div>
-          <h5 style="margin:8px 0">Enterprise</h5>
-          <div class="plan-price"><span class="price-m">9,900</span><span class="price-y" style="display:none">99,000</span> <small><span class="unit-m">DZD/شهر</span><span class="unit-y" style="display:none">DZD/سنة</span></small></div>
+          <h5 style="margin:8px 0">Business</h5>
+          <div class="plan-price"><span data-price="business-monthly">4,900</span> <small data-i18n="unit_month">DZD/شهر</small></div>
           <div class="plan-feature ok"><i class="bi bi-check-lg"></i><span data-i18n="pf_all_pro">كل ميزات Pro</span></div>
+          <div class="plan-feature ok"><i class="bi bi-check-lg"></i><span data-i18n="pf_bot_5000">بوت AI — 5,000 رد/شهر</span></div>
+          <div class="plan-feature ok"><i class="bi bi-check-lg"></i><span data-i18n="pf_team">حسابات الفريق</span></div>
           <div class="plan-feature ok"><i class="bi bi-check-lg"></i><span data-i18n="pf_vip">دعم VIP</span></div>
-          <div class="plan-feature ok"><i class="bi bi-check-lg"></i><span data-i18n="pf_bot">بوت AI</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="row g-3" style="margin-top:4px">
+      <div class="col-md-4 offset-md-4">
+        <div class="plan-card" id="plan_early" style="border-color:#f59e0b">
+          <div style="font-size:28px">🌟</div>
+          <h5 style="margin:8px 0" data-i18n="plan_early">أوائل التجار</h5>
+          <div id="earlySlotsBadge" style="display:none;background:rgba(245,158,11,.15);color:#f59e0b;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;margin-bottom:8px"></div>
+          <div class="plan-price"><span data-price="early-yearly">19,900</span> <small data-i18n="unit_year">DZD/سنة</small></div>
+          <div class="plan-feature ok"><i class="bi bi-check-lg"></i><span data-i18n="pf_early_pro">Pro كاملة لمدة عام</span></div>
+          <div class="plan-feature ok"><i class="bi bi-check-lg"></i><span data-i18n="pf_early_slots">لأول 50 تاجر فقط</span></div>
         </div>
       </div>
     </div>
@@ -599,6 +616,7 @@
     <div class="mt-4 p-3" style="background:var(--card);border:1px solid var(--border);border-radius:12px;font-size:13px;color:var(--muted)">
       <i class="bi bi-info-circle"></i>
       <span data-i18n="plan_contact"> Pour changer de plan, contactez l'administrateur.</span>
+      <div style="margin-top:6px"><i class="bi bi-wallet2"></i> <span data-i18n="plan_payment">الدفع عبر BaridiMob أو CCP — بعد الدفع تتفعّل الباقة من الإدارة.</span></div>
     </div>
     <div id="usageBox" style="display:none;margin-top:16px"></div>
   </div>
