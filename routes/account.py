@@ -15,6 +15,7 @@ from markupsafe import escape as _esc
 
 from core.config import (
     BOT_LAUNCHED,
+    EARLY_MAX_SLOTS,
     LIFETIME_MAX_SLOTS,
     PLANS,
 )
@@ -61,8 +62,9 @@ def api_get_user_plan():
     if plan_features.get("botMsgCap"):
         usage["botMsgs"] = {"used": _get_usage(uid, "botMsgCount"), "cap": plan_features["botMsgCap"]}
     lifetime_left = max(0, LIFETIME_MAX_SLOTS - _count_lifetime_accounts()) if source == "local" else None
+    early_left = max(0, EARLY_MAX_SLOTS - _count_lifetime_accounts("earlyAccounts")) if source == "local" else None
     return ok_json({"plan": plan, "features": plan_features, "currency": currency,
-                     "source": source, "lifetimeSlotsLeft": lifetime_left,
+                     "source": source, "lifetimeSlotsLeft": lifetime_left, "earlySlotsLeft": early_left,
                      "botLaunched": BOT_LAUNCHED, "usage": usage,
                      "role": getattr(request, "auth_role", "owner"),
                      "teamCount": _count_team_members(uid)})

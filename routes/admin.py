@@ -14,6 +14,7 @@ from flask import Blueprint, abort, jsonify, make_response, request, send_from_d
 from markupsafe import escape as _esc
 
 from core.config import (
+    EARLY_MAX_SLOTS,
     LIFETIME_MAX_SLOTS,
     PLANS,
 )
@@ -38,10 +39,10 @@ from services.orders import (
     _recompute_aggregates,
 )
 from services.users import (
-    _LIFETIME_PLANS,
     _LifetimeFull,
     _adjust_lifetime_counter,
     _rebuild_user_indexes,
+    _slot_counter,
     _uname_key,
     _username_taken,
 )
@@ -67,17 +68,32 @@ def api_update_user_plan():
     if not uid or not username: return err_json("Missing fields")
     if plan not in PLANS: return err_json(f"Invalid plan: {list(PLANS.keys())}")
     existing = _fb_get(f"users/{username}") or {}
-    was_lifetime = str(existing.get("plan", "")).lower() in _LIFETIME_PLANS
+    # عدّادات الباقات المحدودة (lifetime/full، early) تتبع الانتقال من/إلى الباقة
+    # (lifetime↔full ما يبدّلوش). الدخول لـ early يحجز خانة قبل الكتابة، والحد يترفض.
+    old_slot, new_slot = _slot_counter(existing.get("plan")), _slot_counter(plan)
+    if new_slot == "earlyAccounts" and old_slot != new_slot:
+        try:
+            _adjust_lifetime_counter(1, cap=EARLY_MAX_SLOTS, counter="earlyAccounts")
+        except _LifetimeFull:
+            return err_json(f"تم الوصول للحد الأقصى ({EARLY_MAX_SLOTS}) من عرض أوائل التجار", 409)
+        except Exception as e:
+            logging.error(f"early counter reserve failed: {type(e).__name__}")
+            return err_json("Firebase unavailable", 503)
     existing["plan"]         = plan
     existing["plan_updated"] = time.strftime("%Y-%m-%d %H:%M")
-    _fb_put(f"users/{username}", existing)
-    # عدّاد lifetime يتبع الانتقال من/إلى lifetime/full (lifetime↔full ما يبدّلوش)
-    now_lifetime = plan in _LIFETIME_PLANS
-    if was_lifetime != now_lifetime:
-        try:
-            _adjust_lifetime_counter(1 if now_lifetime else -1)
-        except Exception as e:
-            logging.error(f"lifetime counter update failed: {type(e).__name__} — شغّل rebuildIndexes")
+    if not _fb_put(f"users/{username}", existing):
+        if new_slot == "earlyAccounts" and old_slot != new_slot:
+            try: _adjust_lifetime_counter(-1, counter="earlyAccounts")
+            except Exception: pass
+        return err_json("Firebase unavailable", 503)
+    if old_slot != new_slot:
+        moves = [(old_slot, -1)] + ([] if new_slot == "earlyAccounts" else [(new_slot, 1)])
+        for counter, delta in moves:
+            if not counter: continue
+            try:
+                _adjust_lifetime_counter(delta, counter=counter)
+            except Exception as e:
+                logging.error(f"{counter} update failed: {type(e).__name__} — شغّل rebuildIndexes")
     return ok_json({"plan": plan})
 
 
@@ -95,14 +111,16 @@ def api_admin_create_client():
     if len(password) < 6: return err_json("كلمة السر قصيرة جداً (6 أحرف على الأقل)")
     if plan not in PLANS: return err_json(f"خطة غير صحيحة: {list(PLANS.keys())}")
     if _username_taken(username): return err_json("اسم المستخدم مستعمل من قبل", 409)
-    if plan in _LIFETIME_PLANS:
-        # حجز خانة lifetime ذرّياً قبل إنشاء الحساب (بدل عدّ /users كاملة)
+    slot = _slot_counter(plan)
+    if slot:
+        # حجز خانة (lifetime أو early) ذرّياً قبل إنشاء الحساب (بدل عدّ /users كاملة)
+        cap, label = (LIFETIME_MAX_SLOTS, "Lifetime") if slot == "lifetimeAccounts" else (EARLY_MAX_SLOTS, "أوائل التجار")
         try:
-            _adjust_lifetime_counter(1, cap=LIFETIME_MAX_SLOTS)
+            _adjust_lifetime_counter(1, cap=cap, counter=slot)
         except _LifetimeFull:
-            return err_json(f"تم الوصول للحد الأقصى ({LIFETIME_MAX_SLOTS}) من عروض Lifetime", 409)
+            return err_json(f"تم الوصول للحد الأقصى ({cap}) من عروض {label}", 409)
         except Exception as e:
-            logging.error(f"lifetime counter reserve failed: {type(e).__name__}")
+            logging.error(f"{slot} counter reserve failed: {type(e).__name__}")
             return err_json("Firebase unavailable", 503)
     new_uid = str(int(time.time() * 1000))
     if not _fb_put(f"users/{username}", {
@@ -110,8 +128,8 @@ def api_admin_create_client():
         "User_ID": new_uid, "plan": plan, "source": source,
         "plan_updated": time.strftime("%Y-%m-%d %H:%M"),
     }):
-        if plan in _LIFETIME_PLANS:
-            try: _adjust_lifetime_counter(-1)
+        if slot:
+            try: _adjust_lifetime_counter(-1, counter=slot)
             except Exception: pass
         return err_json("Firebase unavailable", 503)
     _fb_put(f"uid_index/{new_uid}", username)

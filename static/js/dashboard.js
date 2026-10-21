@@ -65,6 +65,7 @@ async function loadUserPlan(){
       PLAN_USAGE = r.data.usage || {};
       USER_SOURCE = r.data.source || "local";
       LIFETIME_SLOTS_LEFT = r.data.lifetimeSlotsLeft;
+      EARLY_SLOTS_LEFT = r.data.earlySlotsLeft;
       if(r.data.role) currentRole = r.data.role;
       TEAM_COUNT = r.data.teamCount || 0;
       var navPlansEl = document.getElementById("navPlans");
@@ -97,6 +98,12 @@ function highlightCurrentPlan(){
     } else {
       badge.style.display = "none";
     }
+  }
+  var early = document.getElementById("earlySlotsBadge");
+  if(early){
+    var hasSlots = EARLY_SLOTS_LEFT!==null && EARLY_SLOTS_LEFT!==undefined;
+    early.style.display = hasSlots ? "inline-block" : "none";
+    if(hasSlots) early.textContent = "🔥 "+EARLY_SLOTS_LEFT+" "+t("early_slots_left");
   }
   var box = document.getElementById("usageBox");
   var keys = Object.keys(PLAN_USAGE||{});

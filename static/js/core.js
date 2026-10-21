@@ -24,6 +24,7 @@ var PLAN_FEATURES = {};
 var PLAN_USAGE = {};
 var USER_SOURCE = "local";
 var LIFETIME_SLOTS_LEFT = null;
+var EARLY_SLOTS_LEFT = null;
 var TEAM_MEMBERS = [];
 var TEAM_COUNT = 0;
 var TEAM_MAX = 6;
@@ -94,7 +95,7 @@ var I18N = {
     woo_connect_btn:"Connecter la boutique",woo_connected:"Connecté",woo_sync_now:"🔄 Synchroniser maintenant",
     woo_disconnect:"Déconnecter",woo_last_sync:"Dernière synchro",
     bot_coming_soon_title:"🚀 Bientôt disponible",bot_coming_soon_desc:"Nous activons l'assistant IA officiellement (en attente de l'approbation Meta pour Instagram). Vous serez informé dès son lancement !",
-    unit_month:"DZD/mois",unit_year:"DZD/an",or_yearly:"ou",plan_early:"Premiers marchands",
+    unit_month:"DZD/mois",unit_year:"DZD/an",or_yearly:"ou",plan_early:"Premiers marchands",early_slots_left:"places restantes sur 50",
     pf_products:"Produits et stock",pf_cities:"Wilayas et livraison",pf_all_free:"Tout Free",pf_tracking:"Suivi des commandes",
     pf_export:"Export Excel",pf_templates2:"2 modèles de boutique",pf_templates_all:"Tous les modèles",pf_landing:"Landing pages",
     pf_coupons:"Coupons de réduction",pf_team:"Comptes d'équipe",pf_bot_1500:"Bot AI — 1 500 réponses/mois",
@@ -158,7 +159,7 @@ var I18N = {
     woo_connect_btn:"ربط المتجر",woo_connected:"متصل",woo_sync_now:"🔄 مزامنة الآن",
     woo_disconnect:"فك الربط",woo_last_sync:"آخر مزامنة",
     bot_coming_soon_title:"🚀 البوت قريباً",bot_coming_soon_desc:"نعمل دروك على تفعيل المساعد الذكي رسمياً (بانتظار موافقة Meta على إنستغرام). راح نخبرك أول واحد وقت يطلع!",
-    unit_month:"DZD/شهر",unit_year:"DZD/سنة",or_yearly:"أو",plan_early:"أوائل التجار",
+    unit_month:"DZD/شهر",unit_year:"DZD/سنة",or_yearly:"أو",plan_early:"أوائل التجار",early_slots_left:"بلاصة باقية من 50",
     pf_products:"المنتجات والمخزون",pf_cities:"الولايات والتوصيل",pf_all_free:"كل ميزات Free",pf_tracking:"تتبع الطلبات",
     pf_export:"تصدير Excel",pf_templates2:"قالبين للمتجر",pf_templates_all:"كل القوالب",pf_landing:"صفحات هبوط",
     pf_coupons:"كوبونات تخفيض",pf_team:"حسابات الفريق",pf_bot_1500:"بوت AI — 1,500 رد/شهر",
@@ -222,7 +223,7 @@ var I18N = {
     woo_connect_btn:"Connect Store",woo_connected:"Connected",woo_sync_now:"🔄 Sync Now",
     woo_disconnect:"Disconnect",woo_last_sync:"Last sync",
     bot_coming_soon_title:"🚀 Coming Soon",bot_coming_soon_desc:"We're officially activating the AI assistant soon (pending Meta's approval for Instagram). You'll be the first to know when it launches!",
-    unit_month:"DZD/month",unit_year:"DZD/year",or_yearly:"or",plan_early:"Early merchants",
+    unit_month:"DZD/month",unit_year:"DZD/year",or_yearly:"or",plan_early:"Early merchants",early_slots_left:"of 50 spots left",
     pf_products:"Products and stock",pf_cities:"Wilayas and delivery",pf_all_free:"All Free features",pf_tracking:"Order tracking",
     pf_export:"Excel export",pf_templates2:"2 store templates",pf_templates_all:"All templates",pf_landing:"Landing pages",
     pf_coupons:"Discount coupons",pf_team:"Team accounts",pf_bot_1500:"AI Bot — 1,500 replies/month",

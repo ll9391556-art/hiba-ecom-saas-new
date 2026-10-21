@@ -101,9 +101,20 @@ def _username_taken(username):
                 or _fb_get(f"users/{username}") or _fb_get(f"team_users/{username}"))
 
 
-def _count_lifetime_accounts():
+_EARLY_PLANS = ("early",)
+
+
+def _slot_counter(plan):
+    """الباقات المحدودة العدد: lifetime/full (قديمة) وearly (أوائل التجار) — كل وحدة بعدّادها."""
+    plan = str(plan or "").lower()
+    if plan in _LIFETIME_PLANS: return "lifetimeAccounts"
+    if plan in _EARLY_PLANS:    return "earlyAccounts"
+    return None
+
+
+def _count_lifetime_accounts(counter="lifetimeAccounts"):
     try:
-        return max(0, int(_fb_get("counters/lifetimeAccounts") or 0))
+        return max(0, int(_fb_get(f"counters/{counter}") or 0))
     except Exception:
         return 0
 
@@ -112,14 +123,14 @@ class _LifetimeFull(Exception):
     pass
 
 
-def _adjust_lifetime_counter(delta, cap=None):
+def _adjust_lifetime_counter(delta, cap=None, counter="lifetimeAccounts"):
     """+1/-1 ذرّياً. مع cap: يرمي _LifetimeFull إذا الحد وصل (بلا كتابة)."""
     def _txn(cur):
         cur = max(0, int(cur or 0))
         if cap is not None and delta > 0 and cur + delta > cap:
             raise _LifetimeFull()
         return max(0, cur + delta)
-    _firebase_ref("counters/lifetimeAccounts").transaction(_txn)
+    _firebase_ref(f"counters/{counter}").transaction(_txn)
 
 
 # ── حماية حقول حساب المستخدم من التعديل الذاتي (Mass Assignment) ─────
@@ -187,7 +198,7 @@ def _rebuild_user_indexes():
     users, members = as_dict(_fb_get("users")), as_dict(_fb_get("team_users"))
     existing_channels = as_dict(_fb_get("channel_index"))
     patch, conflicts, unames, claims = {}, [], {}, {}
-    lifetime = 0
+    lifetime = early = 0
     for key, u in users.items():
         if not isinstance(u, dict):
             continue
@@ -199,8 +210,9 @@ def _rebuild_user_indexes():
             patch[f"uname_index/{lower}"] = key
         if u.get("User_ID"):
             patch[f"uid_index/{u['User_ID']}"] = key
-        if str(u.get("plan", "")).lower() in _LIFETIME_PLANS:
-            lifetime += 1
+        slot = _slot_counter(u.get("plan"))
+        lifetime += slot == "lifetimeAccounts"
+        early += slot == "earlyAccounts"
         for cid in _channel_ids(u):
             if cid.isdigit():
                 claims.setdefault(cid, []).append(key)
@@ -217,9 +229,10 @@ def _rebuild_user_indexes():
             conflicts.append(f"team_uname_index/{lower}: owner {unames[lower]} vs member {key}")
         patch[f"team_uname_index/{lower}"] = key
     patch["counters/lifetimeAccounts"] = lifetime
+    patch["counters/earlyAccounts"] = early
     if not _fb_patch("/", patch):
         return None
     if conflicts:
         logging.warning(f"🔧 rebuildIndexes: {len(conflicts)} conflicts — راجعهم يدوياً")
     return {"users": len(unames), "members": len(members), "lifetimeAccounts": lifetime,
-            "conflicts": conflicts}
+            "earlyAccounts": early, "conflicts": conflicts}

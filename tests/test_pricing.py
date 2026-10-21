@@ -69,3 +69,53 @@ def test_admin_can_activate_business_and_early(client, db, seed_owner):
         assert _plan(client, owner)["features"]["bot"] is True
     admin = client.get("/admin").get_data(as_text=True)
     assert '<option value="business">' in admin and '<option value="early">' in admin
+
+
+# ── A. أوائل التجار: عدّاد خاص counters/earlyAccounts بحد 50 ─────
+def _create(client, username, plan):
+    return client.post("/api/admin/createClient", headers=ADMIN,
+                       json={"username": username, "password": "dummy-pass-123", "plan": plan})
+
+
+def _set_plan(client, owner, plan, **extra):
+    return client.post("/api/updateUserPlan", headers=ADMIN,
+                       json={"userId": owner["uid"], "username": owner["username"], "plan": plan, **extra})
+
+
+def test_early_slots_are_capped_on_create(client, db, monkeypatch):
+    monkeypatch.setattr("routes.admin.EARLY_MAX_SLOTS", 2)
+    assert _create(client, "e1", "early").status_code == 200
+    assert _create(client, "e2", "early").status_code == 200
+    assert db.get("counters/earlyAccounts") == 2
+    assert _create(client, "e3", "early").status_code == 409 and db.get("users/e3") is None
+    assert (db.get("counters/lifetimeAccounts") or 0) == 0
+
+
+def test_early_slots_follow_plan_changes(client, db, seed_owner, monkeypatch):
+    monkeypatch.setattr("routes.admin.EARLY_MAX_SLOTS", 1)
+    a, b = seed_owner(), seed_owner(username="owner2", uid="1002")
+    assert _set_plan(client, a, "early").status_code == 200 and db.get("counters/earlyAccounts") == 1
+    assert _set_plan(client, a, "early").status_code == 200 and db.get("counters/earlyAccounts") == 1
+    r = _set_plan(client, b, "early")
+    assert r.status_code == 409 and db.get("users/owner2/plan") == "pro"
+    assert _set_plan(client, a, "pro").status_code == 200 and (db.get("counters/earlyAccounts") or 0) == 0
+    assert _set_plan(client, b, "early").status_code == 200
+
+
+def test_get_user_plan_reports_early_slots_left(client, db, seed_owner):
+    owner = seed_owner()
+    db.set("counters/earlyAccounts", 12)
+    assert _plan(client, owner)["earlySlotsLeft"] == 50 - 12
+
+
+def test_rebuild_indexes_recounts_early_accounts(client, db):
+    db.set("users", {"a": {"Username": "a", "User_ID": "1", "plan": "early"},
+                     "b": {"Username": "b", "User_ID": "2", "plan": "pro"}})
+    db.set("counters/earlyAccounts", 9)
+    res = client.post("/api/admin/rebuildIndexes", headers=ADMIN).get_json()["data"]["users"]
+    assert res["earlyAccounts"] == 1 and db.get("counters/earlyAccounts") == 1
+
+
+def test_frontend_shows_early_slots_left():
+    fn = DASH[DASH.index("function highlightCurrentPlan("):]
+    assert "EARLY_SLOTS_LEFT" in fn[:fn.index("\n}\n")] and "r.data.earlySlotsLeft" in DASH

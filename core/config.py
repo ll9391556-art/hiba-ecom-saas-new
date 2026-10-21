@@ -132,3 +132,4 @@ MAX_TEAM_MEMBERS = 6
 TEAM_PERM_KEYS = ["orders", "products", "customers", "cities", "store", "bot", "messages", "integrations", "landing"]
 
 LIFETIME_MAX_SLOTS = 50
+EARLY_MAX_SLOTS = 50  # عرض أوائل التجار — counters/earlyAccounts

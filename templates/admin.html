@@ -64,7 +64,7 @@ td{padding:8px;border-bottom:1px solid rgba(255,255,255,.05)}
         <option value="starter" selected>Starter</option>
         <option value="pro">Pro</option>
         <option value="business">Business</option>
-        <option value="early">أوائل التجار (Early)</option>
+        <option value="early">أوائل التجار (Early) — <span id="earlySlotsDisplay">...</span> متبقي</option>
         <option value="enterprise">Enterprise</option>
         <option value="lifetime">Lifetime — <span id="lifetimeSlotsDisplay">...</span> متبقي</option>
       </select>
@@ -153,6 +153,9 @@ async function loadClients(){
     var lifetimeUsed = data.data.filter(function(c){ return c.plan==="lifetime"||c.plan==="full"; }).length;
     var lifetimeLeftEl = document.getElementById("lifetimeSlotsDisplay");
     if(lifetimeLeftEl) lifetimeLeftEl.textContent = Math.max(0, 50-lifetimeUsed);
+    var earlyUsed = data.data.filter(function(c){ return c.plan==="early"; }).length;
+    var earlyLeftEl = document.getElementById("earlySlotsDisplay");
+    if(earlyLeftEl) earlyLeftEl.textContent = Math.max(0, 50-earlyUsed);
 
     if(!data.data.length){ box.innerHTML = "لا يوجد عملاء بعد"; return; }
     var allowedPlans = ["free","starter","pro","business","early","enterprise","full","lifetime"];
