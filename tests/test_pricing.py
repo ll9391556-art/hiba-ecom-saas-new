@@ -395,3 +395,25 @@ def test_members_of_a_plan_without_team_cannot_log_in(client, db, seed_owner, se
 def test_members_keep_working_on_team_plans(client, seed_owner, seed_member, plan):
     seed_member(seed_owner(plan=plan))
     assert _member_login(client).status_code == 200
+
+
+# ── الكوبونات غير من Pro وفوق: الإنشاء يترفض، والقديمة ما تتطبقش فالـ checkout ──
+COUPON = {"type": "percent", "value": 10, "active": True}
+
+
+@pytest.mark.parametrize("plan,allowed", [("starter", False), ("free", False), ("pro", True), ("business", True)])
+def test_coupons_follow_the_plan(client, db, seed_owner, plan, allowed):
+    owner = seed_owner(plan=plan)
+    uid = owner["uid"]
+    r = client.post("/api/coupons/create", headers=owner["headers"], json={"code": "NEW10", **COUPON})
+    assert (r.status_code == 200) is allowed and bool(db.get(f"data/{uid}/coupons/NEW10")) is allowed
+    db.set(f"data/{uid}/coupons/OLD10", COUPON)
+    r = client.get("/api/coupons/validate", query_string={"userId": uid, "code": "OLD10", "subtotal": "1000"})
+    assert (r.status_code == 200) is allowed
+    assert client.get("/api/coupons/list", headers=owner["headers"]).status_code == 200  # يشوف ويمسح
+    assert app_discount(uid, "OLD10") == (100.0 if allowed else 0.0)
+
+
+def app_discount(uid, code):
+    from services.coupons import _validate_and_apply_coupon
+    return _validate_and_apply_coupon(uid, code, 1000.0)[0]
