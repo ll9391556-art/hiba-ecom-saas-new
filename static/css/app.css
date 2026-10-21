@@ -1,6 +1,6 @@
 /* الألوان والمقاسات فـ tokens.css (يتحمّل قبل هاد الملف) */
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--bg);color:var(--text);font-family:'Segoe UI',Arial,sans-serif;min-height:100vh;display:flex}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:16px;line-height:1.5;min-height:100vh;display:flex}
 a{color:inherit;text-decoration:none}
 #sidebar{width:220px;height:100vh;background:var(--sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;top:0;left:0;z-index:100;transition:.3s;overflow:hidden}
 html[dir=rtl] #sidebar{left:auto;right:0;border-right:none;border-left:1px solid var(--border)}

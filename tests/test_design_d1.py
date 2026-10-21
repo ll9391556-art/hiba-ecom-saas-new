@@ -97,3 +97,25 @@ def test_legacy_variable_names_stay_defined_and_light():
     assert sorted(used - set(root)) == []
     for name in ("--card", "--card2", "--sidebar", "--bg"):
         assert root[name].lower() not in DARK, name
+
+
+# ── 2. الخط ──
+FONT_LINK = ('<link href="https://fonts.googleapis.com/css2?family=Readex+Pro:wght@300;400;500;600;700'
+             '&display=swap" rel="stylesheet"/>')
+
+
+def test_pages_load_readex_pro():
+    assert _rules(_read(TOKENS))[":root"]["--font"].startswith("'Readex Pro'")
+    for name in STATIC_PAGES:
+        html = _page(name)
+        assert FONT_LINK in html, name
+        assert '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>' in html, name
+    for name in FEATURE_PAGES:
+        body = _rules(_page(name))["body"]
+        assert body["font-family"] == "var(--font)", name
+
+
+def test_body_text_is_at_least_16px():
+    body = _rules(_read(APP_CSS))["body"]
+    assert body["font-family"] == "var(--font)"
+    assert _px(body["font-size"]) >= 16
