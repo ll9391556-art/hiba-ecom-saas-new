@@ -29,6 +29,9 @@ def test_products_and_prompt_use_dinar_by_default(app, db, gemini):
     prompt = _system_prompt(gemini)
     assert "دج" in prompt and "الدينار الجزائري" in prompt
     assert "لا تستعمل درهم" in prompt
+    # fix-price-rtl: المثال بلا مسافة داخل الرقم، والتعليمة صريحة
+    assert '"9500 دج"' in prompt and "9 500" not in prompt
+    assert "بلا مسافة ولا فاصلة داخل الرقم" in prompt
 
 
 def test_currency_follows_store_settings(app, db, gemini):
