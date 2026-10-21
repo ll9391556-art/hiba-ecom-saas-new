@@ -27,7 +27,7 @@ async function loadStore(){
     if(pr.status==="ok"){
       var cur = curSym();
       grid.innerHTML = (pr.data||[]).filter(function(p){ return p.visible!=="no"; }).map(function(p){
-        var stCls = {"In Stock":"bc","Low Stock":"bn","Out of Stock":"br"}[p.stat]||"bp";
+        var stCls = {"In Stock":"bs","Low Stock":"bn","Out of Stock":"br"}[p.stat]||"bp";
         return '<div class="store-card">'+
           '<div style="position:relative">'+
             (p.image
@@ -253,7 +253,7 @@ function renderLandingList(list){
   grid.innerHTML = list.map(function(p){
     var img = (p.images&&p.images[0]) ? '<img src="'+esc(p.images[0])+'" style="width:100%;height:160px;object-fit:cover" data-on-error="this.style.display=\'none\'"/>'
                                        : '<div style="height:160px;display:flex;align-items:center;justify-content:center;background:var(--card2);font-size:40px">🎯</div>';
-    var pubBadge = p.published ? '<span class="badge bc">'+t("landing_published")+'</span>' : '<span class="badge bp">'+t("landing_unpublished")+'</span>';
+    var pubBadge = p.published ? '<span class="badge bs">'+t("landing_published")+'</span>' : '<span class="badge bp">'+t("landing_unpublished")+'</span>';
     var igBadge  = p.instagramPostId ? '<span class="badge bi" style="margin-right:4px">📷 IG</span>' : '';
     return '<div class="store-card">'+
       img+

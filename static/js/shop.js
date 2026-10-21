@@ -249,7 +249,7 @@ function pdp_open(name){
   document.getElementById("pdp-desc").textContent = p.description||"";
   document.getElementById("pdp-reviews").style.display = "none";
   document.getElementById("pdp-reviews").innerHTML = "";
-  var stCls = av<=0?"br":av<=5?"bn":"bc";
+  var stCls = av<=0?"br":av<=5?"bn":"bs";
   var stLbl = av<=0?"Rupture de stock":av<=5?"Stock faible":"En stock";
   var statEl = document.getElementById("pdp-stat");
   statEl.className = "badge "+stCls; statEl.textContent = stLbl;

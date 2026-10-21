@@ -190,6 +190,29 @@ def test_reduced_motion_is_respected():
     assert "transition:none" in block and "transform:none" in block
 
 
+# ── 5. الحالات ──
+@pytest.mark.parametrize("cls,status", [
+    (".bc", "confirmed"), (".bi", "delivered"), (".bp", "pending"), (".br", "refused"),
+    (".bs", "delivered"),  # "متوفر" و"منشور" و"مفعّل": أخضر فاتح، ماشي لون المؤكدة
+    (".bn", "neutral"),
+])
+def test_status_badge_colors(cls, status):
+    r = _rules(_read(APP_CSS))[cls]
+    assert r["background"] == f"var(--st-{status}-bg)" and r["color"] == f"var(--st-{status}-fg)"
+
+
+def test_bc_is_only_for_confirmed_orders():
+    """bc = طلبية مؤكدة. المخزون والنشر والتفعيل ياخذو bs."""
+    js = {p.name: _read(p) for p in (STATIC / "js").glob("*.js")}
+    bc_uses = [(n, line.strip()) for n, src in js.items() for line in src.split("\n")
+               if re.search(r"""["' ]bc["' ]""", line)]
+    assert bc_uses and all('Confirmed:"bc"' in line for _, line in bc_uses), bc_uses
+    assert '"In Stock":"bs"' in js["store.js"] and "badge bs\">'+t(\"landing_published\")" in js["store.js"]
+    assert "'<span class=\"badge bs\">'+t(\"active\")" in js["settings.js"]
+    assert 'InStock:"bs","In Stock":"bs"' in js["catalog.js"]
+    assert 'av<=5?"bn":"bs"' in js["shop.js"]
+
+
 def test_body_text_is_at_least_16px():
     body = _rules(_read(APP_CSS))["body"]
     assert body["font-family"] == "var(--font)"
