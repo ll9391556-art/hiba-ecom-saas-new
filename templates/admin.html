@@ -65,7 +65,6 @@ td{padding:8px;border-bottom:1px solid rgba(255,255,255,.05)}
         <option value="pro">Pro</option>
         <option value="business">Business</option>
         <option value="early">أوائل التجار (Early) — <span id="earlySlotsDisplay">...</span> متبقي</option>
-        <option value="lifetime">Lifetime — <span id="lifetimeSlotsDisplay">...</span> متبقي</option>
       </select>
       <button onclick="createClient(document.getElementById('newPlanLocal').value,'local')">إنشاء حساب محلي</button>
     </div>
@@ -149,9 +148,6 @@ async function loadClients(){
     var data = await r.json();
     if(data.status!=="ok"){ box.innerHTML = "❌ "+esc(data.message); return; }
 
-    var lifetimeUsed = data.data.filter(function(c){ return c.plan==="lifetime"||c.plan==="full"; }).length;
-    var lifetimeLeftEl = document.getElementById("lifetimeSlotsDisplay");
-    if(lifetimeLeftEl) lifetimeLeftEl.textContent = Math.max(0, 50-lifetimeUsed);
     var earlyUsed = data.data.filter(function(c){ return c.plan==="early"; }).length;
     var earlyLeftEl = document.getElementById("earlySlotsDisplay");
     if(earlyLeftEl) earlyLeftEl.textContent = Math.max(0, 50-earlyUsed);

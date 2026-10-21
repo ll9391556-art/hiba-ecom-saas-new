@@ -149,3 +149,30 @@ def test_rebuild_indexes_migrates_enterprise_to_business(client, db):
         assert db.get("users/a") == {"Username": "a", "User_ID": "1", "plan": "business", "Gemini_api_key": "k"}
         assert db.get("users/b/plan") == "pro"
     assert res["plansMigrated"] == 0
+
+
+# ── C. lifetime: ما يتباعش جديد، والمشتركين الحاليين يبقاو يخدمو ──
+@pytest.mark.parametrize("plan", ["lifetime", "full"])
+def test_new_lifetime_accounts_are_refused(client, db, plan):
+    r = _create(client, "l1", plan)
+    assert r.status_code == 400 and db.get("users/l1") is None
+    assert (db.get("counters/lifetimeAccounts") or 0) == 0
+
+
+def test_switching_to_lifetime_is_refused_but_existing_ones_keep_it(client, db, seed_owner):
+    newbie = seed_owner(plan="pro")
+    assert _set_plan(client, newbie, "lifetime").status_code == 400 and db.get("users/owner1/plan") == "pro"
+    old = seed_owner(username="old", uid="2002", plan="lifetime")
+    db.set("counters/lifetimeAccounts", 1)
+    assert _set_plan(client, old, "lifetime").status_code == 200
+    assert _set_plan(client, old, "full").status_code == 200 and db.get("counters/lifetimeAccounts") == 1
+    data = _plan(client, old)
+    assert data["plan"] == "full" and data["features"]["bot"] and data["features"]["team"]
+    assert data["features"]["botMsgCap"] == 3000
+
+
+def test_lifetime_is_gone_from_the_ui(client):
+    html = (STATIC / "index.html").read_text(encoding="utf-8")
+    assert 'id="plan_lifetime"' not in html and "lifetimeSlotsBadge" not in DASH
+    admin = client.get("/admin").get_data(as_text=True)
+    assert '<option value="lifetime">' not in admin and "lifetimeSlotsDisplay" not in admin

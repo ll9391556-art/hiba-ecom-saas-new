@@ -64,7 +64,6 @@ async function loadUserPlan(){
       PLAN_FEATURES = r.data.features || {};
       PLAN_USAGE = r.data.usage || {};
       USER_SOURCE = r.data.source || "local";
-      LIFETIME_SLOTS_LEFT = r.data.lifetimeSlotsLeft;
       EARLY_SLOTS_LEFT = r.data.earlySlotsLeft;
       if(r.data.role) currentRole = r.data.role;
       TEAM_COUNT = r.data.teamCount || 0;
@@ -86,19 +85,10 @@ function planHas(feature){
 }
 
 function highlightCurrentPlan(){
-  ["free","starter","pro","business","early","lifetime"].forEach(function(p){
+  ["free","starter","pro","business","early"].forEach(function(p){
     var el = document.getElementById("plan_"+p);
     if(el) el.classList.toggle("current", p===currentPlan);
   });
-  var badge = document.getElementById("lifetimeSlotsBadge");
-  if(badge){
-    if(LIFETIME_SLOTS_LEFT!==null && LIFETIME_SLOTS_LEFT!==undefined){
-      badge.style.display = "inline-block";
-      badge.textContent = "🔥 "+LIFETIME_SLOTS_LEFT+" من 50 متبقي فقط";
-    } else {
-      badge.style.display = "none";
-    }
-  }
   var early = document.getElementById("earlySlotsBadge");
   if(early){
     var hasSlots = EARLY_SLOTS_LEFT!==null && EARLY_SLOTS_LEFT!==undefined;

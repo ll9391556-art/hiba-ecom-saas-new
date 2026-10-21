@@ -51,6 +51,8 @@ from services.users import (
 from core.templates import render
 bp = Blueprint("admin", __name__)
 
+_LIFETIME_RETIRED = "باقة Lifetime ما بقاتش للبيع — المشتركين الحاليين فيها يبقاو، والجدد يختارو باقة أخرى"
+
 
 
 
@@ -72,6 +74,9 @@ def api_update_user_plan():
     # عدّادات الباقات المحدودة (lifetime/full، early) تتبع الانتقال من/إلى الباقة
     # (lifetime↔full ما يبدّلوش). الدخول لـ early يحجز خانة قبل الكتابة، والحد يترفض.
     old_slot, new_slot = _slot_counter(existing.get("plan")), _slot_counter(plan)
+    # lifetime/full ما بقاتش للبيع: غير اللي عندهم من قبل يبقاو (حتى lifetime↔full)
+    if new_slot == "lifetimeAccounts" and old_slot != new_slot:
+        return err_json(_LIFETIME_RETIRED)
     if new_slot == "earlyAccounts" and old_slot != new_slot:
         try:
             _adjust_lifetime_counter(1, cap=EARLY_MAX_SLOTS, counter="earlyAccounts")
@@ -111,6 +116,7 @@ def api_admin_create_client():
     if not username or not password: return err_json("اسم المستخدم وكلمة السر مطلوبين")
     if len(password) < 6: return err_json("كلمة السر قصيرة جداً (6 أحرف على الأقل)")
     if plan not in PLANS: return err_json(f"خطة غير صحيحة: {list(PLANS.keys())}")
+    if _slot_counter(plan) == "lifetimeAccounts": return err_json(_LIFETIME_RETIRED)
     if _username_taken(username): return err_json("اسم المستخدم مستعمل من قبل", 409)
     slot = _slot_counter(plan)
     if slot:

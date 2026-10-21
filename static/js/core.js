@@ -23,7 +23,6 @@ var BOT_LAUNCHED = false;
 var PLAN_FEATURES = {};
 var PLAN_USAGE = {};
 var USER_SOURCE = "local";
-var LIFETIME_SLOTS_LEFT = null;
 var EARLY_SLOTS_LEFT = null;
 var TEAM_MEMBERS = [];
 var TEAM_COUNT = 0;
