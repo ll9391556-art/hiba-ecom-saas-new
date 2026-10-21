@@ -169,7 +169,7 @@ async function addOrder(){
   if(!data.deliveryType){
     toast("اختر نوع التوصيل (منزل أو مكتب الاستلام)","err"); return;
   }
-  var r = await apiPost("/addOrder", {userId:uid(), data:data}, false);
+  var r = await apiPost("/addOrder", {userId:uid(), data:data}, true);  // التوكن: طلب يدوي من التاجر (حتى فـ Free)
   if(r.status==="ok"){
     toast("✅ Commande ajoutée","ok");
     closeModal("addOrderModal");

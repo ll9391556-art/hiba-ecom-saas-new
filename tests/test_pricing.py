@@ -466,3 +466,63 @@ def test_export_button_shows_only_with_the_feature():
     fn = DASH[DASH.index("async function exportOrders("):]
     assert "/exportOrders" in fn[:fn.index("\n}\n")] and "Authorization" in fn[:fn.index("\n}\n")]
     assert 'planHas("export")' in DASH
+
+
+# ── Free: بلا متجر عام وبلا تتبع (فالسيرفر)؛ الطلبات اليدوية من اللوحة تبقى ──
+ORDER_DATA = {"name": "Amina", "phone": "0555123456", "product": "Sac", "qty": 1,
+              "city": "Alger", "deliveryType": "home", "address": "12 Rue"}
+
+
+def _store_calls(client, uid):
+    q = {"userId": uid}
+    return {
+        "products": client.get("/api/getStoreProducts", query_string=q).status_code,
+        "cities": client.get("/api/getStoreCities", query_string=q).status_code,
+        "track": client.get("/api/trackOrder", query_string={**q, "phone": "0555123456"}).status_code,
+        "ratings": client.get("/api/getProductRatings", query_string={**q, "product": "Sac"}).status_code,
+        "order": client.post("/api/addOrder", json={"userId": uid, "data": ORDER_DATA}).status_code,
+    }
+
+
+@pytest.fixture
+def store_owner(db, seed_owner):
+    def make(plan, **extra):
+        owner = seed_owner(plan=plan, **extra)
+        db.set(f"data/{owner['uid']}/products/Sac", {"name": "Sac", "sell": 2500, "init": 10})
+        db.set(f"data/{owner['uid']}/cities/Alger", {"name": "Alger", "custShip": 400})
+        return owner
+    return make
+
+
+def test_free_plan_has_no_public_store_or_tracking(client, db, store_owner):
+    owner = store_owner("free")
+    assert set(_store_calls(client, owner["uid"]).values()) == {403}
+    assert db.get(f"data/{owner['uid']}/orders") is None
+    assert client.get("/api/getStoreSettings", query_string={"userId": owner["uid"]}).status_code == 200
+
+
+def test_expired_subscription_closes_the_store(client, store_owner):
+    owner = store_owner("starter", plan_expires_at=_now() - 5 * DAY)
+    assert _store_calls(client, owner["uid"])["products"] == 403
+
+
+@pytest.mark.parametrize("plan", ["starter", "pro", "business"])
+def test_paid_plans_keep_the_store(client, store_owner, plan):
+    owner = store_owner(plan)
+    assert set(_store_calls(client, owner["uid"]).values()) == {200}
+
+
+def test_free_merchant_still_adds_orders_from_the_dashboard(client, db, store_owner, seed_member):
+    owner = store_owner("free")
+    r = client.post("/api/addOrder", headers=owner["headers"], json={"userId": owner["uid"], "data": ORDER_DATA})
+    assert r.status_code == 200 and len(db.get(f"data/{owner['uid']}/orders")) == 1
+    other = store_owner("free", username="other", uid="4004")
+    r = client.post("/api/addOrder", headers=other["headers"], json={"userId": owner["uid"], "data": ORDER_DATA})
+    assert r.status_code == 403
+    assert 'apiPost("/addOrder", {userId:uid(), data:data}, true)' in DASH
+
+
+def test_shop_page_shows_store_unavailable():
+    shop = page_source("shop.html")
+    fn = shop[shop.index("async function loadShopData("):]
+    assert "store_unavailable" in fn[:fn.index("\n}\n")]

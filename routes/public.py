@@ -55,11 +55,30 @@ from services.orders import (
 from services.users import (
     _get_user_record,
     _increment_usage,
+    _plan_status,
     _under_cap,
 )
+from core.config import PLANS
+from core.security import _extract_bearer, decode_token
 
 from core.templates import render
 bp = Blueprint("public", __name__)
+
+# المتجر العام والتتبع حسب الباقة (المهمة 1): free (أو اشتراك انتهى) = بلا متجر وبلا تتبع.
+# getStoreSettings يبقى مفتوح (اللوحة تستعملو للاسم واللوغو فالبون).
+_STORE_UNAVAILABLE = "هذا المتجر غير متاح حالياً"
+
+
+def _store_feature(uid, feature="store", rec=None):
+    rec = _get_user_record(uid) if rec is None else rec
+    return bool(rec) and bool(PLANS.get(_plan_status(rec)[0], {}).get(feature))
+
+
+def _is_merchant_request(uid):
+    """طلب من لوحة التاجر نفسو (توكن جلسة صالح لنفس المتجر) — مثلاً إضافة طلب يدوياً."""
+    token = _extract_bearer(request)
+    payload = decode_token(token) if token else None
+    return bool(payload) and str(payload.get("uid", "")) == str(uid)
 
 
 
@@ -128,8 +147,11 @@ def api_add_order():
     raw  = body.get("data") or {}
     if not uid or not raw: return err_json("Missing fields")
 
-    if not _get_user_record(uid):
+    rec = _get_user_record(uid)
+    if not rec:
         return err_json("Invalid store", 404)
+    if not _store_feature(uid, rec=rec) and not _is_merchant_request(uid):
+        return err_json(_STORE_UNAVAILABLE, 403)
 
     # request.remote_addr مُصحَّح عبر ProxyFix (بروكسي موثوق واحد) بدل هيدر خام قابل للتزوير.
     # حد مشترك بين الـ workers: لكل IP فهاد المتجر + سقف للمتجر كامل. سلة بعدة منتجات
@@ -220,10 +242,15 @@ def api_get_store_products():
     with _store_products_cache_lock:
         cached = _store_products_cache.get(uid)
         if cached and time.time() - cached["ts"] < _STORE_CACHE_TTL:
+            if not cached.get("open", True):
+                return err_json(_STORE_UNAVAILABLE, 403)
             return ok_json(cached["data"])
-    result = _compute_store_products(uid)
+    is_open = _store_feature(uid)
+    result = _compute_store_products(uid) if is_open else []
     with _store_products_cache_lock:
-        _store_products_cache[uid] = {"data": result, "ts": time.time()}
+        _store_products_cache[uid] = {"data": result, "ts": time.time(), "open": is_open}
+    if not is_open:
+        return err_json(_STORE_UNAVAILABLE, 403)
     return ok_json(result)
 
 
@@ -232,6 +259,8 @@ def api_track_order():
     uid   = request.args.get("userId", "").strip()
     phone = re.sub(r"\D", "", request.args.get("phone", ""))
     if not uid or not phone: return err_json("Missing userId or phone")
+    if not _store_feature(uid, "tracking"):
+        return err_json(_STORE_UNAVAILABLE, 403)
     client_ip = request.remote_addr or ""
     if _any_shared_limited(("track_ip", client_ip), ("track_ip_store", f"{client_ip}|{uid}")):
         return err_json("محاولات كثيرة جداً — حاول بعد قليل", 429)
@@ -264,6 +293,8 @@ def api_submit_rating():
         return err_json("Invalid rating")
     if not uid or not order_id or not phone: return err_json("Missing fields")
     if rating < 1 or rating > 5: return err_json("Rating must be between 1 and 5")
+    if not _store_feature(uid):
+        return err_json(_STORE_UNAVAILABLE, 403)
     order = _fb_get(f"data/{uid}/orders/{order_id}")
     if not order: return err_json("Order not found", 404)
     if re.sub(r"\D", "", str(order.get("phone",""))) != phone:
@@ -288,6 +319,8 @@ def api_get_product_ratings():
     uid     = request.args.get("userId", "").strip()
     product = request.args.get("product", "").strip()
     if not uid or not product: return err_json("Missing fields")
+    if not _store_feature(uid):
+        return err_json(_STORE_UNAVAILABLE, 403)
     raw = _fb_get(f"data/{uid}/ratings/{product}") or {}
     items = []
     if isinstance(raw, dict):
@@ -302,6 +335,8 @@ def api_get_product_ratings():
 def api_get_store_cities():
     uid = request.args.get("userId", "").strip()
     if not uid: return err_json("Missing userId")
+    if not _store_feature(uid):
+        return err_json(_STORE_UNAVAILABLE, 403)
     raw    = _fb_get(f"data/{uid}/cities") or {}
     cities = []
     for k, v in raw.items():

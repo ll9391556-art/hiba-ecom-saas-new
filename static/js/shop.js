@@ -34,6 +34,15 @@ async function loadShopData(){
     var pr = await apiGet("/getStoreProducts", {userId: SHOP_UID}, false);
     var cr = await apiGet("/getStoreCities",   {userId: SHOP_UID}, false);
     var sr = await apiGet("/getStoreSettings", {userId: SHOP_UID}, false);
+    if(pr.status!=="ok"){
+      // store_unavailable: باقة المتجر ما فيهاش متجر عام (free أو اشتراك انتهى)
+      document.getElementById("sh-loading").style.display = "none";
+      var empty = document.getElementById("sh-empty");
+      empty.style.display = "block";
+      empty.textContent = pr.message || "هذا المتجر غير متاح حالياً";
+      if(sr.status==="ok" && sr.data && sr.data.name) document.getElementById("sh-name").textContent = sr.data.name;
+      return;
+    }
 
     SHOP_PRODUCTS = (pr.status==="ok" && pr.data) ? pr.data.filter(function(p){ return p.visible!=="no"; }) : [];
     SHOP_CITIES   = (cr.status==="ok" && cr.data) ? cr.data : [];
