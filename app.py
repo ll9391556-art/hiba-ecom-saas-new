@@ -130,6 +130,7 @@ from services.bot import (
     log_ai_message,
     _log_conversation,
     get_products_text,
+    _fmt_price,
     extract_json,
     _find_field,
     _normalize_delivery_type,

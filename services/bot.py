@@ -335,6 +335,24 @@ def _store_currency(uid):
     return CURRENCY_SYMBOLS_PY[code], _CURRENCY_NAMES[code]
 
 
+def _fmt_price(value):
+    """سعر للعرض فردود البوت: بلا ".0" وبفاصل الآلاف (فراغ) — 9500.0 → "9 500".
+    الكسور تبان غير إلا كانت (12.5). قيمة ماشي رقم تبقى كيما هي، والفارغة "?"."""
+    if value is None or isinstance(value, bool) or str(value).strip() == "":
+        return "?"
+    try:
+        num = float(str(value).strip().replace(",", "."))
+    except ValueError:
+        return str(value).strip()
+    if num != num or num in (float("inf"), float("-inf")):
+        return str(value).strip()
+    rounded = round(num, 2)
+    whole = int(abs(rounded))
+    frac = ("%.2f" % (abs(rounded) - whole))[1:].rstrip("0").rstrip(".")
+    sign = "-" if rounded < 0 else ""
+    return sign + f"{whole:,}".replace(",", " ") + frac
+
+
 def get_products_text(bot_settings, currency=None):
     try:
         uid      = bot_settings.get("User_ID")
@@ -342,7 +360,7 @@ def get_products_text(bot_settings, currency=None):
         if products and isinstance(products, dict):
             symbol = (currency or _store_currency(uid))[0]
             sold = _sold_by_name(_get_stats(uid))
-            lines = [f"- {p.get('name','?')}: {p.get('sell','?')} {symbol} | stock:{_stock_fields(p, sold.get(p.get('name',''), 0))['available']} | {p.get('category','')}".strip()
+            lines = [f"- {p.get('name','?')}: {_fmt_price(p.get('sell'))} {symbol} | stock:{_stock_fields(p, sold.get(p.get('name',''), 0))['available']} | {p.get('category','')}".strip()
                      for p in products.values() if isinstance(p,dict)]
             if lines: return "\n".join(lines)
     except Exception: pass
