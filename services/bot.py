@@ -337,9 +337,13 @@ def _store_currency(uid):
     return CURRENCY_SYMBOLS_PY[code], _CURRENCY_NAMES[code]
 
 
-def _fmt_price(value):
-    """سعر للعرض فردود البوت: بلا ".0" وبفاصل الآلاف (فراغ) — 9500.0 → "9 500".
-    الكسور تبان غير إلا كانت (12.5). قيمة ماشي رقم تبقى كيما هي، والفارغة "?"."""
+_NBSP = "\u00a0"  # مسافة ما تتقطعش بين الرقم والعملة
+
+
+def _fmt_price(value, symbol=None):
+    """سعر للعرض فردود البوت: بلا ".0" وبلا فاصل آلاف — 9500.0 → "9500"، ومع symbol
+    → "9500\u00a0دج". المسافة وسط الرقم ("9 500") كانت تقلبو فماسنجر وسط نص عربي
+    ("500 دج.9"). الكسور تبان غير إلا كانت (12.5). قيمة ماشي رقم تبقى كيما هي، والفارغة "?"."""
     if value is None or isinstance(value, bool) or str(value).strip() == "":
         return "?"
     try:
@@ -352,7 +356,8 @@ def _fmt_price(value):
     whole = int(abs(rounded))
     frac = ("%.2f" % (abs(rounded) - whole))[1:].rstrip("0").rstrip(".")
     sign = "-" if rounded < 0 else ""
-    return sign + f"{whole:,}".replace(",", " ") + frac
+    text = f"{sign}{whole}{frac}"
+    return f"{text}{_NBSP}{symbol}" if symbol else text
 
 
 # أسماء/فئات المنتجات يكتبوهم التاجر أو أعضاء الفريق (وتجي من WooCommerce): قبل ما يدخلو
@@ -380,7 +385,7 @@ def get_products_text(bot_settings, currency=None):
         if products and isinstance(products, dict):
             symbol = (currency or _store_currency(uid))[0]
             sold = _sold_by_name(_get_stats(uid))
-            lines = [f"- {_clean_prompt_text(p.get('name','?'), _PROMPT_NAME_MAX)}: {_fmt_price(p.get('sell'))} {symbol} | stock:{_stock_fields(p, sold.get(p.get('name',''), 0))['available']} | {_clean_prompt_text(p.get('category',''), _PROMPT_CATEGORY_MAX)}".strip()
+            lines = [f"- {_clean_prompt_text(p.get('name','?'), _PROMPT_NAME_MAX)}: {_fmt_price(p.get('sell'), symbol)} | stock:{_stock_fields(p, sold.get(p.get('name',''), 0))['available']} | {_clean_prompt_text(p.get('category',''), _PROMPT_CATEGORY_MAX)}".strip()
                      for p in products.values() if isinstance(p,dict)]
             if lines: return "\n".join(lines)
     except Exception: pass
@@ -516,7 +521,7 @@ def ask_gemini(sender_id, user_message, bot_settings,
         req_format = '{"product":"اسم المنتج","quantity":"الكمية","name":"اسم العميل","phone":"رقم الهاتف","city":"المدينة","delivery_type":"منزل أو مكتب الاستلام","address":"العنوان"}'
         system_text = f"""أنت مساعد مبيعات لمتجر إلكتروني. مهمتك مساعدة العملاء في الطلب.
 رد بنفس لغة العميل (عربي أو فرنسي).
-العملة: {currency[0]} ({currency[1]}). اكتب كل الأسعار بهذه العملة وبهذا الشكل: 9 500 {currency[0]}. لا تستعمل درهم ولا أي عملة أخرى.
+العملة: {currency[0]} ({currency[1]}). اكتب كل الأسعار بهذه العملة هكذا "9500 {currency[0]}"، بلا مسافة ولا فاصلة داخل الرقم، ولا تستعمل درهم ولا أي عملة أخرى.
 اجمع من العميل بشكل ودي: الاسم الكامل، الهاتف، المدينة، اسم المنتج، الكمية، العنوان، **ونوع التوصيل الذي يفضّله العميل بنفسه (توصيل للمنزل، أو توصيل لمكتب الاستلام/Stop Desk)** — اسأله بوضوح عن هذا الخيار ولا تفترضه أبداً من نفسك. لا تكتب تأكيد الطلب قبل جمع كل هذه المعلومات.
 تعليمات إضافية من المتجر:
 {instructions}
@@ -582,6 +587,18 @@ def _strip_markdown(text):
     return s.replace("`", "").replace("*", "")
 
 
+# Gemini يقدر يكتب "9 500 دج" ولا "9,500 دج" رغم التعليمة، وماسنجر يقلب الرقم وسط نص عربي
+# ("500 دج.9"). قبل الإرسال: الرقم يتلصق (بلا فاصل آلاف وبلا .0) وبينو وبين دج U+00A0.
+# الفاصل لازم يكون متبوع بـ 3 أرقام بالضبط (12,5 دج ما يتمسّش)، وبلا "دج" مباشرة من بعد ما نمسّو والو.
+_PRICE_DZD = re.compile(r"(?<![\d.,])(\d{1,3}(?:[ \u00a0\u202f,]\d{3})+|\d+)(?:\.0+)?[ \u00a0\u202f]*(?=دج)")
+
+
+def _fix_prices(text):
+    if not text:
+        return text
+    return _PRICE_DZD.sub(lambda m: re.sub(r"\D", "", m.group(1)) + _NBSP, text)
+
+
 def process_bg(sender_id, user_text, bot, send_fn,
                media_bytes=b"", mime_type="", is_voice=False, is_image=False, platform="fb", page_id=""):
     def task():
@@ -608,7 +625,7 @@ def process_bg(sender_id, user_text, bot, send_fn,
             elif not reply or not reply.strip():
                 reply = "عذراً، لم أتمكن من المعالجة الآن. حاول مرة أخرى."
             if platform in _PLAIN_TEXT_PLATFORMS:
-                reply = _strip_markdown(reply)  # نفس النص يتبعث ويتسجّل فالمحادثات
+                reply = _fix_prices(_strip_markdown(reply))  # نفس النص يتبعث ويتسجّل فالمحادثات
             try:
                 ok = send_fn(reply)
                 logging.info(f"📨 send_fn result for {_mask_id(sender_id)}: {ok}")

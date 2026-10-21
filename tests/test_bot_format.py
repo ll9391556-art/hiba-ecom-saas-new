@@ -29,6 +29,9 @@ def test_products_and_prompt_use_dinar_by_default(app, db, gemini):
     prompt = _system_prompt(gemini)
     assert "دج" in prompt and "الدينار الجزائري" in prompt
     assert "لا تستعمل درهم" in prompt
+    # fix-price-rtl: المثال بلا مسافة داخل الرقم، والتعليمة صريحة
+    assert '"9500 دج"' in prompt and "9 500" not in prompt
+    assert "بلا مسافة ولا فاصلة داخل الرقم" in prompt
 
 
 def test_currency_follows_store_settings(app, db, gemini):
@@ -39,20 +42,32 @@ def test_currency_follows_store_settings(app, db, gemini):
     assert "€" in _system_prompt(gemini)
 
 
-# ── 2. الأسعار بلا ".0" وبفاصل الآلاف ────────────────────
+# ── 2. الأسعار بلا ".0" وبلا فاصل آلاف (fix-price-rtl) ─────
+# فماسنجر، "9 500 دج" وسط نص عربي يتعرض مقلوب ("500 دج.9") بسبب المسافة داخل الرقم.
+# دابا: الرقم ملصوق، وبينو وبين العملة U+00A0 (مسافة ما تتقطعش).
+NBSP = "\u00a0"
+
+
 @pytest.mark.parametrize("value,expected", [
-    (9500.0, "9 500"), (9500, "9 500"), ("2500", "2 500"), (1234567, "1 234 567"),
-    (950, "950"), (0, "0"), (12.5, "12.5"), (12.50, "12.5"), ("19900.00", "19 900"), (-1500, "-1 500"),
+    (9500.0, "9500"), (9500, "9500"), ("2500", "2500"), (1234567, "1234567"),
+    (950, "950"), (0, "0"), (12.5, "12.5"), (12.50, "12.5"), ("19900.00", "19900"), (-1500, "-1500"),
     ("?", "?"), (None, "?"), ("", "?"), (True, "?"),
 ])
 def test_fmt_price(app, value, expected):
     assert app._fmt_price(value) == expected
 
 
+@pytest.mark.parametrize("value,expected", [
+    (9500.0, "9500" + NBSP + "دج"), (1234567, "1234567" + NBSP + "دج"), (None, "?"),
+])
+def test_fmt_price_with_currency(app, value, expected):
+    assert app._fmt_price(value, "دج") == expected
+
+
 def test_product_lines_use_the_new_price_format(app, db):
     db.set(f"data/{UID}/products/Sac", {"name": "Sac", "sell": 9500.0, "init": 5})
     text = app.get_products_text(BOT)
-    assert "Sac: 9 500 دج" in text and "9500.0" not in text
+    assert "Sac: 9500" + NBSP + "دج |" in text and "9500.0" not in text and "9 500" not in text
 
 
 # ── 3. بلا Markdown فماسنجر وإنستغرام ─────────────────────
@@ -75,8 +90,28 @@ class _Sync:
         fn(*a, **kw)
 
 
+# ── fix-price-rtl: الأرقام اللي يكتبها Gemini بفاصل آلاف قبل "دج" تتصلّح قبل الإرسال ──
+@pytest.mark.parametrize("raw,fixed", [
+    ("السعر 9 500 دج برك", "السعر 9500" + NBSP + "دج برك"),
+    ("السعر 9,500 دج", "السعر 9500" + NBSP + "دج"),
+    ("Total: 1 234 567 دج", "Total: 1234567" + NBSP + "دج"),
+    ("9" + NBSP + "500" + NBSP + "دج", "9500" + NBSP + "دج"),
+    ("9\u202f500 دج", "9500" + NBSP + "دج"),
+    ("السعر 9500.0 دج", "السعر 9500" + NBSP + "دج"),
+    ("السعر 9500 دج", "السعر 9500" + NBSP + "دج"),
+    ("سعرين: 2 500 دج و 12 000 دج", "سعرين: 2500" + NBSP + "دج و 12000" + NBSP + "دج"),
+    ("عندك 3 500 قطعة", "عندك 3 500 قطعة"),          # بلا دج: ما نمسّوش
+    ("هاتف 0555 123 456", "هاتف 0555 123 456"),
+    ("12,5 دج", "12,5 دج"),                           # ماشي فاصل آلاف
+    ("25 €", "25 €"),
+])
+def test_fix_prices_in_reply(app, raw, fixed):
+    assert app._fix_prices(raw) == fixed
+
+
 @pytest.mark.parametrize("platform,expected", [
-    ("fb", "مرحبا Sac بـ 9 500 دج"), ("ig", "مرحبا Sac بـ 9 500 دج"), ("wa", "مرحبا **Sac** بـ 9 500 دج"),
+    ("fb", "مرحبا Sac بـ 9500" + NBSP + "دج"), ("ig", "مرحبا Sac بـ 9500" + NBSP + "دج"),
+    ("wa", "مرحبا **Sac** بـ 9 500 دج"),
 ])
 def test_replies_are_plain_text_on_messenger_and_instagram(app, db, seed_owner, monkeypatch, platform, expected):
     monkeypatch.setattr("services.bot._executor", _Sync())
