@@ -543,6 +543,24 @@ def ask_gemini(sender_id, user_message, bot_settings,
 
 _GEMINI_ERROR_REPLY = "عذراً، حاول مرة أخرى بعد قليل."
 
+# ماسنجر وإنستغرام ما يعرضوش Markdown: Gemini يكتب **غليظ** و*مائل* و## عناوين و`كود`
+# والزبون يشوف النجوم كما هي. نحيّدو الرموز بلا ما نبدّلو الكلام (واتساب يعرض *غليظ*، يبقى).
+_MD_HEADING = re.compile(r"^(\s*)#{1,6}\s+", re.M)
+_MD_BULLET  = re.compile(r"^(\s*)\*\s+", re.M)
+_MD_BOLD    = re.compile(r"\*\*(.+?)\*\*", re.S)
+_MD_ITALIC  = re.compile(r"(?<!\*)\*(?!\s)([^*\n]+?)(?<!\s)\*(?!\*)")
+_PLAIN_TEXT_PLATFORMS = ("fb", "ig")
+
+
+def _strip_markdown(text):
+    if not text:
+        return text
+    s = _MD_HEADING.sub(r"\1", text)
+    s = _MD_BULLET.sub(r"\1• ", s)
+    s = _MD_BOLD.sub(r"\1", s)
+    s = _MD_ITALIC.sub(r"\1", s)
+    return s.replace("`", "").replace("*", "")
+
 
 def process_bg(sender_id, user_text, bot, send_fn,
                media_bytes=b"", mime_type="", is_voice=False, is_image=False, platform="fb", page_id=""):
@@ -569,6 +587,8 @@ def process_bg(sender_id, user_text, bot, send_fn,
                 reply = "✅ تم استلام طلبك بنجاح! سنتواصل معك قريباً لتأكيد التوصيل."
             elif not reply or not reply.strip():
                 reply = "عذراً، لم أتمكن من المعالجة الآن. حاول مرة أخرى."
+            if platform in _PLAIN_TEXT_PLATFORMS:
+                reply = _strip_markdown(reply)  # نفس النص يتبعث ويتسجّل فالمحادثات
             try:
                 ok = send_fn(reply)
                 logging.info(f"📨 send_fn result for {_mask_id(sender_id)}: {ok}")

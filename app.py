@@ -131,6 +131,7 @@ from services.bot import (
     _log_conversation,
     get_products_text,
     _fmt_price,
+    _strip_markdown,
     extract_json,
     _find_field,
     _normalize_delivery_type,

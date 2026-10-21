@@ -53,3 +53,37 @@ def test_product_lines_use_the_new_price_format(app, db):
     db.set(f"data/{UID}/products/Sac", {"name": "Sac", "sell": 9500.0, "init": 5})
     text = app.get_products_text(BOT)
     assert "Sac: 9 500 دج" in text and "9500.0" not in text
+
+
+# ── 3. بلا Markdown فماسنجر وإنستغرام ─────────────────────
+@pytest.mark.parametrize("raw,clean", [
+    ("**Sac** à 9 500 دج", "Sac à 9 500 دج"),
+    ("السعر *مغري* بزاف", "السعر مغري بزاف"),
+    ("## العروض\nSac", "العروض\nSac"),
+    ("* Sac\n* Montre", "• Sac\n• Montre"),
+    ("اكتب `0555` هنا", "اكتب 0555 هنا"),
+    ("طلبك رقم #12 مسجّل", "طلبك رقم #12 مسجّل"),
+    ("__مهم__ جدا", "__مهم__ جدا"),
+    ("بلا تنسيق", "بلا تنسيق"),
+])
+def test_strip_markdown(app, raw, clean):
+    assert app._strip_markdown(raw) == clean
+
+
+class _Sync:
+    def submit(self, fn, *a, **kw):
+        fn(*a, **kw)
+
+
+@pytest.mark.parametrize("platform,expected", [
+    ("fb", "مرحبا Sac بـ 9 500 دج"), ("ig", "مرحبا Sac بـ 9 500 دج"), ("wa", "مرحبا **Sac** بـ 9 500 دج"),
+])
+def test_replies_are_plain_text_on_messenger_and_instagram(app, db, seed_owner, monkeypatch, platform, expected):
+    monkeypatch.setattr("services.bot._executor", _Sync())
+    fakes.GEMINI_RESPONDER["fn"] = lambda *a: "مرحبا **Sac** بـ 9 500 دج"
+    seed_owner(plan="pro")
+    sent = []
+    app.process_bg("SID1", "salam", BOT, lambda msg: sent.append(msg) or True, platform=platform)
+    assert sent == [expected]
+    out = [m for m in (db.get(f"conversations/{UID}/SID1") or {}).values() if m["direction"] == "out"]
+    assert [m["text"] for m in out] == [expected]
