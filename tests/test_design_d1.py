@@ -115,6 +115,53 @@ def test_pages_load_readex_pro():
         assert body["font-family"] == "var(--font)", name
 
 
+# ── 3. الشعار و favicon ──
+LOGO_ARC = '<path d="M45 24.5A15 15 0 1 0 47 32" fill="none" stroke="{c}" stroke-width="7" stroke-linecap="round"/>'
+LOGO_HEAD = ('<path d="M36.5 18 L46 23.5 L43.5 33" fill="none" stroke="{c}" stroke-width="7" '
+             'stroke-linecap="round" stroke-linejoin="round"/>')
+FAVICON_LINKS = [
+    '<link rel="icon" href="/static/favicon.svg" type="image/svg+xml"/>',
+    '<link rel="icon" href="/static/favicon-32.png" sizes="32x32" type="image/png"/>',
+    '<link rel="apple-touch-icon" href="/static/apple-touch-icon.png"/>',
+]
+
+
+@pytest.mark.parametrize("path,square,arrow", [
+    ("img/logo.svg", "#3B2BFF", "#D4FF3A"),       # بنفسجي مع سهم volt
+    ("img/logo-volt.svg", "#D4FF3A", "#3B2BFF"),  # volt مع سهم بنفسجي
+    ("favicon.svg", "#3B2BFF", "#D4FF3A"),
+])
+def test_logo_svg_matches_identity(client, path, square, arrow):
+    svg = _read(STATIC / path)
+    assert 'viewBox="0 0 64 64"' in svg
+    assert f'<rect x="0" y="0" width="64" height="64" rx="18" fill="{square}"/>' in svg
+    assert LOGO_ARC.format(c=arrow) in svg and LOGO_HEAD.format(c=arrow) in svg
+    r = client.get(f"/static/{path}")
+    assert r.status_code == 200 and r.mimetype == "image/svg+xml"
+
+
+@pytest.mark.parametrize("path,size", [("favicon-32.png", 32), ("apple-touch-icon.png", 180)])
+def test_png_favicons(client, path, size):
+    data = client.get(f"/static/{path}").data
+    assert data[:8] == b"\x89PNG\r\n\x1a\n"
+    assert int.from_bytes(data[16:20], "big") == size and int.from_bytes(data[20:24], "big") == size
+
+
+def test_old_logo_png_is_gone():
+    assert not (STATIC / "logo.png").exists()
+    for path in list(STATIC.rglob("*.html")) + list(STATIC.rglob("*.js")) + list((ROOT / "templates").glob("*.html")):
+        assert "logo.png" not in _read(path), path.name
+    index = _page("index.html")
+    assert index.count('src="/static/img/logo.svg"') == 2
+
+
+def test_static_pages_have_favicon():
+    for name in STATIC_PAGES:
+        html = _page(name)
+        for link in FAVICON_LINKS:
+            assert link in html, f"{name}: {link}"
+
+
 def test_body_text_is_at_least_16px():
     body = _rules(_read(APP_CSS))["body"]
     assert body["font-family"] == "var(--font)"

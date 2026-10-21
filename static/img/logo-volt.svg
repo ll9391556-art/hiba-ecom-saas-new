@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="OrderFlow">
+<rect x="0" y="0" width="64" height="64" rx="18" fill="#D4FF3A"/>
+<path d="M45 24.5A15 15 0 1 0 47 32" fill="none" stroke="#3B2BFF" stroke-width="7" stroke-linecap="round"/>
+<path d="M36.5 18 L46 23.5 L43.5 33" fill="none" stroke="#3B2BFF" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
