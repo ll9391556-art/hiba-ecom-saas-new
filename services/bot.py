@@ -337,12 +337,12 @@ def _store_currency(uid):
     return CURRENCY_SYMBOLS_PY[code], _CURRENCY_NAMES[code]
 
 
-_NBSP = " "  # مسافة ما تتقطعش بين الرقم والعملة
+_NBSP = "\u00a0"  # مسافة ما تتقطعش بين الرقم والعملة
 
 
 def _fmt_price(value, symbol=None):
     """سعر للعرض فردود البوت: بلا ".0" وبلا فاصل آلاف — 9500.0 → "9500"، ومع symbol
-    → "9500 دج". المسافة وسط الرقم ("9 500") كانت تقلبو فماسنجر وسط نص عربي
+    → "9500\u00a0دج". المسافة وسط الرقم ("9 500") كانت تقلبو فماسنجر وسط نص عربي
     ("500 دج.9"). الكسور تبان غير إلا كانت (12.5). قيمة ماشي رقم تبقى كيما هي، والفارغة "?"."""
     if value is None or isinstance(value, bool) or str(value).strip() == "":
         return "?"
@@ -587,6 +587,18 @@ def _strip_markdown(text):
     return s.replace("`", "").replace("*", "")
 
 
+# Gemini يقدر يكتب "9 500 دج" ولا "9,500 دج" رغم التعليمة، وماسنجر يقلب الرقم وسط نص عربي
+# ("500 دج.9"). قبل الإرسال: الرقم يتلصق (بلا فاصل آلاف وبلا .0) وبينو وبين دج U+00A0.
+# الفاصل لازم يكون متبوع بـ 3 أرقام بالضبط (12,5 دج ما يتمسّش)، وبلا "دج" مباشرة من بعد ما نمسّو والو.
+_PRICE_DZD = re.compile(r"(?<![\d.,])(\d{1,3}(?:[ \u00a0\u202f,]\d{3})+|\d+)(?:\.0+)?[ \u00a0\u202f]*(?=دج)")
+
+
+def _fix_prices(text):
+    if not text:
+        return text
+    return _PRICE_DZD.sub(lambda m: re.sub(r"\D", "", m.group(1)) + _NBSP, text)
+
+
 def process_bg(sender_id, user_text, bot, send_fn,
                media_bytes=b"", mime_type="", is_voice=False, is_image=False, platform="fb", page_id=""):
     def task():
@@ -613,7 +625,7 @@ def process_bg(sender_id, user_text, bot, send_fn,
             elif not reply or not reply.strip():
                 reply = "عذراً، لم أتمكن من المعالجة الآن. حاول مرة أخرى."
             if platform in _PLAIN_TEXT_PLATFORMS:
-                reply = _strip_markdown(reply)  # نفس النص يتبعث ويتسجّل فالمحادثات
+                reply = _fix_prices(_strip_markdown(reply))  # نفس النص يتبعث ويتسجّل فالمحادثات
             try:
                 ok = send_fn(reply)
                 logging.info(f"📨 send_fn result for {_mask_id(sender_id)}: {ok}")

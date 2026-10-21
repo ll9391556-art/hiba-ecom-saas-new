@@ -132,6 +132,7 @@ from services.bot import (
     get_products_text,
     _fmt_price,
     _strip_markdown,
+    _fix_prices,
     _clean_prompt_text,
     extract_json,
     _find_field,
