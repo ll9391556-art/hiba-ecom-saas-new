@@ -36,6 +36,7 @@ def _rules(css):
     css = re.sub(r"/\*[\s\S]*?\*/", "", css)
     out = {}
     for sel, body in re.findall(r"([^{}]+)\{([^{}]*)\}", css):
+        sel = sel.split("<style>")[-1]  # <style>body{…} على نفس السطر
         decls = {}
         for d in body.split(";"):
             if ":" in d:
@@ -275,6 +276,25 @@ def test_no_dark_backgrounds_left():
     assert "currentcolor" in rules[".spinner"]["border"]  # يبان فوق الأبيض والأزرار
     for name in FEATURE_PAGES:
         assert not any(d in _page(name).lower() for d in DARK), name
+
+
+# ── 8. صفحات templates/ (admin، privacy، نوافذ OAuth) فاتحة ──
+@pytest.mark.parametrize("name", TEMPLATES)
+def test_templates_use_light_identity(name):
+    html = _template(name)
+    assert TOKENS_LINK in html and FONT_LINK in html
+    for link in FAVICON_LINKS:
+        assert link in html, link
+    body = _rules(html)["body"]
+    assert body["background"] == "var(--bg)" and body["font-family"] == "var(--font)"
+    low = html.lower()
+    for dark in DARK + ("#e8edf5", "rgba(15,32,68", "rgba(255,255,255,.0", "segoe ui", "font-family:arial"):
+        assert dark not in low, dark
+
+
+def test_oauth_pages_box_is_light():
+    src = _read(ROOT / "routes" / "oauth.py")
+    assert "rgba(255,255,255,.04)" not in src and "background:var(--bg)" in src
 
 
 def test_body_text_is_at_least_16px():

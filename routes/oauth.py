@@ -172,11 +172,11 @@ def _fb_oauth_callback_page():
             except Exception as e:
                 logging.error(f"channel_index update failed: {e}")
         logging.info(f"✅ OAuth OK UID={uid}")
-        ph = "".join(f"<div style='display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12px'>"
+        ph = "".join(f"<div style='display:flex;align-items:center;gap:8px;padding:5px 0;font-size:15px'>"
                      f"<span>{'📷' if p['type']=='instagram' else '📘'}</span>"
                      f"<span>{_esc(p.get('name','—'))}</span></div>" for p in pages_info)
         return render("oauth_success.html",
-            pages_box=Markup('<div style="margin-top:16px;background:rgba(255,255,255,.04);border-radius:10px;padding:12px">' + ph + '</div>' if ph else ''),
+            pages_box=Markup('<div style="margin-top:16px;background:var(--bg);border-radius:14px;padding:12px">' + ph + '</div>' if ph else ''),
             opener_js=Markup(_post_to_opener_js('{type:"FB_AUTH_SUCCESS"}')),
         )
     except Exception as err:
