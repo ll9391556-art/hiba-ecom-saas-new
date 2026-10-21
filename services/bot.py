@@ -337,9 +337,13 @@ def _store_currency(uid):
     return CURRENCY_SYMBOLS_PY[code], _CURRENCY_NAMES[code]
 
 
-def _fmt_price(value):
-    """سعر للعرض فردود البوت: بلا ".0" وبفاصل الآلاف (فراغ) — 9500.0 → "9 500".
-    الكسور تبان غير إلا كانت (12.5). قيمة ماشي رقم تبقى كيما هي، والفارغة "?"."""
+_NBSP = " "  # مسافة ما تتقطعش بين الرقم والعملة
+
+
+def _fmt_price(value, symbol=None):
+    """سعر للعرض فردود البوت: بلا ".0" وبلا فاصل آلاف — 9500.0 → "9500"، ومع symbol
+    → "9500 دج". المسافة وسط الرقم ("9 500") كانت تقلبو فماسنجر وسط نص عربي
+    ("500 دج.9"). الكسور تبان غير إلا كانت (12.5). قيمة ماشي رقم تبقى كيما هي، والفارغة "?"."""
     if value is None or isinstance(value, bool) or str(value).strip() == "":
         return "?"
     try:
@@ -352,7 +356,8 @@ def _fmt_price(value):
     whole = int(abs(rounded))
     frac = ("%.2f" % (abs(rounded) - whole))[1:].rstrip("0").rstrip(".")
     sign = "-" if rounded < 0 else ""
-    return sign + f"{whole:,}".replace(",", " ") + frac
+    text = f"{sign}{whole}{frac}"
+    return f"{text}{_NBSP}{symbol}" if symbol else text
 
 
 # أسماء/فئات المنتجات يكتبوهم التاجر أو أعضاء الفريق (وتجي من WooCommerce): قبل ما يدخلو
@@ -380,7 +385,7 @@ def get_products_text(bot_settings, currency=None):
         if products and isinstance(products, dict):
             symbol = (currency or _store_currency(uid))[0]
             sold = _sold_by_name(_get_stats(uid))
-            lines = [f"- {_clean_prompt_text(p.get('name','?'), _PROMPT_NAME_MAX)}: {_fmt_price(p.get('sell'))} {symbol} | stock:{_stock_fields(p, sold.get(p.get('name',''), 0))['available']} | {_clean_prompt_text(p.get('category',''), _PROMPT_CATEGORY_MAX)}".strip()
+            lines = [f"- {_clean_prompt_text(p.get('name','?'), _PROMPT_NAME_MAX)}: {_fmt_price(p.get('sell'), symbol)} | stock:{_stock_fields(p, sold.get(p.get('name',''), 0))['available']} | {_clean_prompt_text(p.get('category',''), _PROMPT_CATEGORY_MAX)}".strip()
                      for p in products.values() if isinstance(p,dict)]
             if lines: return "\n".join(lines)
     except Exception: pass
