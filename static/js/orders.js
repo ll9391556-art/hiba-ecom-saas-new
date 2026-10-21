@@ -266,8 +266,9 @@ async function exportOrders(){
     var blob = await r.blob();
     var a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    var m = /filename="([^"]+)"/.exec(r.headers.get("Content-Disposition") || "");
-    a.download = m ? m[1] : "orders.csv";
+    // الاسم من الواجهة: هيدر Content-Disposition ما يتقراش من JS كي يكون الـ API فـ origin آخر
+    var d = new Date(), pad = function(n){ return (n<10?"0":"")+n; };
+    a.download = "orders-" + d.getFullYear() + pad(d.getMonth()+1) + pad(d.getDate()) + ".csv";
     document.body.appendChild(a);
     a.click();
     setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1000);

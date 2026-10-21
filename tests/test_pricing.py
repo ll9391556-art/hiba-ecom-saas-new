@@ -542,3 +542,11 @@ def test_shop_asks_settings_first_and_skips_closed_stores():
     assert fn.index("/getStoreSettings") < fn.index("/getStoreProducts")
     assert "storeOpen===false" in fn.replace(" ", "")
     assert fn.index("storeOpen") < fn.index("/getStoreProducts")
+
+
+def test_export_file_name_does_not_depend_on_cors_headers():
+    """Content-Disposition ما يتقراش من JS فطلب cross-origin — الاسم يتبنى فالواجهة."""
+    fn = DASH[DASH.index("async function exportOrders("):]
+    fn = fn[:fn.index("\n}\n")]
+    code = "\n".join(l for l in fn.split("\n") if not l.strip().startswith("//"))
+    assert "Content-Disposition" not in code and '"orders-"' in code
