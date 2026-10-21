@@ -297,6 +297,13 @@ def test_oauth_pages_box_is_light():
     assert "rgba(255,255,255,.04)" not in src and "background:var(--bg)" in src
 
 
+def test_dashboard_fits_360px():
+    """#main عنصر flex: بلا min-width:0 يتمدّد قد محتواه؛ والـ topbar لازم يلتف (لقطة 360px كانت 374px)."""
+    rules = _rules(_read(APP_CSS))
+    assert rules["#main"]["min-width"] == "0"
+    assert rules[".topbar-right"]["flex-wrap"] == "wrap"
+
+
 def test_body_text_is_at_least_16px():
     body = _rules(_read(APP_CSS))["body"]
     assert body["font-family"] == "var(--font)"

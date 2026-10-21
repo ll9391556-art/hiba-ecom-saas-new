@@ -22,11 +22,11 @@ html[dir=rtl] .nav-item.active::before{left:auto;right:0;border-radius:2px 0 0 2
 .plan-full{background:var(--volt-light);color:var(--st-delivered-fg)}
 .plan-business{background:var(--white);color:var(--brand-dark);box-shadow:inset 0 0 0 1.5px var(--brand)}.plan-early{background:var(--volt);color:var(--ink)}
 .plan-lifetime{background:var(--volt-light);color:var(--st-delivered-fg)}
-#main{margin-left:220px;flex:1;padding:24px;min-height:100vh;transition:.3s}
+#main{margin-left:220px;flex:1;min-width:0;padding:24px;min-height:100vh;transition:.3s}
 html[dir=rtl] #main{margin-left:0;margin-right:220px}
 .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px}
 .topbar-title{font-size:22px;font-weight:700}
-.topbar-right{display:flex;align-items:center;gap:10px}
+.topbar-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .lang-btn{background:var(--white);border:1px solid var(--line);color:var(--text);min-height:40px;padding:0 14px;border-radius:var(--r-btn);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;transition:.2s}
 .lang-btn:hover{border-color:var(--brand);color:var(--brand)}
 .lang-btn.active{background:var(--brand);color:#fff;border-color:var(--brand)}
