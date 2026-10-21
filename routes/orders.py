@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """طلبات التاجر: القائمة بالصفحات والتغييرات (since/before)، الحالة، ونوع التوصيل. منقول من app.py بلا تغيير (Phase 4 / A7)."""
+import datetime
 import hashlib
 import hmac
 import json
@@ -35,6 +36,10 @@ from services.orders import (
     _ship_values,
 )
 
+from services.users import (
+    planHas_server,
+)
+
 import services.orders as _orders_svc  # _now_ms: الاختبارات تعوّضو فـ services.orders
 
 bp = Blueprint("orders", __name__)
@@ -46,6 +51,66 @@ _ORDERS_PAGE_MAX         = 500
 
 
 _ORDERS_CURSOR_MARGIN_MS = 30_000  # تداخل آمن: كتابة بطيئة (retry) ما تضيعش من الـ polling
+
+
+# ── تصدير الطلبات لـ Excel (من Starter وفوق) ───────────────
+# CSV بـ UTF-8 BOM وفاصل ";" — Excel بالفرنسية (أغلب الحواسيب فالجزائر) يحلّو بالأعمدة
+# والعربية صحيحة، بلا مكتبة جديدة. استعلام createdAt (مفهرس) بدل تنزيل كل الطلبات.
+_EXPORT_MAX_ROWS   = 5000
+_EXPORT_DEFAULT_MS = 90 * 86_400_000
+_EXPORT_COLUMNS = [("ID", "id"), ("Date", "createdAt"), ("Nom / الاسم", "name"), ("Téléphone / الهاتف", "phone"),
+                   ("Wilaya / الولاية", "city"), ("Adresse / العنوان", "address"), ("Produit / المنتج", "product"),
+                   ("Qté / الكمية", "qty"), ("Livraison / التوصيل", "deliveryType"), ("Frais / الشحن", "shipping"),
+                   ("Total / المجموع", "total"), ("Statut / الحالة", "status"), ("Source / المصدر", "source"),
+                   ("Coupon", "couponCode")]
+_DZ_TZ = datetime.timezone(datetime.timedelta(hours=1))  # الجزائر UTC+1 بلا توقيت صيفي
+
+
+def _csv_cell(v):
+    s = "" if v is None else str(v)
+    # CSV injection: خلية تبدا بـ = + - @ (أو tab/CR) يحسبها Excel معادلة — نسبقوها بـ '
+    if s[:1] in ("=", "@", "\t", "\r") or (s[:1] in ("+", "-") and not s[1:].replace(" ", "").isdigit()):
+        s = "'" + s
+    if any(ch in s for ch in (";", '"', "\n", "\r")):
+        s = '"' + s.replace('"', '""') + '"'
+    return s
+
+
+def _export_value(order, key):
+    v = order.get(key)
+    if key == "createdAt" and isinstance(v, (int, float)) and v > 0:
+        return datetime.datetime.fromtimestamp(v / 1000, _DZ_TZ).strftime("%Y-%m-%d %H:%M")
+    return v
+
+
+@bp.route("/api/exportOrders", methods=["GET"])
+@require_auth
+@require_perm("orders")
+def api_export_orders():
+    uid = request.auth_uid
+    if not planHas_server(uid, "export"):
+        return err_json("تصدير الطلبات متاح من باقة Starter وفوق", 403)
+    try:
+        to_ms   = _opt_int_arg("to")
+        from_ms = _opt_int_arg("from")
+    except ValueError:
+        return err_json("Invalid date range")
+    to_ms   = to_ms if to_ms is not None else _orders_svc._now_ms()
+    from_ms = from_ms if from_ms is not None else to_ms - _EXPORT_DEFAULT_MS
+    found = _fb_query(f"data/{uid}/orders", "createdAt", start_at=from_ms, end_at=to_ms,
+                      limit_last=_EXPORT_MAX_ROWS)
+    if found is None:
+        return err_json("تعذّر تحميل الطلبات — حاول بعد قليل", 503)
+    orders = sorted((o for o in found.values() if isinstance(o, dict)),
+                    key=lambda o: o.get("createdAt") or 0, reverse=True)
+    lines = [";".join(h for h, _ in _EXPORT_COLUMNS)]
+    lines += [";".join(_csv_cell(_export_value(o, k)) for _, k in _EXPORT_COLUMNS) for o in orders]
+    log_audit_entry(uid, getattr(request, "auth_member_username", "") or "owner", f"تصدير {len(orders)} طلب")
+    resp = make_response("\ufeff" + "\r\n".join(lines) + "\r\n")
+    resp.headers["Content-Type"] = "text/csv; charset=utf-8"
+    stamp = datetime.datetime.now(_DZ_TZ).strftime("%Y%m%d")
+    resp.headers["Content-Disposition"] = f'attachment; filename="orders-{stamp}.csv"'
+    return resp
 
 
 @bp.route("/api/getOrders", methods=["GET"])

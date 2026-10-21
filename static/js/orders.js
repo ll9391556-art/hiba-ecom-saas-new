@@ -169,7 +169,7 @@ async function addOrder(){
   if(!data.deliveryType){
     toast("اختر نوع التوصيل (منزل أو مكتب الاستلام)","err"); return;
   }
-  var r = await apiPost("/addOrder", {userId:uid(), data:data}, false);
+  var r = await apiPost("/addOrder", {userId:uid(), data:data}, true);  // التوكن: طلب يدوي من التاجر (حتى فـ Free)
   if(r.status==="ok"){
     toast("✅ Commande ajoutée","ok");
     closeModal("addOrderModal");
@@ -253,3 +253,24 @@ async function printOrderSlip(orderId){
   w.document.close();
 }
 
+// تصدير الطلبات (آخر 90 يوم) لملف CSV يتحل فـ Excel — التوكن فالهيدر، لهذا fetch + blob
+async function exportOrders(){
+  try{
+    var r = await fetch(API_URL + "/exportOrders", {headers: {"Authorization": "Bearer " + authToken}});
+    if(!r.ok){
+      var err = {};
+      try{ err = await r.json(); }catch(e){}
+      toast("❌ " + (err.message || r.status), "err");
+      return;
+    }
+    var blob = await r.blob();
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    // الاسم من الواجهة: هيدر Content-Disposition ما يتقراش من JS كي يكون الـ API فـ origin آخر
+    var d = new Date(), pad = function(n){ return (n<10?"0":"")+n; };
+    a.download = "orders-" + d.getFullYear() + pad(d.getMonth()+1) + pad(d.getDate()) + ".csv";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }catch(e){ toast("Erreur réseau", "err"); }
+}

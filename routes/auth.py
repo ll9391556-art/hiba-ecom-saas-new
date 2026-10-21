@@ -100,6 +100,10 @@ def api_login():
             return err_json("Invalid credentials", 401)
         if not member.get("active", True):
             return err_json("هذا الحساب معطّل حالياً — تواصل مع صاحب المتجر", 403)
+        # الفريق غير فـ Business (المهمة 1): باقة صاحب المتجر بلا team (أو انتهات) → العضو
+        # ما يدخلش، بلا ما نمسحو والو؛ يرجع يخدم كي يرقّي. التوكنات القديمة (24 ساعة) تكمّل.
+        if not planHas_server(member.get("ownerUid", ""), "team"):
+            return err_json("حسابات الفريق متاحة فباقة Business — تواصل مع صاحب المتجر", 403)
         if not _is_bcrypt_hash(stored_pw):
             _fb_patch(f"team_users/{member_key}", {"Password": _hash_password(pwd)})
         perms = _clean_perms(member.get("permissions"))

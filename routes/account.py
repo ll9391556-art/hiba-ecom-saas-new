@@ -15,8 +15,10 @@ from markupsafe import escape as _esc
 
 from core.config import (
     BOT_LAUNCHED,
+    EARLY_MAX_SLOTS,
     LIFETIME_MAX_SLOTS,
     PLANS,
+    normalize_plan,
 )
 from core.db import (
     _fb_get,
@@ -38,6 +40,7 @@ from services.users import (
     _count_team_members,
     _get_usage,
     _get_user_record,
+    _plan_status,
 )
 
 bp = Blueprint("account", __name__)
@@ -51,7 +54,7 @@ bp = Blueprint("account", __name__)
 def api_get_user_plan():
     uid      = request.auth_uid
     user_rec = _get_user_record(uid)
-    plan     = str(user_rec.get("plan", "starter")).lower()
+    plan, subscription = _plan_status(user_rec)
     source   = str(user_rec.get("source", "local")).lower()
     currency = (_fb_get(f"data/{uid}/storeSettings/currency") or "DZD")
     plan_features = PLANS.get(plan, PLANS["starter"])
@@ -61,9 +64,10 @@ def api_get_user_plan():
     if plan_features.get("botMsgCap"):
         usage["botMsgs"] = {"used": _get_usage(uid, "botMsgCount"), "cap": plan_features["botMsgCap"]}
     lifetime_left = max(0, LIFETIME_MAX_SLOTS - _count_lifetime_accounts()) if source == "local" else None
+    early_left = max(0, EARLY_MAX_SLOTS - _count_lifetime_accounts("earlyAccounts")) if source == "local" else None
     return ok_json({"plan": plan, "features": plan_features, "currency": currency,
-                     "source": source, "lifetimeSlotsLeft": lifetime_left,
-                     "botLaunched": BOT_LAUNCHED, "usage": usage,
+                     "source": source, "lifetimeSlotsLeft": lifetime_left, "earlySlotsLeft": early_left,
+                     "botLaunched": BOT_LAUNCHED, "usage": usage, "subscription": subscription,
                      "role": getattr(request, "auth_role", "owner"),
                      "teamCount": _count_team_members(uid)})
 

@@ -24,7 +24,8 @@ from core.db import _fb_get, _fb_keys, _fb_patch, _fb_put, _fb_query, _firebase_
 from core.security import _cleanup_shared_limits
 from core.util import _mask_id
 from services.orders import _save_order, _ship_values, _stock_fields, _sold_by_name, _get_stats
-from services.users import _CACHE_TTL, _NEG_CACHE_TTL, _settings_cache, _settings_cache_lock, _under_cap, _increment_usage
+from services.users import (_CACHE_TTL, _NEG_CACHE_TTL, _settings_cache, _settings_cache_lock, _under_cap, _increment_usage,
+                            _plan_cap, _plan_status, _release_usage, _reserve_usage)
 
 _executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="bot_worker")
 
@@ -150,8 +151,7 @@ def get_user_settings(identifier):
 
 def _bot_allowed_for(bot_settings):
     if not bot_settings: return False
-    plan = str(bot_settings.get("plan", "starter")).lower()
-    return PLANS.get(plan, {}).get("bot", False)
+    return PLANS.get(_plan_status(bot_settings)[0], {}).get("bot", False)
 
 
 # ── Bot / Webhook ─────────────────────────────────────────
@@ -504,24 +504,32 @@ def ask_gemini(sender_id, user_message, bot_settings,
         return clean_text, order_data
     except Exception as e:
         logging.error(f"ask_gemini {_mask_id(sender_id)}: {e}")
-        return "عذراً، حاول مرة أخرى بعد قليل.", None
+        return _GEMINI_ERROR_REPLY, None
+
+
+_GEMINI_ERROR_REPLY = "عذراً، حاول مرة أخرى بعد قليل."
 
 
 def process_bg(sender_id, user_text, bot, send_fn,
                media_bytes=b"", mime_type="", is_voice=False, is_image=False, platform="fb", page_id=""):
     def task():
         logging.info(f"🔄 process_bg START | sender={_mask_id(sender_id)} | platform={platform} | text_len={len(user_text or '')}")
+        reserved = False
         try:
             merchant_uid = bot.get("User_ID", "")
-            if merchant_uid and not _under_cap(merchant_uid, "botMsgCount", "botMsgCap"):
-                logging.warning(f"⏭️ تجاوز سقف رسائل البوت الشهري | uid={merchant_uid} — لا يتم استدعاء Gemini")
-                try: send_fn("عذراً، تم الوصول للحد الشهري لخدمة المساعد الذكي. سيتم التواصل معك يدوياً قريباً 🙏")
-                except Exception: pass
-                return
-            if merchant_uid: _increment_usage(merchant_uid, "botMsgCount")
+            # سقف ردود البوت الشهري (PLANS[plan]["botMsgCap"]): حجز ذرّي قبل Gemini. عند الحد
+            # البوت يسكت — حتى رسالة للزبون — والرسالة الواردة راهي مسجّلة فالمحادثات من قبل،
+            # والتاجر يشوف التنبيه فاللوحة ويجاوب يدوياً.
+            if merchant_uid:
+                if not _reserve_usage(merchant_uid, "botMsgCount", _plan_cap(merchant_uid, "botMsgCap")):
+                    logging.warning(f"⏭️ سقف ردود البوت الشهري | uid={merchant_uid} — بلا Gemini وبلا رد")
+                    return
+                reserved = True
             reply, order = ask_gemini(sender_id,user_text,bot,
                                       media_bytes=media_bytes,mime_type=mime_type,
                                       is_voice=is_voice,is_image=is_image)
+            if reply == _GEMINI_ERROR_REPLY and not order:
+                _release_usage(merchant_uid, "botMsgCount"); reserved = False
             logging.info(f"🤖 ask_gemini DONE | sender={_mask_id(sender_id)} | reply_len={len(reply or '')} | order={'yes' if order else 'no'}")
             if order and (not reply or not reply.strip()):
                 reply = "✅ تم استلام طلبك بنجاح! سنتواصل معك قريباً لتأكيد التوصيل."
@@ -534,10 +542,13 @@ def process_bg(sender_id, user_text, bot, send_fn,
                     _log_conversation(merchant_uid, sender_id, "out", reply, platform, via="bot", page_id=page_id)
             except Exception as send_err:
                 logging.error(f"send_fn raised exception ({_mask_id(sender_id)}): {send_err}")
+            reserved = False  # Gemini جاوب: الوحدة مستهلكة حتى لو فشل شي حاجة من بعد
             if order:
                 save_order_from_bot(order, bot, sender_id)
         except Exception as e:
             logging.error(f"BG task ({_mask_id(sender_id)}): {e}", exc_info=True)
+            if reserved:
+                _release_usage(merchant_uid, "botMsgCount")
             try: send_fn("عذراً، حدث خطأ مؤقت.")
             except Exception: pass
     _executor.submit(task)

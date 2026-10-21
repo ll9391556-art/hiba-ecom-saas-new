@@ -5,6 +5,9 @@ import logging
 import time
 
 from core.db import _fb_get, _fb_patch, _firebase_ref
+from services.users import planHas_server
+
+COUPONS_NOT_IN_PLAN = "أكواد الخصم متاحة من باقة Pro وفوق"
 
 def coupon_problem(c, subtotal):
     """None إذا الكوبون صالح لهاد المجموع، وإلا رسالة السبب (نفس رسائل المتجر العام)."""
@@ -41,6 +44,8 @@ def _validate_and_apply_coupon(uid, code, subtotal):
     (الطلب يستمر بلا خصم بدل ما يفشل بالكامل بسبب كود خصم غير صالح)."""
     code = str(code or "").strip().upper()
     if not code:
+        return 0.0, None
+    if not planHas_server(uid, "coupons"):  # كوبونات قديمة عند باقة بلا coupons: بلا خصم
         return 0.0, None
     c = _fb_get(f"data/{uid}/coupons/{code}")
     if coupon_problem(c, subtotal):

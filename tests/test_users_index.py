@@ -47,7 +47,7 @@ def test_unknown_user_is_rejected_without_reading_all_users(client, seed_owner):
 
 
 def test_member_login_case_insensitive_via_team_index(client, db, seed_owner):
-    owner = seed_owner()
+    owner = seed_owner(plan="business")  # الفريق غير فـ business (المهمة 1)
     r = client.post("/api/team/addMember", headers=owner["headers"],
                     json={"username": "Karim", "password": "dummy-pass-123", "name": "K"})
     assert r.status_code == 200
@@ -59,7 +59,7 @@ def test_member_login_case_insensitive_via_team_index(client, db, seed_owner):
 
 
 def test_usernames_are_unique_ignoring_case(client, db, seed_owner):
-    owner = seed_owner()
+    owner = seed_owner(plan="business")  # الفريق غير فـ business (المهمة 1)
     _create_client(client, "Amina")
     assert _create_client(client, "amina").status_code == 409
     add = lambda u: client.post("/api/team/addMember", headers=owner["headers"],
@@ -71,7 +71,7 @@ def test_usernames_are_unique_ignoring_case(client, db, seed_owner):
 
 
 def test_delete_member_removes_team_index(client, db, seed_owner):
-    owner = seed_owner()
+    owner = seed_owner(plan="business")  # الفريق غير فـ business (المهمة 1)
     client.post("/api/team/addMember", headers=owner["headers"],
                 json={"username": "Karim", "password": "dummy-pass-123"})
     assert client.post("/api/team/deleteMember", headers=owner["headers"],
@@ -81,24 +81,23 @@ def test_delete_member_removes_team_index(client, db, seed_owner):
 
 # ── عدّاد lifetime ───────────────────────────────────────
 def test_lifetime_counter_and_cap(client, db, app, monkeypatch):
-    monkeypatch.setattr("routes.admin.LIFETIME_MAX_SLOTS", 2)
-    assert _create_client(client, "a1", plan="lifetime").status_code == 200
+    # المهمة 1: lifetime/full ما بقاوش للبيع — الإنشاء يترفض والعدّاد ما يتحرّكش
+    assert _create_client(client, "a1", plan="lifetime").status_code == 400
     assert _create_client(client, "a2", plan="starter").status_code == 200
-    assert db.get("counters/lifetimeAccounts") == 1
-    assert _create_client(client, "a3", plan="full").status_code == 200
-    assert db.get("counters/lifetimeAccounts") == 2
-    assert _create_client(client, "a4", plan="lifetime").status_code == 409
-    assert db.get("users/a4") is None and db.get("counters/lifetimeAccounts") == 2
+    assert _create_client(client, "a3", plan="full").status_code == 400
+    assert db.get("users/a1") is None and (db.get("counters/lifetimeAccounts") or 0) == 0
 
 
 def test_plan_changes_move_the_counter(client, db):
     _create_client(client, "a1", plan="starter")
+    db.set("users/a1/plan", "lifetime")  # مشترك lifetime قديم
+    db.set("counters/lifetimeAccounts", 1)
     uid = db.get("users/a1")["User_ID"]
     upd = lambda plan: client.post("/api/updateUserPlan", headers=ADMIN,
                                    json={"userId": uid, "username": "a1", "plan": plan})
-    assert upd("lifetime").status_code == 200 and db.get("counters/lifetimeAccounts") == 1
     assert upd("full").status_code == 200 and db.get("counters/lifetimeAccounts") == 1
     assert upd("pro").status_code == 200 and (db.get("counters/lifetimeAccounts") or 0) == 0
+    assert upd("lifetime").status_code == 400 and (db.get("counters/lifetimeAccounts") or 0) == 0
 
 
 def test_get_user_plan_reads_counter_not_all_users(client, db, seed_owner):

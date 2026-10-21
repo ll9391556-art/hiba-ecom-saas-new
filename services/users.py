@@ -6,7 +6,7 @@ import logging
 import threading
 import time
 
-from core.config import PLANS
+from core.config import PLAN_ALIASES, PLANS, normalize_plan
 from core.db import _fb_delete, _fb_get, _fb_keys, _fb_patch, _fb_put, _firebase_ref
 from core.http import err_json, ok_json
 
@@ -54,6 +54,46 @@ def _increment_usage(uid, field):
         return new_val
 
 
+class _CapReached(Exception):
+    pass
+
+
+def _reserve_usage(uid, field, cap):
+    """فحص الحد + الزيادة فـ transaction وحدة (بدل _under_cap ثم _increment_usage، اللي
+    يخلّيو رسائل متزامنة يفوتو الحد). True = تحجزت وحدة، False = الحد وصل. بلا cap = زيادة عادية."""
+    if not cap:
+        _increment_usage(uid, field)
+        return True
+    path = f"data/{uid}/usage/{_usage_month_key()}/{field}"
+
+    def _txn(cur):
+        cur = cur if isinstance(cur, int) else 0
+        if cur >= cap:
+            raise _CapReached()
+        return cur + 1
+    try:
+        _firebase_ref(path).transaction(_txn)
+        return True
+    except _CapReached:
+        return False
+    except Exception as e:
+        logging.error(f"_reserve_usage transaction failed, fallback: {type(e).__name__}")
+        used = _get_usage(uid, field)
+        if used >= cap:
+            return False
+        _fb_put(path, used + 1)
+        return True
+
+
+def _release_usage(uid, field):
+    """رجوع وحدة محجوزة (مثلاً Gemini فشل وما تبعثش حتى رد حقيقي)."""
+    path = f"data/{uid}/usage/{_usage_month_key()}/{field}"
+    try:
+        _firebase_ref(path).transaction(lambda cur: max(0, (cur if isinstance(cur, int) else 0) - 1))
+    except Exception as e:
+        logging.error(f"_release_usage failed: {type(e).__name__}")
+
+
 def _plan_cap(uid, cap_field):
     plan = get_user_plan(uid)
     return PLANS.get(plan, {}).get(cap_field)
@@ -80,8 +120,43 @@ def _get_user_record(uid):
     return {}
 
 
+# ── انتهاء الاشتراك ──────────────────────────────────────
+# users/{u}: plan_period (monthly|yearly) وplan_expires_at (ms) — يحطّهم الأدمين عند التفعيل.
+# بلا plan_expires_at (أو قيمة غير صالحة) = ما تنتهيش، كيما كل الحسابات قبل المهمة 1.
+# تنبيه قبل الانتهاء بـ 3 أيام، ومن بعد 3 أيام سماح بالباقة كاملة، ومن بعد free (بلا مسح والو).
+PLAN_WARN_MS  = 3 * 86_400_000
+PLAN_GRACE_MS = 3 * 86_400_000
+
+
+def _expiry_ms(rec):
+    v = rec.get("plan_expires_at")
+    if isinstance(v, bool): return 0
+    try:
+        v = int(v)
+    except (TypeError, ValueError):
+        return 0
+    return v if v > 0 else 0
+
+
+def _plan_status(rec, now_ms=None):
+    """سجل users/{u} → (الباقة الفعلية، معلومات الاشتراك للّوحة)."""
+    rec = rec if isinstance(rec, dict) else {}
+    plan = normalize_plan(rec.get("plan"))
+    exp = _expiry_ms(rec)
+    if not exp or plan == "free":
+        return plan, {"state": "none", "plan": plan}
+    now = int(time.time() * 1000) if now_ms is None else now_ms
+    if now >= exp + PLAN_GRACE_MS:   state = "expired"
+    elif now >= exp:                 state = "grace"
+    elif now >= exp - PLAN_WARN_MS:  state = "expiring"
+    else:                            state = "active"
+    info = {"state": state, "plan": plan, "expiresAt": exp, "graceEndsAt": exp + PLAN_GRACE_MS,
+            "period": str(rec.get("plan_period") or "")}
+    return ("free" if state == "expired" else plan), info
+
+
 def get_user_plan(uid):
-    return str(_get_user_record(uid).get("plan", "starter")).lower()
+    return _plan_status(_get_user_record(uid))[0]
 
 
 # ── فهارس الأسماء وعدّاد lifetime (بدل قراءة /users و/team_users كاملة) ──
@@ -101,9 +176,20 @@ def _username_taken(username):
                 or _fb_get(f"users/{username}") or _fb_get(f"team_users/{username}"))
 
 
-def _count_lifetime_accounts():
+_EARLY_PLANS = ("early",)
+
+
+def _slot_counter(plan):
+    """الباقات المحدودة العدد: lifetime/full (قديمة) وearly (أوائل التجار) — كل وحدة بعدّادها."""
+    plan = str(plan or "").lower()
+    if plan in _LIFETIME_PLANS: return "lifetimeAccounts"
+    if plan in _EARLY_PLANS:    return "earlyAccounts"
+    return None
+
+
+def _count_lifetime_accounts(counter="lifetimeAccounts"):
     try:
-        return max(0, int(_fb_get("counters/lifetimeAccounts") or 0))
+        return max(0, int(_fb_get(f"counters/{counter}") or 0))
     except Exception:
         return 0
 
@@ -112,14 +198,14 @@ class _LifetimeFull(Exception):
     pass
 
 
-def _adjust_lifetime_counter(delta, cap=None):
+def _adjust_lifetime_counter(delta, cap=None, counter="lifetimeAccounts"):
     """+1/-1 ذرّياً. مع cap: يرمي _LifetimeFull إذا الحد وصل (بلا كتابة)."""
     def _txn(cur):
         cur = max(0, int(cur or 0))
         if cap is not None and delta > 0 and cur + delta > cap:
             raise _LifetimeFull()
         return max(0, cur + delta)
-    _firebase_ref("counters/lifetimeAccounts").transaction(_txn)
+    _firebase_ref(f"counters/{counter}").transaction(_txn)
 
 
 # ── حماية حقول حساب المستخدم من التعديل الذاتي (Mass Assignment) ─────
@@ -132,7 +218,7 @@ def _adjust_lifetime_counter(delta, cap=None):
 # AI instructions, tokens الخ) وليس لبيانات الحساب/الخطة.
 _PROTECTED_USER_FIELDS = {
     "plan", "source", "Password", "User_ID", "Username",
-    "plan_updated",
+    "plan_updated", "plan_period", "plan_expires_at",
 }
 
 
@@ -187,7 +273,7 @@ def _rebuild_user_indexes():
     users, members = as_dict(_fb_get("users")), as_dict(_fb_get("team_users"))
     existing_channels = as_dict(_fb_get("channel_index"))
     patch, conflicts, unames, claims = {}, [], {}, {}
-    lifetime = 0
+    lifetime = early = migrated = 0
     for key, u in users.items():
         if not isinstance(u, dict):
             continue
@@ -199,8 +285,13 @@ def _rebuild_user_indexes():
             patch[f"uname_index/{lower}"] = key
         if u.get("User_ID"):
             patch[f"uid_index/{u['User_ID']}"] = key
-        if str(u.get("plan", "")).lower() in _LIFETIME_PLANS:
-            lifetime += 1
+        raw_plan = str(u.get("plan", "")).strip().lower()
+        if raw_plan in PLAN_ALIASES:  # enterprise → business (مرة وحدة، idempotent)
+            patch[f"users/{key}/plan"] = PLAN_ALIASES[raw_plan]
+            migrated += 1
+        slot = _slot_counter(u.get("plan"))
+        lifetime += slot == "lifetimeAccounts"
+        early += slot == "earlyAccounts"
         for cid in _channel_ids(u):
             if cid.isdigit():
                 claims.setdefault(cid, []).append(key)
@@ -217,9 +308,10 @@ def _rebuild_user_indexes():
             conflicts.append(f"team_uname_index/{lower}: owner {unames[lower]} vs member {key}")
         patch[f"team_uname_index/{lower}"] = key
     patch["counters/lifetimeAccounts"] = lifetime
+    patch["counters/earlyAccounts"] = early
     if not _fb_patch("/", patch):
         return None
     if conflicts:
         logging.warning(f"🔧 rebuildIndexes: {len(conflicts)} conflicts — راجعهم يدوياً")
     return {"users": len(unames), "members": len(members), "lifetimeAccounts": lifetime,
-            "conflicts": conflicts}
+            "earlyAccounts": early, "plansMigrated": migrated, "conflicts": conflicts}

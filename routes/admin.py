@@ -14,8 +14,10 @@ from flask import Blueprint, abort, jsonify, make_response, request, send_from_d
 from markupsafe import escape as _esc
 
 from core.config import (
+    EARLY_MAX_SLOTS,
     LIFETIME_MAX_SLOTS,
     PLANS,
+    normalize_plan,
 )
 from core.db import (
     _fb_get,
@@ -38,16 +40,40 @@ from services.orders import (
     _recompute_aggregates,
 )
 from services.users import (
-    _LIFETIME_PLANS,
     _LifetimeFull,
     _adjust_lifetime_counter,
     _rebuild_user_indexes,
+    _plan_status,
+    _slot_counter,
     _uname_key,
     _username_taken,
 )
 
 from core.templates import render
 bp = Blueprint("admin", __name__)
+
+# مدة الاشتراك اللي يحطّها الأدمين عند التفعيل (الدفع يدوي). بلا duration = ما تنتهيش
+# (كيما قبل)، إلا early: عام دايماً. free ما عندهاش انتهاء.
+_DURATIONS = {"month": ("monthly", 30), "year": ("yearly", 365), "none": (None, 0)}
+_DAY_MS = 86_400_000
+
+
+def _apply_duration(rec, old_plan, plan, duration):
+    """يبدّل plan_period/plan_expires_at فـ rec. تجديد نفس الباقة قبل الانتهاء يزيد على الانتهاء الحالي."""
+    duration = str(duration or "").strip().lower() or ("year" if plan == "early" else "none")
+    if duration not in _DURATIONS:
+        return False
+    period, days = _DURATIONS[duration]
+    if plan == "free" or not period:
+        rec.pop("plan_period", None); rec.pop("plan_expires_at", None)
+        return True
+    now = int(time.time() * 1000)
+    current = _plan_status(rec, now)[1].get("expiresAt", 0)
+    base = current if (old_plan == plan and current > now) else now
+    rec["plan_period"], rec["plan_expires_at"] = period, base + days * _DAY_MS
+    return True
+
+_LIFETIME_RETIRED = "باقة Lifetime ما بقاتش للبيع — المشتركين الحاليين فيها يبقاو، والجدد يختارو باقة أخرى"
 
 
 
@@ -63,21 +89,45 @@ def api_update_user_plan():
     body     = request.get_json(silent=True) or {}
     uid      = str(body.get("userId")   or "").strip()
     username = str(body.get("username") or "").strip()
-    plan     = str(body.get("plan")     or "starter").strip().lower()
+    plan     = normalize_plan(body.get("plan"))
     if not uid or not username: return err_json("Missing fields")
     if plan not in PLANS: return err_json(f"Invalid plan: {list(PLANS.keys())}")
     existing = _fb_get(f"users/{username}") or {}
-    was_lifetime = str(existing.get("plan", "")).lower() in _LIFETIME_PLANS
+    # عدّادات الباقات المحدودة (lifetime/full، early) تتبع الانتقال من/إلى الباقة
+    # (lifetime↔full ما يبدّلوش). الدخول لـ early يحجز خانة قبل الكتابة، والحد يترفض.
+    old_slot, new_slot = _slot_counter(existing.get("plan")), _slot_counter(plan)
+    # lifetime/full ما بقاتش للبيع: غير اللي عندهم من قبل يبقاو (حتى lifetime↔full)
+    if new_slot == "lifetimeAccounts" and old_slot != new_slot:
+        return err_json(_LIFETIME_RETIRED)
+    if new_slot == "earlyAccounts" and old_slot != new_slot:
+        try:
+            _adjust_lifetime_counter(1, cap=EARLY_MAX_SLOTS, counter="earlyAccounts")
+        except _LifetimeFull:
+            return err_json(f"تم الوصول للحد الأقصى ({EARLY_MAX_SLOTS}) من عرض أوائل التجار", 409)
+        except Exception as e:
+            logging.error(f"early counter reserve failed: {type(e).__name__}")
+            return err_json("Firebase unavailable", 503)
+    old_plan = normalize_plan(existing.get("plan"))
+    if not _apply_duration(existing, old_plan, plan, body.get("duration")):
+        if new_slot == "earlyAccounts" and old_slot != new_slot:
+            try: _adjust_lifetime_counter(-1, counter="earlyAccounts")
+            except Exception: pass
+        return err_json("مدة غير صحيحة: month أو year أو none")
     existing["plan"]         = plan
     existing["plan_updated"] = time.strftime("%Y-%m-%d %H:%M")
-    _fb_put(f"users/{username}", existing)
-    # عدّاد lifetime يتبع الانتقال من/إلى lifetime/full (lifetime↔full ما يبدّلوش)
-    now_lifetime = plan in _LIFETIME_PLANS
-    if was_lifetime != now_lifetime:
-        try:
-            _adjust_lifetime_counter(1 if now_lifetime else -1)
-        except Exception as e:
-            logging.error(f"lifetime counter update failed: {type(e).__name__} — شغّل rebuildIndexes")
+    if not _fb_put(f"users/{username}", existing):
+        if new_slot == "earlyAccounts" and old_slot != new_slot:
+            try: _adjust_lifetime_counter(-1, counter="earlyAccounts")
+            except Exception: pass
+        return err_json("Firebase unavailable", 503)
+    if old_slot != new_slot:
+        moves = [(old_slot, -1)] + ([] if new_slot == "earlyAccounts" else [(new_slot, 1)])
+        for counter, delta in moves:
+            if not counter: continue
+            try:
+                _adjust_lifetime_counter(delta, counter=counter)
+            except Exception as e:
+                logging.error(f"{counter} update failed: {type(e).__name__} — شغّل rebuildIndexes")
     return ok_json({"plan": plan})
 
 
@@ -88,30 +138,36 @@ def api_admin_create_client():
     username = str(body.get("username") or "").strip()
     password = str(body.get("password") or "").strip()
     store_name = str(body.get("storeName") or "").strip() or "متجري"
-    plan     = str(body.get("plan") or "starter").strip().lower()
+    plan     = normalize_plan(body.get("plan"))
     source   = str(body.get("source") or "local").strip().lower()
     if source not in ("local", "fiverr"): source = "local"
     if not username or not password: return err_json("اسم المستخدم وكلمة السر مطلوبين")
     if len(password) < 6: return err_json("كلمة السر قصيرة جداً (6 أحرف على الأقل)")
     if plan not in PLANS: return err_json(f"خطة غير صحيحة: {list(PLANS.keys())}")
+    if _slot_counter(plan) == "lifetimeAccounts": return err_json(_LIFETIME_RETIRED)
+    record = {}
+    if not _apply_duration(record, None, plan, body.get("duration")):
+        return err_json("مدة غير صحيحة: month أو year أو none")
     if _username_taken(username): return err_json("اسم المستخدم مستعمل من قبل", 409)
-    if plan in _LIFETIME_PLANS:
-        # حجز خانة lifetime ذرّياً قبل إنشاء الحساب (بدل عدّ /users كاملة)
+    slot = _slot_counter(plan)
+    if slot:
+        # حجز خانة (lifetime أو early) ذرّياً قبل إنشاء الحساب (بدل عدّ /users كاملة)
+        cap, label = (LIFETIME_MAX_SLOTS, "Lifetime") if slot == "lifetimeAccounts" else (EARLY_MAX_SLOTS, "أوائل التجار")
         try:
-            _adjust_lifetime_counter(1, cap=LIFETIME_MAX_SLOTS)
+            _adjust_lifetime_counter(1, cap=cap, counter=slot)
         except _LifetimeFull:
-            return err_json(f"تم الوصول للحد الأقصى ({LIFETIME_MAX_SLOTS}) من عروض Lifetime", 409)
+            return err_json(f"تم الوصول للحد الأقصى ({cap}) من عروض {label}", 409)
         except Exception as e:
-            logging.error(f"lifetime counter reserve failed: {type(e).__name__}")
+            logging.error(f"{slot} counter reserve failed: {type(e).__name__}")
             return err_json("Firebase unavailable", 503)
     new_uid = str(int(time.time() * 1000))
     if not _fb_put(f"users/{username}", {
         "Username": username, "Password": _hash_password(password),
         "User_ID": new_uid, "plan": plan, "source": source,
-        "plan_updated": time.strftime("%Y-%m-%d %H:%M"),
+        "plan_updated": time.strftime("%Y-%m-%d %H:%M"), **record,
     }):
-        if plan in _LIFETIME_PLANS:
-            try: _adjust_lifetime_counter(-1)
+        if slot:
+            try: _adjust_lifetime_counter(-1, counter=slot)
             except Exception: pass
         return err_json("Firebase unavailable", 503)
     _fb_put(f"uid_index/{new_uid}", username)
@@ -159,7 +215,9 @@ def api_admin_list_clients():
         if isinstance(u, dict):
             result.append({
                 "username": u.get("Username", uname), "userId": u.get("User_ID", ""),
-                "plan": u.get("plan", "starter"), "planUpdated": u.get("plan_updated", ""),
+                "plan": normalize_plan(u.get("plan")), "planUpdated": u.get("plan_updated", ""),
+                "planPeriod": u.get("plan_period", ""), "planExpiresAt": u.get("plan_expires_at", 0),
+                "planState": _plan_status(u)[1]["state"],
                 "source": u.get("source", "local"),
             })
     result.sort(key=lambda x: x.get("planUpdated",""), reverse=True)

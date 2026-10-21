@@ -22,6 +22,11 @@ shipping_bp = Blueprint("shipping", __name__)
 
 YALIDINE_BASE_URL = "https://api.yalidine.app/v1"
 
+# المهمة 1 (F): الربط مع شركات الشحن ما تجرّبش فالإنتاج — "قريبًا". الربط وإرسال الشحنات
+# يترفضو (بلا حفظ حتى إعداد)؛ status/disconnect يبقاو باش اللي ربط من قبل يقدر يفك الربط.
+SHIPPING_ENABLED = False
+_COMING_SOON = "ربط شركات الشحن قريبًا — مازال ما تفعّلش"
+
 
 def _yalidine_headers(api_id, api_token):
     return {"X-API-ID": api_id, "X-API-TOKEN": api_token, "Content-Type": "application/json"}
@@ -31,6 +36,8 @@ def _yalidine_headers(api_id, api_token):
 @require_auth
 @require_perm("integrations")
 def connect_shipping_provider():
+    if not SHIPPING_ENABLED:
+        return err_json(_COMING_SOON, 503)
     uid = request.auth_uid
     body = request.get_json(silent=True) or {}
     provider = str(body.get("provider") or "").strip().lower()
@@ -92,6 +99,8 @@ def shipping_disconnect():
 @require_perm("orders")
 def create_shipment():
     """يُستدعى بزر 'أرسل للشحن' جنب كل طلب مؤكد بجدول الطلبات."""
+    if not SHIPPING_ENABLED:
+        return err_json(_COMING_SOON, 503)
     uid = request.auth_uid
     body = request.get_json(silent=True) or {}
     order_id = str(body.get("orderId") or "").strip()

@@ -61,16 +61,21 @@ async function loadUserPlan(){
       currentPlan = r.data.plan;
       merchantCurrency = r.data.currency || "DZD";
       BOT_LAUNCHED = !!r.data.botLaunched;
+      PLAN_FEATURES = r.data.features || {};
+      SUBSCRIPTION = r.data.subscription || {};
       PLAN_USAGE = r.data.usage || {};
       USER_SOURCE = r.data.source || "local";
-      LIFETIME_SLOTS_LEFT = r.data.lifetimeSlotsLeft;
+      EARLY_SLOTS_LEFT = r.data.earlySlotsLeft;
       if(r.data.role) currentRole = r.data.role;
       TEAM_COUNT = r.data.teamCount || 0;
       var navPlansEl = document.getElementById("navPlans");
       if(navPlansEl) navPlansEl.style.display = (USER_SOURCE==="fiverr") ? "none" : "flex";
+      var exportBtn = document.getElementById("exportOrdersBtn");
+      if(exportBtn) exportBtn.style.display = planHas("export") ? "inline-flex" : "none";
       var navTeamEl = document.getElementById("navTeam");
       if(navTeamEl) navTeamEl.style.display = (currentRole==="owner" && planHas("team")) ? "flex" : "none";
       renderCurrencyButtons();
+      renderPlanAlerts();
       var pd = document.getElementById("planDisplay");
       if(pd) pd.innerHTML = 'Plan: <span class="plan-badge plan-'+currentPlan+'">'+currentPlan.toUpperCase()+'</span>';
       document.getElementById("s_plan").value = currentPlan;
@@ -78,51 +83,57 @@ async function loadUserPlan(){
   }catch(e){}
 }
 
+// الميزات جاية من PLANS فالسيرفر (features فـ /api/getUserPlan) — ما كاينش نسخة ثانية هنا
 function planHas(feature){
-  var features = {
-    free:       {bot:false,store:false,landing:false,integrations:false,team:false},
-    starter:    {bot:false,store:true, landing:true, integrations:false,team:true},
-    pro:        {bot:true, store:true, landing:true, integrations:true, team:true},
-    enterprise: {bot:true, store:true, landing:true, integrations:true, team:true},
-    full:       {bot:true, store:true, landing:true, integrations:true, team:true},
-    lifetime:   {bot:true, store:true, landing:true, integrations:true, team:true}
-  };
-  return (features[currentPlan]||features.free)[feature]||false;
+  return !!(PLAN_FEATURES && PLAN_FEATURES[feature]);
 }
 
-function setBillingCycle(cycle){
-  var isYearly = cycle==="yearly";
-  document.getElementById("billMonthlyBtn").classList.toggle("active", !isYearly);
-  document.getElementById("billYearlyBtn").classList.toggle("active", isYearly);
-  document.querySelectorAll(".price-m").forEach(function(el){ el.style.display = isYearly?"none":"inline"; });
-  document.querySelectorAll(".price-y").forEach(function(el){ el.style.display = isYearly?"inline":"none"; });
-  document.querySelectorAll(".unit-m").forEach(function(el){ el.style.display = isYearly?"none":"inline"; });
-  document.querySelectorAll(".unit-y").forEach(function(el){ el.style.display = isYearly?"inline":"none"; });
+// تنبيهات أعلى اللوحة: الاشتراك (3 أيام قبل الانتهاء، وخلال 3 أيام السماح، ومن بعد)
+// وردود البوت (من 80% ثم عند الحد)
+function renderPlanAlerts(){
+  var box = document.getElementById("planAlerts");
+  if(!box) return;
+  var alerts = [];
+  var sub = SUBSCRIPTION || {};
+  var day = function(ms){ return new Date(ms).toLocaleDateString(); };
+  if(sub.state==="expiring")
+    alerts.push({level:"warn", text:t("sub_expiring").replace("{date}", day(sub.expiresAt))});
+  else if(sub.state==="grace")
+    alerts.push({level:"danger", text:t("sub_grace").replace("{date}", day(sub.expiresAt)).replace("{grace}", day(sub.graceEndsAt))});
+  else if(sub.state==="expired")
+    alerts.push({level:"danger", text:t("sub_expired").replace("{plan}", String(sub.plan||"").toUpperCase())});
+  var u = (PLAN_USAGE||{}).botMsgs;
+  if(u && u.cap){
+    var txt = t("bot_usage_x_of_y").replace("{x}", u.used).replace("{y}", u.cap);
+    if(u.used >= u.cap) alerts.push({level:"danger", text:t("bot_cap_reached")+" — "+txt});
+    else if(u.used >= u.cap*0.8) alerts.push({level:"warn", text:txt});
+  }
+  box.innerHTML = alerts.map(function(a){
+    return '<div class="plan-alert plan-alert-'+a.level+'"><i class="bi bi-exclamation-triangle"></i> '+esc(a.text)+'</div>';
+  }).join("");
+  box.style.display = alerts.length ? "block" : "none";
 }
 
 function highlightCurrentPlan(){
-  ["free","starter","pro","enterprise","full","lifetime"].forEach(function(p){
+  ["free","starter","pro","business","early"].forEach(function(p){
     var el = document.getElementById("plan_"+p);
     if(el) el.classList.toggle("current", p===currentPlan);
   });
-  var badge = document.getElementById("lifetimeSlotsBadge");
-  if(badge){
-    if(LIFETIME_SLOTS_LEFT!==null && LIFETIME_SLOTS_LEFT!==undefined){
-      badge.style.display = "inline-block";
-      badge.textContent = "🔥 "+LIFETIME_SLOTS_LEFT+" من 50 متبقي فقط";
-    } else {
-      badge.style.display = "none";
-    }
+  var early = document.getElementById("earlySlotsBadge");
+  if(early){
+    var hasSlots = EARLY_SLOTS_LEFT!==null && EARLY_SLOTS_LEFT!==undefined;
+    early.style.display = hasSlots ? "inline-block" : "none";
+    if(hasSlots) early.textContent = "🔥 "+EARLY_SLOTS_LEFT+" "+t("early_slots_left");
   }
   var box = document.getElementById("usageBox");
   var keys = Object.keys(PLAN_USAGE||{});
   if(!keys.length){ box.style.display="none"; return; }
   box.style.display = "block";
-  var labels = {orders:"الطلبات هذا الشهر", botMsgs:"رسائل البوت هذا الشهر"};
+  var labels = {orders:t("orders_this_month"), botMsgs:t("bot_replies_this_month")};
   box.innerHTML = keys.map(function(k){
     var u = PLAN_USAGE[k];
     var pct = Math.min(100, Math.round((u.used/u.cap)*100));
-    var color = pct>=90?"var(--red)":pct>=70?"var(--yellow)":"var(--green)";
+    var color = pct>=100?"var(--red)":pct>=80?"var(--yellow)":"var(--green)";
     return '<div class="table-wrap" style="padding:16px;margin-bottom:10px">'+
       '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px">'+
         '<span>'+(labels[k]||k)+'</span><strong>'+u.used+' / '+u.cap+'</strong>'+

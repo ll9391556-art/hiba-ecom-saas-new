@@ -79,6 +79,8 @@ from services.users import (
     _usage_month_key,
     _get_usage,
     _increment_usage,
+    _reserve_usage,
+    _release_usage,
     _plan_cap,
     _under_cap,
     _get_user_record,

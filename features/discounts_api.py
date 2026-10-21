@@ -14,7 +14,8 @@ from app import (
     require_auth, require_perm, _fb_get, _fb_put, _fb_patch, _fb_delete,
     ok_json, err_json, _any_shared_limited,
 )
-from services.coupons import coupon_discount, coupon_problem
+from services.coupons import COUPONS_NOT_IN_PLAN, coupon_discount, coupon_problem
+from services.users import planHas_server
 
 discounts_bp = Blueprint("discounts", __name__)
 
@@ -80,6 +81,8 @@ def list_coupons():
 @require_perm("store")
 def create_coupon():
     uid = request.auth_uid
+    if not planHas_server(uid, "coupons"):
+        return err_json(COUPONS_NOT_IN_PLAN, 403)
     body = request.get_json(silent=True) or {}
     code = re.sub(r"[^A-Za-z0-9_-]", "", str(body.get("code") or "").strip().upper())
     if not code:
@@ -97,6 +100,8 @@ def create_coupon():
 @require_perm("store")
 def update_coupon():
     uid = request.auth_uid
+    if not planHas_server(uid, "coupons"):
+        return err_json(COUPONS_NOT_IN_PLAN, 403)
     body = request.get_json(silent=True) or {}
     code = str(body.get("code") or "").strip().upper()
     if not code:
@@ -138,6 +143,8 @@ def validate_coupon_public():
     if _any_shared_limited(("coupon_ip_store", f"{client_ip}|{uid}"), ("coupon_store", uid)):
         return err_json("محاولات كثيرة جداً — حاول بعد قليل", 429)
 
+    if not planHas_server(uid, "coupons"):
+        return err_json("كود الخصم غير متاح فهاد المتجر", 400)
     c = _fb_get(f"data/{uid}/coupons/{code}")
     # نفس التحقق اللي يستعملو addOrder (services/coupons.py)
     problem = coupon_problem(c, subtotal)
