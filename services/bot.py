@@ -9,7 +9,9 @@ import hmac
 import json
 import logging
 import os
+import html
 import re
+import unicodedata
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -19,7 +21,7 @@ import requests
 from google import genai
 from google.genai import types
 
-from core.config import _GEMINI_MODELS, _JSON_END, _JSON_START, MAX_HISTORY_TURNS, PLANS
+from core.config import _GEMINI_MODELS, _JSON_END, _JSON_START, CURRENCY_SYMBOLS_PY, MAX_HISTORY_TURNS, PLANS
 from core.db import _fb_get, _fb_keys, _fb_patch, _fb_put, _fb_query, _firebase_ref
 from core.security import _cleanup_shared_limits
 from core.util import _mask_id
@@ -322,13 +324,63 @@ def _log_conversation(uid, sender_id, direction, text, platform, via="", page_id
         logging.error(f"_log_conversation: {e}")
 
 
-def get_products_text(bot_settings):
+# عملة ردود البوت = عملة إعدادات المتجر (الافتراضي دج). قبل: الأسعار كانت تدخل للـ prompt
+# أرقام بلا عملة، وGemini كان يخمّن ("درهم" مع الدارجة).
+_CURRENCY_NAMES = {"DZD": "الدينار الجزائري", "EUR": "اليورو", "USD": "الدولار الأمريكي"}
+
+
+def _store_currency(uid):
+    """(الرمز، الاسم) لعملة المتجر — DZD إذا ما كانتش أو قيمة مجهولة."""
+    code = str((_fb_get(f"data/{uid}/storeSettings/currency") if uid else None) or "DZD").upper()
+    if code not in CURRENCY_SYMBOLS_PY:
+        code = "DZD"
+    return CURRENCY_SYMBOLS_PY[code], _CURRENCY_NAMES[code]
+
+
+def _fmt_price(value):
+    """سعر للعرض فردود البوت: بلا ".0" وبفاصل الآلاف (فراغ) — 9500.0 → "9 500".
+    الكسور تبان غير إلا كانت (12.5). قيمة ماشي رقم تبقى كيما هي، والفارغة "?"."""
+    if value is None or isinstance(value, bool) or str(value).strip() == "":
+        return "?"
+    try:
+        num = float(str(value).strip().replace(",", "."))
+    except ValueError:
+        return str(value).strip()
+    if num != num or num in (float("inf"), float("-inf")):
+        return str(value).strip()
+    rounded = round(num, 2)
+    whole = int(abs(rounded))
+    frac = ("%.2f" % (abs(rounded) - whole))[1:].rstrip("0").rstrip(".")
+    sign = "-" if rounded < 0 else ""
+    return sign + f"{whole:,}".replace(",", " ") + frac
+
+
+# أسماء/فئات المنتجات يكتبوهم التاجر أو أعضاء الفريق (وتجي من WooCommerce): قبل ما يدخلو
+# للـ prompt نحيّدو HTML والأسطر الجديدة والحروف الخفية (باش اسم ما يزيدش "تعليمات")، ونحدّو الطول.
+_PROMPT_NAME_MAX     = 80
+_PROMPT_CATEGORY_MAX = 40
+_HTML_TAG = re.compile(r"<[^>]*>")
+
+
+def _clean_prompt_text(value, max_len):
+    if value is None:
+        return ""
+    s = _HTML_TAG.sub(" ", str(value))
+    s = _HTML_TAG.sub(" ", html.unescape(s))
+    s = "".join(" " if unicodedata.category(ch) in ("Cc", "Zl", "Zp") else ch
+                for ch in s if unicodedata.category(ch) != "Cf")
+    s = " ".join(s.split())
+    return s if len(s) <= max_len else s[:max_len - 1].rstrip() + "…"
+
+
+def get_products_text(bot_settings, currency=None):
     try:
         uid      = bot_settings.get("User_ID")
         products = _fb_get(f"data/{uid}/products") if uid else None
         if products and isinstance(products, dict):
+            symbol = (currency or _store_currency(uid))[0]
             sold = _sold_by_name(_get_stats(uid))
-            lines = [f"- {p.get('name','?')}: {p.get('sell','?')} | stock:{_stock_fields(p, sold.get(p.get('name',''), 0))['available']} | {p.get('category','')}".strip()
+            lines = [f"- {_clean_prompt_text(p.get('name','?'), _PROMPT_NAME_MAX)}: {_fmt_price(p.get('sell'))} {symbol} | stock:{_stock_fields(p, sold.get(p.get('name',''), 0))['available']} | {_clean_prompt_text(p.get('category',''), _PROMPT_CATEGORY_MAX)}".strip()
                      for p in products.values() if isinstance(p,dict)]
             if lines: return "\n".join(lines)
     except Exception: pass
@@ -458,11 +510,13 @@ def ask_gemini(sender_id, user_message, bot_settings,
     merchant_uid = str(bot_settings.get("User_ID","") or "")
     try:
         instructions = bot_settings.get("AI_instructions","أنت مساعد مبيعات ذكي.")
-        products     = get_products_text(bot_settings)
+        currency     = _store_currency(merchant_uid)
+        products     = get_products_text(bot_settings, currency)
         history_text = history_to_text(get_history(sender_id, merchant_uid))
         req_format = '{"product":"اسم المنتج","quantity":"الكمية","name":"اسم العميل","phone":"رقم الهاتف","city":"المدينة","delivery_type":"منزل أو مكتب الاستلام","address":"العنوان"}'
         system_text = f"""أنت مساعد مبيعات لمتجر إلكتروني. مهمتك مساعدة العملاء في الطلب.
 رد بنفس لغة العميل (عربي أو فرنسي).
+العملة: {currency[0]} ({currency[1]}). اكتب كل الأسعار بهذه العملة وبهذا الشكل: 9 500 {currency[0]}. لا تستعمل درهم ولا أي عملة أخرى.
 اجمع من العميل بشكل ودي: الاسم الكامل، الهاتف، المدينة، اسم المنتج، الكمية، العنوان، **ونوع التوصيل الذي يفضّله العميل بنفسه (توصيل للمنزل، أو توصيل لمكتب الاستلام/Stop Desk)** — اسأله بوضوح عن هذا الخيار ولا تفترضه أبداً من نفسك. لا تكتب تأكيد الطلب قبل جمع كل هذه المعلومات.
 تعليمات إضافية من المتجر:
 {instructions}
@@ -509,6 +563,24 @@ def ask_gemini(sender_id, user_message, bot_settings,
 
 _GEMINI_ERROR_REPLY = "عذراً، حاول مرة أخرى بعد قليل."
 
+# ماسنجر وإنستغرام ما يعرضوش Markdown: Gemini يكتب **غليظ** و*مائل* و## عناوين و`كود`
+# والزبون يشوف النجوم كما هي. نحيّدو الرموز بلا ما نبدّلو الكلام (واتساب يعرض *غليظ*، يبقى).
+_MD_HEADING = re.compile(r"^(\s*)#{1,6}\s+", re.M)
+_MD_BULLET  = re.compile(r"^(\s*)\*\s+", re.M)
+_MD_BOLD    = re.compile(r"\*\*(.+?)\*\*", re.S)
+_MD_ITALIC  = re.compile(r"(?<!\*)\*(?!\s)([^*\n]+?)(?<!\s)\*(?!\*)")
+_PLAIN_TEXT_PLATFORMS = ("fb", "ig")
+
+
+def _strip_markdown(text):
+    if not text:
+        return text
+    s = _MD_HEADING.sub(r"\1", text)
+    s = _MD_BULLET.sub(r"\1• ", s)
+    s = _MD_BOLD.sub(r"\1", s)
+    s = _MD_ITALIC.sub(r"\1", s)
+    return s.replace("`", "").replace("*", "")
+
 
 def process_bg(sender_id, user_text, bot, send_fn,
                media_bytes=b"", mime_type="", is_voice=False, is_image=False, platform="fb", page_id=""):
@@ -535,6 +607,8 @@ def process_bg(sender_id, user_text, bot, send_fn,
                 reply = "✅ تم استلام طلبك بنجاح! سنتواصل معك قريباً لتأكيد التوصيل."
             elif not reply or not reply.strip():
                 reply = "عذراً، لم أتمكن من المعالجة الآن. حاول مرة أخرى."
+            if platform in _PLAIN_TEXT_PLATFORMS:
+                reply = _strip_markdown(reply)  # نفس النص يتبعث ويتسجّل فالمحادثات
             try:
                 ok = send_fn(reply)
                 logging.info(f"📨 send_fn result for {_mask_id(sender_id)}: {ok}")
