@@ -213,6 +213,37 @@ def test_bc_is_only_for_confirmed_orders():
     assert 'av<=5?"bn":"bs"' in js["shop.js"]
 
 
+# ── 6. الحقول ──
+FIELDS = [".form-control", ".form-select", ".search-input", ".shop-sort", "select.status-sel",
+          ".conv-chat-input textarea", ".rate-comment"]
+
+
+def test_fields_follow_identity():
+    """خط 16px (وإلا iOS يكبّر الصفحة عند الكتابة)، زوايا 14، خلفية بيضاء، focus بلون brand."""
+    rules = _rules(_read(APP_CSS))
+    for sel in FIELDS:
+        r = rules[sel]
+        assert _px(r["font-size"]) >= 16, sel
+        assert r["border-radius"] == "var(--r-field)", sel
+        assert r["background"] == "var(--white)" and r["border"] == "1px solid var(--line)", sel
+        assert r["font-family"] == "inherit", sel
+    for sel in (".form-control", ".form-select", ".search-input"):
+        assert rules[sel]["min-height"] == "var(--h-field)", sel
+    focus = rules[".form-control:focus"]
+    assert focus["border-color"] == "var(--brand)" and focus["box-shadow"] == "var(--focus-ring)"
+    assert _rules(_read(TOKENS))[":root"]["--r-field"] == "14px"
+
+
+def test_feature_page_fields_are_16px():
+    for name in FEATURE_PAGES:
+        rules = _rules(_page(name))
+        fields = [s for s in rules if s in ("input", "select", "textarea")]
+        assert fields, name
+        for sel in fields:
+            assert _px(rules[sel].get("font-size")) >= 16, f"{name} {sel}"
+            assert rules[sel].get("border-radius") == "var(--r-field)", f"{name} {sel}"
+
+
 def test_body_text_is_at_least_16px():
     body = _rules(_read(APP_CSS))["body"]
     assert body["font-family"] == "var(--font)"
