@@ -115,7 +115,7 @@ function renderTeamTable(list){
       return '<span class="member-perm-badge">'+esc(_teamPermLabel(k))+'</span>';
     }).join("") || '<span style="color:var(--muted);font-size:11px">—</span>';
     var statusBadge = m.active!==false
-      ? '<span class="badge bc">'+t("active")+'</span>'
+      ? '<span class="badge bs">'+t("active")+'</span>'
       : '<span class="badge br">'+t("inactive")+'</span>';
     return '<tr>'+
       '<td><strong>'+esc(m.username)+'</strong></td>'+

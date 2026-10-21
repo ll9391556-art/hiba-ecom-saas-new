@@ -10,7 +10,7 @@ async function loadProducts(){
       var products = r.data||[];
       var cur = curSym();
       tbl.innerHTML = products.map(function(p){
-        var stCls = {InStock:"bc","In Stock":"bc","Low Stock":"bn",LowStock:"bn","Out of Stock":"br",OutOfStock:"br"}[p.stat||""]||"bp";
+        var stCls = {InStock:"bs","In Stock":"bs","Low Stock":"bn",LowStock:"bn","Out of Stock":"br",OutOfStock:"br"}[p.stat||""]||"bp";
         return '<tr>'+
           '<td><strong>'+esc(p.name||"—")+'</strong></td>'+
           '<td>'+esc(p.category||"—")+'</td>'+
@@ -71,7 +71,7 @@ async function loadCustomers(){
 function renderCustomers(list){
   var tbl = document.getElementById("customersTbl");
   tbl.innerHTML = list.map(function(c){
-    var typeCls = {Good:"bc",Bad:"br",Neutral:"bn"}[c.type]||"bp";
+    var typeCls = {Good:"bs",Bad:"br",Neutral:"bn"}[c.type]||"bp";
     return '<tr>'+
       '<td><strong>'+esc(c.name||"—")+'</strong></td>'+
       '<td>'+esc(c.phone||"—")+'</td>'+

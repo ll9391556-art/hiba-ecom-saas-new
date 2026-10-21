@@ -1,0 +1,30 @@
+/* OrderFlow — هوية التصميم (D1). الملف الوحيد اللي يعرّف الألوان:
+   كل الصفحات تحمّلو قبل app.css. المرجع: design/PLAN.md و design/Main.dc.html.
+   --ink للنصوص فقط، ممنوع كخلفية. */
+:root{
+  --brand:#3B2BFF;--brand-dark:#2A1DD1;--brand-light:#E6E3FF;
+  --volt:#D4FF3A;--volt-light:#EFFFC2;
+  --ink:#0B0B1F;--text:#2A2B3D;--muted:#5A5B70;
+  --flash:#D9230F;--bg:#F4F4F8;--line:#DCDCE6;
+  --white:#FFFFFF;--soft:#EEEEF4;
+
+  /* الحالات: خلفية / نص */
+  --st-confirmed-bg:#E6E3FF;--st-confirmed-fg:#2A1DD1;
+  --st-delivered-bg:#EFFFC2;--st-delivered-fg:#3A4A00;
+  --st-pending-bg:#FFF1D6;--st-pending-fg:#7A4B00;
+  --st-refused-bg:#FFE3DF;--st-refused-fg:#A3180A;
+  --st-neutral-bg:#EEEEF4;--st-neutral-fg:#3A3B4F;
+
+  /* الخط والمقاسات */
+  --font:'Readex Pro',system-ui,-apple-system,'Segoe UI',Tahoma,Arial,sans-serif;
+  --r-btn:14px;--r-field:14px;--r-card:22px;--r-pill:999px;
+  --h-btn:48px;--h-btn-sm:40px;--h-field:48px;
+  --focus-ring:0 0 0 3px rgba(59,43,255,.22);
+  --shadow:0 8px 24px rgba(11,11,31,.08);
+
+  /* الأسماء القديمة (index.html و JS يستعملوها) — كلها فاتحة */
+  --sidebar:#FFFFFF;--card:#FFFFFF;--card2:#F4F4F8;--border:#DCDCE6;
+  --accent:#3B2BFF;--accent2:#2A1DD1;--accent-soft:rgba(59,43,255,.10);
+  --green:#3A4A00;--red:#D9230F;--yellow:#FFB020;--amber:#7A4B00;
+  --blue:#3B2BFF;--purple:#2A1DD1;
+}

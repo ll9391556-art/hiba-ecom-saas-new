@@ -70,7 +70,8 @@ Deployment: production runs Python 3.10 in Docker (`Dockerfile`), so keep code c
 
 ## UI/UX and media rules
 
-- Use modern UI components with GSAP animations and Lenis smooth scrolling. Use high-contrast interactive elements, subtle glows and dark-mode dynamics (the app already has a dark/light toggle stored in `localStorage.of_theme`).
+- Use modern UI components with GSAP animations and Lenis smooth scrolling. Use high-contrast interactive elements.
+- The identity is light only (design D1): no dark backgrounds anywhere; `--ink` (#0B0B1F) is for text only. All colors and sizes are CSS variables in `static/css/tokens.css`, loaded before `app.css` by every page (templates included); old names (`--card`, `--accent`…) are kept as light aliases. Font: Readex Pro, body text ≥ 16px, buttons 14–16px corners, cards 20–28px. Logo: `static/img/logo.svg` / `logo-volt.svg`, favicon `static/favicon.svg`. `theme.js` keeps `applyTheme`/`toggleTheme`/`DARK_MODE` (always `false`) for old callers; the toggle markup stays `hidden`, and `localStorage.of_theme` is ignored. Status badges: `bp` pending, `bc` confirmed order only, `bi` delivered, `br` refused, `bn` neutral, `bs` in stock / published / active. `tests/test_design_d1.py` pins all of this.
 - Always structure smooth scrolling with `lenis`. Use `gsap` (with `ScrollTrigger`) for scroll triggers, timeline animations and landing-page hero reveals.
 - **Loading the libraries:** Flask serves only `static/`, so `node_modules/` is not reachable from the browser and there is no bundler. Load the versions pinned in `package-lock.json` (gsap 3.15.0, lenis 1.3.27) the same way Chart.js is loaded in `index.html`: an exact-version jsDelivr URL (`gsap@3.15.0/dist/gsap.min.js`, `gsap@3.15.0/dist/ScrollTrigger.min.js`, `lenis@1.3.27/dist/lenis.min.js` plus `lenis.css`) with an SRI `integrity` hash. Alternatively, copy those `dist` files into `static/`.
 - **Where pages are built:**
