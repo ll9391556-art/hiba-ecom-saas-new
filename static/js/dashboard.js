@@ -72,6 +72,7 @@ async function loadUserPlan(){
       var navTeamEl = document.getElementById("navTeam");
       if(navTeamEl) navTeamEl.style.display = (currentRole==="owner" && planHas("team")) ? "flex" : "none";
       renderCurrencyButtons();
+      renderPlanAlerts();
       var pd = document.getElementById("planDisplay");
       if(pd) pd.innerHTML = 'Plan: <span class="plan-badge plan-'+currentPlan+'">'+currentPlan.toUpperCase()+'</span>';
       document.getElementById("s_plan").value = currentPlan;
@@ -82,6 +83,23 @@ async function loadUserPlan(){
 // الميزات جاية من PLANS فالسيرفر (features فـ /api/getUserPlan) — ما كاينش نسخة ثانية هنا
 function planHas(feature){
   return !!(PLAN_FEATURES && PLAN_FEATURES[feature]);
+}
+
+// تنبيهات أعلى اللوحة: ردود البوت (من 80% ثم عند الحد)
+function renderPlanAlerts(){
+  var box = document.getElementById("planAlerts");
+  if(!box) return;
+  var alerts = [];
+  var u = (PLAN_USAGE||{}).botMsgs;
+  if(u && u.cap){
+    var txt = t("bot_usage_x_of_y").replace("{x}", u.used).replace("{y}", u.cap);
+    if(u.used >= u.cap) alerts.push({level:"danger", text:t("bot_cap_reached")+" — "+txt});
+    else if(u.used >= u.cap*0.8) alerts.push({level:"warn", text:txt});
+  }
+  box.innerHTML = alerts.map(function(a){
+    return '<div class="plan-alert plan-alert-'+a.level+'"><i class="bi bi-exclamation-triangle"></i> '+esc(a.text)+'</div>';
+  }).join("");
+  box.style.display = alerts.length ? "block" : "none";
 }
 
 function highlightCurrentPlan(){
@@ -99,11 +117,11 @@ function highlightCurrentPlan(){
   var keys = Object.keys(PLAN_USAGE||{});
   if(!keys.length){ box.style.display="none"; return; }
   box.style.display = "block";
-  var labels = {orders:"الطلبات هذا الشهر", botMsgs:"رسائل البوت هذا الشهر"};
+  var labels = {orders:t("orders_this_month"), botMsgs:t("bot_replies_this_month")};
   box.innerHTML = keys.map(function(k){
     var u = PLAN_USAGE[k];
     var pct = Math.min(100, Math.round((u.used/u.cap)*100));
-    var color = pct>=90?"var(--red)":pct>=70?"var(--yellow)":"var(--green)";
+    var color = pct>=100?"var(--red)":pct>=80?"var(--yellow)":"var(--green)";
     return '<div class="table-wrap" style="padding:16px;margin-bottom:10px">'+
       '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px">'+
         '<span>'+(labels[k]||k)+'</span><strong>'+u.used+' / '+u.cap+'</strong>'+

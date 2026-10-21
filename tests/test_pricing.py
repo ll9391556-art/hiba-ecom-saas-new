@@ -176,3 +176,89 @@ def test_lifetime_is_gone_from_the_ui(client):
     assert 'id="plan_lifetime"' not in html and "lifetimeSlotsBadge" not in DASH
     admin = client.get("/admin").get_data(as_text=True)
     assert '<option value="lifetime">' not in admin and "lifetimeSlotsDisplay" not in admin
+
+
+# ── D. سقف ردود البوت الشهري ─────────────────────────────
+class _Sync:
+    def submit(self, fn, *a, **kw):
+        fn(*a, **kw)
+
+
+@pytest.fixture
+def bot_run(app, monkeypatch, seed_owner):
+    monkeypatch.setattr("services.bot._executor", _Sync())
+    fakes.GEMINI_CALLS.clear()
+    fakes.GEMINI_RESPONDER["fn"] = lambda model, contents, config: "مرحبا بيك"
+    owner = seed_owner(plan="pro")
+    bot = {"User_ID": owner["uid"], "Gemini_api_key": "dummy-gemini-key", "plan": "pro"}
+    sent = []
+
+    def run(text="salam"):
+        app.process_bg("SID1", text, bot, lambda msg: sent.append(msg) or True)
+    run.sent, run.owner = sent, owner
+    run.path = f"data/{owner['uid']}/usage/{app._usage_month_key()}/botMsgCount"
+    return run
+
+
+def test_bot_stops_silently_at_the_cap(db, bot_run):
+    db.set(bot_run.path, 1499)
+    bot_run()
+    assert bot_run.sent == ["مرحبا بيك"] and db.get(bot_run.path) == 1500
+    calls = len(fakes.GEMINI_CALLS)
+    bot_run("salam 2")
+    assert bot_run.sent == ["مرحبا بيك"]            # ما كاين حتى رد ولا اعتذار للزبون
+    assert len(fakes.GEMINI_CALLS) == calls and db.get(bot_run.path) == 1500
+
+
+def test_reservation_is_one_atomic_step(app, db, bot_run, monkeypatch):
+    uid = bot_run.owner["uid"]
+    assert [app._reserve_usage(uid, "botMsgCount", 2) for _ in range(3)] == [True, True, False]
+    assert db.get(bot_run.path) == 2
+    db.set(bot_run.path, 0)
+    boom = lambda *a, **k: (_ for _ in ()).throw(AssertionError("check-then-increment"))
+    monkeypatch.setattr("services.bot._under_cap", boom, raising=False)
+    monkeypatch.setattr("services.bot._increment_usage", boom, raising=False)
+    bot_run()
+    assert db.get(bot_run.path) == 1
+
+
+def test_gemini_failure_gives_the_reply_back(db, bot_run, monkeypatch):
+    monkeypatch.setattr("services.bot.sleep", lambda s: None)
+    db.set(bot_run.path, 10)
+    fakes.GEMINI_RESPONDER["fn"] = lambda *a: (_ for _ in ()).throw(RuntimeError("down"))
+    bot_run()
+    assert db.get(bot_run.path) == 10
+
+
+def test_messages_still_reach_conversations_at_the_cap(client, app, db, bot_run, monkeypatch):
+    import hashlib, hmac, json
+    uid = bot_run.owner["uid"]
+    bot = {"User_ID": uid, "Gemini_api_key": "dummy-gemini-key", "plan": "pro", "whtsapp_token": "wa-tok"}
+    monkeypatch.setattr("services.bot.get_user_settings", lambda cid: bot if cid == "PNID" else None)
+    outgoing = []
+    monkeypatch.setattr("services.bot.send_whatsapp_message", lambda *a: outgoing.append(a) or True)
+    db.set(bot_run.path, 1500)
+    body = json.dumps({"object": "whatsapp_business_account", "entry": [{"changes": [{"value": {
+        "metadata": {"phone_number_id": "PNID"},
+        "messages": [{"from": "213555000111", "type": "text", "text": {"body": "salam"}}]}}]}]}).encode()
+    sig = hmac.new(b"dummy-secret", body, hashlib.sha256).hexdigest()
+    r = client.post("/webhook", data=body, content_type="application/json",
+                    headers={"X-Hub-Signature-256": "sha256=" + sig})
+    assert r.status_code == 200
+    msgs = list((db.get(f"conversations/{uid}/213555000111") or {}).values())
+    assert [m["direction"] for m in msgs] == ["in"] and msgs[0]["text"] == "salam"
+    assert fakes.GEMINI_CALLS == [] and outgoing == []
+
+
+def test_get_user_plan_reports_bot_usage(client, db, bot_run):
+    db.set(bot_run.path, 1200)
+    assert _plan(client, bot_run.owner)["usage"]["botMsgs"] == {"used": 1200, "cap": 1500}
+
+
+def test_dashboard_warns_at_80_percent_and_at_the_cap():
+    fn = DASH[DASH.index("function renderPlanAlerts("):]
+    fn = fn[:fn.index("\n}\n")]
+    assert "0.8" in fn and "botMsgs" in fn and "bot_cap_reached" in fn and "bot_usage_x_of_y" in fn
+    assert "renderPlanAlerts()" in DASH[DASH.index("async function loadUserPlan("):]
+    assert 'id="planAlerts"' in (STATIC / "index.html").read_text(encoding="utf-8")
+    assert "استعملت {x} من {y} رد هذا الشهر" in DASH

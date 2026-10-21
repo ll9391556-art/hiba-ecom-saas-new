@@ -54,6 +54,46 @@ def _increment_usage(uid, field):
         return new_val
 
 
+class _CapReached(Exception):
+    pass
+
+
+def _reserve_usage(uid, field, cap):
+    """فحص الحد + الزيادة فـ transaction وحدة (بدل _under_cap ثم _increment_usage، اللي
+    يخلّيو رسائل متزامنة يفوتو الحد). True = تحجزت وحدة، False = الحد وصل. بلا cap = زيادة عادية."""
+    if not cap:
+        _increment_usage(uid, field)
+        return True
+    path = f"data/{uid}/usage/{_usage_month_key()}/{field}"
+
+    def _txn(cur):
+        cur = cur if isinstance(cur, int) else 0
+        if cur >= cap:
+            raise _CapReached()
+        return cur + 1
+    try:
+        _firebase_ref(path).transaction(_txn)
+        return True
+    except _CapReached:
+        return False
+    except Exception as e:
+        logging.error(f"_reserve_usage transaction failed, fallback: {type(e).__name__}")
+        used = _get_usage(uid, field)
+        if used >= cap:
+            return False
+        _fb_put(path, used + 1)
+        return True
+
+
+def _release_usage(uid, field):
+    """رجوع وحدة محجوزة (مثلاً Gemini فشل وما تبعثش حتى رد حقيقي)."""
+    path = f"data/{uid}/usage/{_usage_month_key()}/{field}"
+    try:
+        _firebase_ref(path).transaction(lambda cur: max(0, (cur if isinstance(cur, int) else 0) - 1))
+    except Exception as e:
+        logging.error(f"_release_usage failed: {type(e).__name__}")
+
+
 def _plan_cap(uid, cap_field):
     plan = get_user_plan(uid)
     return PLANS.get(plan, {}).get(cap_field)
