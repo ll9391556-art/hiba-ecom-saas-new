@@ -19,7 +19,7 @@ import requests
 from google import genai
 from google.genai import types
 
-from core.config import _GEMINI_MODELS, _JSON_END, _JSON_START, MAX_HISTORY_TURNS, PLANS
+from core.config import _GEMINI_MODELS, _JSON_END, _JSON_START, MAX_HISTORY_TURNS, PLANS, normalize_plan
 from core.db import _fb_get, _fb_keys, _fb_patch, _fb_put, _fb_query, _firebase_ref
 from core.security import _cleanup_shared_limits
 from core.util import _mask_id
@@ -150,8 +150,7 @@ def get_user_settings(identifier):
 
 def _bot_allowed_for(bot_settings):
     if not bot_settings: return False
-    plan = str(bot_settings.get("plan", "starter")).lower()
-    return PLANS.get(plan, {}).get("bot", False)
+    return PLANS.get(normalize_plan(bot_settings.get("plan")), {}).get("bot", False)
 
 
 # ── Bot / Webhook ─────────────────────────────────────────

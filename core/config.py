@@ -114,7 +114,6 @@ PLANS = {
     # أوائل التجار: Pro كاملة بسعر سنوي، لأول EARLY_MAX_SLOTS تاجر، تفعيل يدوي من الأدمين
     "early":      {**_PRO_FEATURES,      "label": "Early",    "price": {"yearly": 19900}},
     # ── باقات قديمة: يبقاو يخدمو للمشتركين الحاليين ──
-    "enterprise": {"bot": True,  "store": True,  "landing": True,  "dashboard": True, "orders": True, "integrations": True,  "team": True,  "label": "Enterprise"},
     "full":       {"bot": True,  "store": True,  "landing": True,  "dashboard": True, "orders": True, "integrations": True,  "team": True,  "label": "Full",
                     "orderCap": 300, "botMsgCap": 3000},
     "lifetime":   {"bot": True,  "store": True,  "landing": True,  "dashboard": True, "orders": True, "integrations": True,  "team": True,  "label": "Lifetime",
@@ -122,6 +121,17 @@ PLANS = {
     "bot_only":   {"bot": True, "store": False, "landing": False, "dashboard": False,
                     "orders": False, "integrations": False, "team": False, "label": "Bot Only"},
 }
+
+# أسماء قديمة → الباقة الحالية. enterprise ولّات business: تتقرا business فكل مكان،
+# وrebuildIndexes يبدّل القيمة المخزّنة مرة وحدة.
+PLAN_ALIASES = {"enterprise": "business"}
+
+
+def normalize_plan(plan, default="starter"):
+    """قيمة plan الخام (من users/{u}) → مفتاح فـ PLANS. غياب الحقل = starter، كيما قبل."""
+    plan = str(plan if plan not in (None, "") else default).strip().lower()
+    return PLAN_ALIASES.get(plan, plan)
+
 
 CURRENCY_SYMBOLS_PY = {"DZD": "دج", "EUR": "€", "USD": "$"}
 

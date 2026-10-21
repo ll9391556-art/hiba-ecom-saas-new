@@ -18,6 +18,7 @@ from core.config import (
     EARLY_MAX_SLOTS,
     LIFETIME_MAX_SLOTS,
     PLANS,
+    normalize_plan,
 )
 from core.db import (
     _fb_get,
@@ -52,7 +53,7 @@ bp = Blueprint("account", __name__)
 def api_get_user_plan():
     uid      = request.auth_uid
     user_rec = _get_user_record(uid)
-    plan     = str(user_rec.get("plan", "starter")).lower()
+    plan     = normalize_plan(user_rec.get("plan"))
     source   = str(user_rec.get("source", "local")).lower()
     currency = (_fb_get(f"data/{uid}/storeSettings/currency") or "DZD")
     plan_features = PLANS.get(plan, PLANS["starter"])

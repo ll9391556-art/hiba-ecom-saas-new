@@ -6,7 +6,7 @@ import logging
 import threading
 import time
 
-from core.config import PLANS
+from core.config import PLAN_ALIASES, PLANS, normalize_plan
 from core.db import _fb_delete, _fb_get, _fb_keys, _fb_patch, _fb_put, _firebase_ref
 from core.http import err_json, ok_json
 
@@ -81,7 +81,7 @@ def _get_user_record(uid):
 
 
 def get_user_plan(uid):
-    return str(_get_user_record(uid).get("plan", "starter")).lower()
+    return normalize_plan(_get_user_record(uid).get("plan"))
 
 
 # ── فهارس الأسماء وعدّاد lifetime (بدل قراءة /users و/team_users كاملة) ──
@@ -198,7 +198,7 @@ def _rebuild_user_indexes():
     users, members = as_dict(_fb_get("users")), as_dict(_fb_get("team_users"))
     existing_channels = as_dict(_fb_get("channel_index"))
     patch, conflicts, unames, claims = {}, [], {}, {}
-    lifetime = early = 0
+    lifetime = early = migrated = 0
     for key, u in users.items():
         if not isinstance(u, dict):
             continue
@@ -210,6 +210,10 @@ def _rebuild_user_indexes():
             patch[f"uname_index/{lower}"] = key
         if u.get("User_ID"):
             patch[f"uid_index/{u['User_ID']}"] = key
+        raw_plan = str(u.get("plan", "")).strip().lower()
+        if raw_plan in PLAN_ALIASES:  # enterprise → business (مرة وحدة، idempotent)
+            patch[f"users/{key}/plan"] = PLAN_ALIASES[raw_plan]
+            migrated += 1
         slot = _slot_counter(u.get("plan"))
         lifetime += slot == "lifetimeAccounts"
         early += slot == "earlyAccounts"
@@ -235,4 +239,4 @@ def _rebuild_user_indexes():
     if conflicts:
         logging.warning(f"🔧 rebuildIndexes: {len(conflicts)} conflicts — راجعهم يدوياً")
     return {"users": len(unames), "members": len(members), "lifetimeAccounts": lifetime,
-            "earlyAccounts": early, "conflicts": conflicts}
+            "earlyAccounts": early, "plansMigrated": migrated, "conflicts": conflicts}

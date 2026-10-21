@@ -119,3 +119,33 @@ def test_rebuild_indexes_recounts_early_accounts(client, db):
 def test_frontend_shows_early_slots_left():
     fn = DASH[DASH.index("function highlightCurrentPlan("):]
     assert "EARLY_SLOTS_LEFT" in fn[:fn.index("\n}\n")] and "r.data.earlySlotsLeft" in DASH
+
+
+# ── B. enterprise → business (تطبيع عند القراءة + backfill فـ rebuildIndexes) ──
+def test_enterprise_accounts_work_as_business(client, app, seed_owner):
+    owner = seed_owner(plan="Enterprise")
+    data = _plan(client, owner)
+    assert data["plan"] == "business" and data["features"]["team"] and data["features"]["botMsgCap"] == 5000
+    assert app.get_user_plan(owner["uid"]) == "business" and app.planHas_server(owner["uid"], "team")
+    assert app._bot_allowed_for({"plan": "enterprise"}) is True
+    assert app._plan_cap(owner["uid"], "botMsgCap") == 5000
+    r = client.post("/api/team/addMember", headers=owner["headers"],
+                    json={"username": "m1", "password": "dummy-pass-123"})
+    assert r.status_code == 200
+
+
+def test_admin_enterprise_is_stored_as_business(client, db, seed_owner):
+    owner = seed_owner(plan="free")
+    assert _set_plan(client, owner, "enterprise").get_json()["data"]["plan"] == "business"
+    assert db.get("users/owner1/plan") == "business"
+    assert "enterprise" not in client.get("/admin").get_data(as_text=True).lower()
+
+
+def test_rebuild_indexes_migrates_enterprise_to_business(client, db):
+    db.set("users", {"a": {"Username": "a", "User_ID": "1", "plan": "enterprise", "Gemini_api_key": "k"},
+                     "b": {"Username": "b", "User_ID": "2", "plan": "pro"}})
+    for _ in range(2):  # idempotent
+        res = client.post("/api/admin/rebuildIndexes", headers=ADMIN).get_json()["data"]["users"]
+        assert db.get("users/a") == {"Username": "a", "User_ID": "1", "plan": "business", "Gemini_api_key": "k"}
+        assert db.get("users/b/plan") == "pro"
+    assert res["plansMigrated"] == 0

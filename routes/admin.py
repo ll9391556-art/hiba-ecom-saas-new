@@ -17,6 +17,7 @@ from core.config import (
     EARLY_MAX_SLOTS,
     LIFETIME_MAX_SLOTS,
     PLANS,
+    normalize_plan,
 )
 from core.db import (
     _fb_get,
@@ -64,7 +65,7 @@ def api_update_user_plan():
     body     = request.get_json(silent=True) or {}
     uid      = str(body.get("userId")   or "").strip()
     username = str(body.get("username") or "").strip()
-    plan     = str(body.get("plan")     or "starter").strip().lower()
+    plan     = normalize_plan(body.get("plan"))
     if not uid or not username: return err_json("Missing fields")
     if plan not in PLANS: return err_json(f"Invalid plan: {list(PLANS.keys())}")
     existing = _fb_get(f"users/{username}") or {}
@@ -104,7 +105,7 @@ def api_admin_create_client():
     username = str(body.get("username") or "").strip()
     password = str(body.get("password") or "").strip()
     store_name = str(body.get("storeName") or "").strip() or "متجري"
-    plan     = str(body.get("plan") or "starter").strip().lower()
+    plan     = normalize_plan(body.get("plan"))
     source   = str(body.get("source") or "local").strip().lower()
     if source not in ("local", "fiverr"): source = "local"
     if not username or not password: return err_json("اسم المستخدم وكلمة السر مطلوبين")
@@ -177,7 +178,7 @@ def api_admin_list_clients():
         if isinstance(u, dict):
             result.append({
                 "username": u.get("Username", uname), "userId": u.get("User_ID", ""),
-                "plan": u.get("plan", "starter"), "planUpdated": u.get("plan_updated", ""),
+                "plan": normalize_plan(u.get("plan")), "planUpdated": u.get("plan_updated", ""),
                 "source": u.get("source", "local"),
             })
     result.sort(key=lambda x: x.get("planUpdated",""), reverse=True)
