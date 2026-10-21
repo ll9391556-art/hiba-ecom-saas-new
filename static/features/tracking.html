@@ -4,23 +4,14 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>أدوات التتبع الإعلاني — OrderFlow</title>
+<link rel="stylesheet" href="/static/css/tokens.css"/>
 <style>
-:root{
-  --bg:#f4f8fb;--card:#ffffff;--card2:#eef6fb;
-  --accent:#0ea5e9;--accent2:#0284c7;--accent-soft:rgba(14,165,233,.10);
-  --green:#10b981;--red:#ef4444;
-  --text:#0f2438;--muted:#5b7285;--border:rgba(14,116,144,.12);
-  --shadow:0 4px 18px rgba(14,116,144,.08);
-}
 *{box-sizing:border-box;margin:0;padding:0}
 body{
-  background:
-    radial-gradient(1100px 420px at 15% -10%, rgba(14,165,233,.10), transparent 60%),
-    radial-gradient(900px 400px at 100% 0%, rgba(2,132,199,.08), transparent 55%),
-    var(--bg);
+  background:var(--bg);
   color:var(--text);font-family:'Segoe UI',Arial,sans-serif;padding:24px;min-height:100vh}
 .wrap{max-width:640px;margin:0 auto}
-h1{font-size:21px;font-weight:800;margin-bottom:18px;display:flex;align-items:center;gap:8px;color:#0c4a6e}
+h1{font-size:21px;font-weight:800;margin-bottom:18px;display:flex;align-items:center;gap:8px;color:var(--ink)}
 .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:22px;
   margin-bottom:18px;box-shadow:var(--shadow)}
 .field{margin-bottom:16px}
@@ -32,8 +23,8 @@ input{width:100%;background:var(--card2);border:1px solid var(--border);color:va
 input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
 button{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;border-radius:10px;
   padding:10px 22px;font-size:13px;font-weight:700;cursor:pointer;margin-top:6px;
-  box-shadow:0 6px 16px -6px rgba(14,165,233,.55);transition:.15s}
-button:hover{transform:translateY(-1px);box-shadow:0 8px 20px -6px rgba(14,165,233,.65)}
+  box-shadow:0 6px 16px -6px rgba(59,43,255,.35);transition:.15s}
+button:hover{transform:translateY(-1px);box-shadow:0 8px 20px -6px rgba(59,43,255,.45)}
 .msg{margin-top:12px;font-size:12px;display:none;font-weight:600}
 .msg.ok{color:var(--green);display:block}
 .msg.err{color:var(--red);display:block}
