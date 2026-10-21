@@ -184,6 +184,14 @@ def test_buttons_follow_identity():
     assert _rules(_read(TOKENS))[":root"]["--r-btn"] == "14px"
 
 
+def test_feature_page_buttons_follow_identity():
+    for name in FEATURE_PAGES:
+        b = _rules(_page(name))["button"]
+        assert b["background"] == "var(--brand)", name
+        assert b["border-radius"] == "var(--r-btn)" and b["min-height"] == "var(--h-btn)", name
+        assert _px(b["font-size"]) >= 16 and b["font-family"] == "inherit", name
+
+
 def test_reduced_motion_is_respected():
     css = _read(APP_CSS)
     block = css[css.index("@media (prefers-reduced-motion: reduce)"):]

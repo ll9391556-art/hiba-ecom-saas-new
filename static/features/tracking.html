@@ -27,10 +27,9 @@ label{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);m
 input{width:100%;background:var(--white);border:1px solid var(--border);color:var(--text);
   border-radius:var(--r-field);padding:10px 14px;font-size:16px;transition:.15s;font-family:inherit}
 input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
-button{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;border-radius:10px;
-  padding:10px 22px;font-size:13px;font-weight:700;cursor:pointer;margin-top:6px;
-  box-shadow:0 6px 16px -6px rgba(59,43,255,.35);transition:.15s}
-button:hover{transform:translateY(-1px);box-shadow:0 8px 20px -6px rgba(59,43,255,.45)}
+button{background:var(--brand);color:#fff;border:none;border-radius:var(--r-btn);min-height:var(--h-btn);padding:0 22px;
+  font-family:inherit;font-size:16px;font-weight:600;cursor:pointer;transition:background .15s;margin-top:6px}
+button:hover{background:var(--brand-dark)}
 .msg{margin-top:12px;font-size:12px;display:none;font-weight:600}
 .msg.ok{color:var(--green);display:block}
 .msg.err{color:var(--red);display:block}

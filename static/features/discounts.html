@@ -26,10 +26,9 @@ label{display:block;font-size:11px;color:var(--muted);margin-bottom:6px;font-wei
 input,select{width:100%;background:var(--white);border:1px solid var(--border);color:var(--text);
   border-radius:var(--r-field);padding:10px 14px;font-size:16px;transition:.15s;font-family:inherit}
 input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
-button{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;border-radius:10px;
-  padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 6px 16px -6px rgba(59,43,255,.35);
-  transition:.15s}
-button:hover{transform:translateY(-1px);box-shadow:0 8px 20px -6px rgba(59,43,255,.45)}
+button{background:var(--brand);color:#fff;border:none;border-radius:var(--r-btn);min-height:var(--h-btn);padding:0 22px;
+  font-family:inherit;font-size:16px;font-weight:600;cursor:pointer;transition:background .15s}
+button:hover{background:var(--brand-dark)}
 .btn-danger{background:var(--st-refused-bg);color:var(--st-refused-fg);border:1px solid var(--st-refused-bg);box-shadow:none}
 .btn-danger:hover{background:#FFD3CC;transform:none;box-shadow:none}
 table{width:100%;border-collapse:collapse;font-size:13px;margin-top:12px}
