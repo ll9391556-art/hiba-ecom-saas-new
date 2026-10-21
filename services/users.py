@@ -120,8 +120,43 @@ def _get_user_record(uid):
     return {}
 
 
+# ── انتهاء الاشتراك ──────────────────────────────────────
+# users/{u}: plan_period (monthly|yearly) وplan_expires_at (ms) — يحطّهم الأدمين عند التفعيل.
+# بلا plan_expires_at (أو قيمة غير صالحة) = ما تنتهيش، كيما كل الحسابات قبل المهمة 1.
+# تنبيه قبل الانتهاء بـ 3 أيام، ومن بعد 3 أيام سماح بالباقة كاملة، ومن بعد free (بلا مسح والو).
+PLAN_WARN_MS  = 3 * 86_400_000
+PLAN_GRACE_MS = 3 * 86_400_000
+
+
+def _expiry_ms(rec):
+    v = rec.get("plan_expires_at")
+    if isinstance(v, bool): return 0
+    try:
+        v = int(v)
+    except (TypeError, ValueError):
+        return 0
+    return v if v > 0 else 0
+
+
+def _plan_status(rec, now_ms=None):
+    """سجل users/{u} → (الباقة الفعلية، معلومات الاشتراك للّوحة)."""
+    rec = rec if isinstance(rec, dict) else {}
+    plan = normalize_plan(rec.get("plan"))
+    exp = _expiry_ms(rec)
+    if not exp or plan == "free":
+        return plan, {"state": "none", "plan": plan}
+    now = int(time.time() * 1000) if now_ms is None else now_ms
+    if now >= exp + PLAN_GRACE_MS:   state = "expired"
+    elif now >= exp:                 state = "grace"
+    elif now >= exp - PLAN_WARN_MS:  state = "expiring"
+    else:                            state = "active"
+    info = {"state": state, "plan": plan, "expiresAt": exp, "graceEndsAt": exp + PLAN_GRACE_MS,
+            "period": str(rec.get("plan_period") or "")}
+    return ("free" if state == "expired" else plan), info
+
+
 def get_user_plan(uid):
-    return normalize_plan(_get_user_record(uid).get("plan"))
+    return _plan_status(_get_user_record(uid))[0]
 
 
 # ── فهارس الأسماء وعدّاد lifetime (بدل قراءة /users و/team_users كاملة) ──
@@ -183,7 +218,7 @@ def _adjust_lifetime_counter(delta, cap=None, counter="lifetimeAccounts"):
 # AI instructions, tokens الخ) وليس لبيانات الحساب/الخطة.
 _PROTECTED_USER_FIELDS = {
     "plan", "source", "Password", "User_ID", "Username",
-    "plan_updated",
+    "plan_updated", "plan_period", "plan_expires_at",
 }
 
 

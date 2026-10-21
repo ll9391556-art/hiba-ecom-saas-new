@@ -19,13 +19,13 @@ import requests
 from google import genai
 from google.genai import types
 
-from core.config import _GEMINI_MODELS, _JSON_END, _JSON_START, MAX_HISTORY_TURNS, PLANS, normalize_plan
+from core.config import _GEMINI_MODELS, _JSON_END, _JSON_START, MAX_HISTORY_TURNS, PLANS
 from core.db import _fb_get, _fb_keys, _fb_patch, _fb_put, _fb_query, _firebase_ref
 from core.security import _cleanup_shared_limits
 from core.util import _mask_id
 from services.orders import _save_order, _ship_values, _stock_fields, _sold_by_name, _get_stats
 from services.users import (_CACHE_TTL, _NEG_CACHE_TTL, _settings_cache, _settings_cache_lock, _under_cap, _increment_usage,
-                            _plan_cap, _release_usage, _reserve_usage)
+                            _plan_cap, _plan_status, _release_usage, _reserve_usage)
 
 _executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="bot_worker")
 
@@ -151,7 +151,7 @@ def get_user_settings(identifier):
 
 def _bot_allowed_for(bot_settings):
     if not bot_settings: return False
-    return PLANS.get(normalize_plan(bot_settings.get("plan")), {}).get("bot", False)
+    return PLANS.get(_plan_status(bot_settings)[0], {}).get("bot", False)
 
 
 # ── Bot / Webhook ─────────────────────────────────────────

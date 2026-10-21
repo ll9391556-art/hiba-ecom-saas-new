@@ -66,7 +66,8 @@ td{padding:8px;border-bottom:1px solid rgba(255,255,255,.05)}
         <option value="business">Business</option>
         <option value="early">أوائل التجار (Early) — <span id="earlySlotsDisplay">...</span> متبقي</option>
       </select>
-      <button onclick="createClient(document.getElementById('newPlanLocal').value,'local')">إنشاء حساب محلي</button>
+      <select id="newDurationLocal"><option value="month">شهر</option><option value="year">عام</option><option value="none">بلا انتهاء</option></select>
+      <button onclick="createClient(document.getElementById('newPlanLocal').value,'local',document.getElementById('newDurationLocal').value)">إنشاء حساب محلي</button>
     </div>
 
     <div id="createMsg" class="msg"></div>
@@ -97,7 +98,7 @@ function showMsg(id, text, type){
   el.textContent = text;
 }
 
-async function createClient(plan, source){
+async function createClient(plan, source, duration){
   var key = adminKey();
   if(!key){ showMsg("createMsg","أدخل مفتاح الإدارة أولاً","err"); return; }
   var username = document.getElementById("newUsername").value.trim();
@@ -108,7 +109,7 @@ async function createClient(plan, source){
     var r = await fetch("/api/admin/createClient", {
       method:"POST",
       headers:{"Content-Type":"application/json","X-Admin-Key":key},
-      body: JSON.stringify({username:username, password:password, storeName:storeName, plan:plan, source:source})
+      body: JSON.stringify({username:username, password:password, storeName:storeName, plan:plan, source:source, duration:duration||"none"})
     });
     var data = await r.json();
     if(data.status==="ok"){
@@ -154,35 +155,46 @@ async function loadClients(){
 
     if(!data.data.length){ box.innerHTML = "لا يوجد عملاء بعد"; return; }
     var allowedPlans = ["free","starter","pro","business","early","full","lifetime"];
-    box.innerHTML = '<table><thead><tr><th>المستخدم</th><th>ID</th><th>المصدر</th><th>الخطة</th><th>تغيير الخطة</th></tr></thead><tbody>'+
+    box.innerHTML = '<table><thead><tr><th>المستخدم</th><th>ID</th><th>المصدر</th><th>الخطة</th><th>ينتهي</th><th>تغيير الخطة (بعد الدفع)</th></tr></thead><tbody>'+
       data.data.map(function(c){
         var srcBadge = c.source==="fiverr" ? '<span class="badge b-pro">Fiverr</span>' : '<span class="badge b-starter">محلي</span>';
         var safePlan = allowedPlans.indexOf(c.plan) !== -1 ? c.plan : "free";
         return '<tr><td>'+esc(c.username)+'</td><td style="font-size:10px;color:#8899bb">'+esc(c.userId)+'</td>'+
           '<td>'+srcBadge+'</td>'+
           '<td><span class="badge b-'+safePlan+'">'+esc(String(c.plan).toUpperCase())+'</span></td>'+
-          '<td><select class="plan-select" data-uid="'+esc(c.userId)+'" data-uname="'+esc(c.username)+'">'+
+          '<td style="font-size:11px">'+expiryCell(c)+'</td>'+
+          '<td><select class="plan-select">'+
             allowedPlans.map(function(p){
               return '<option value="'+p+'"'+(p===safePlan?" selected":"")+'>'+p+'</option>';
             }).join("")+
-          '</select></td></tr>';
+          '</select> <select class="duration-select"><option value="month">شهر</option><option value="year">عام</option><option value="none">بلا انتهاء</option></select> '+
+          '<button class="plan-save" data-uid="'+esc(c.userId)+'" data-uname="'+esc(c.username)+'" style="margin-top:0;padding:6px 10px">تفعيل</button></td></tr>';
       }).join("")+
       '</tbody></table>';
-    document.querySelectorAll('.plan-select').forEach(function(sel){
-      sel.addEventListener('change', function(){
-        changePlan(sel.getAttribute('data-uid'), sel.getAttribute('data-uname'), sel.value);
+    document.querySelectorAll('.plan-save').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var row = btn.closest('tr');
+        changePlan(btn.getAttribute('data-uid'), btn.getAttribute('data-uname'),
+                   row.querySelector('.plan-select').value, row.querySelector('.duration-select').value);
       });
     });
   }catch(e){ box.innerHTML = "خطأ فالاتصال"; }
 }
 
-async function changePlan(userId, username, plan){
+function expiryCell(c){
+  if(!c.planExpiresAt) return '—';
+  var d = new Date(c.planExpiresAt).toLocaleDateString();
+  var states = {active:'', expiring:' ⚠️', grace:' ⏳ سماح', expired:' ❌ انتهى'};
+  return esc(d + (states[c.planState]||''));
+}
+
+async function changePlan(userId, username, plan, duration){
   var key = adminKey();
   try{
     var r = await fetch("/api/updateUserPlan", {
       method:"POST",
       headers:{"Content-Type":"application/json","X-Admin-Key":key},
-      body: JSON.stringify({userId:userId, username:username, plan:plan})
+      body: JSON.stringify({userId:userId, username:username, plan:plan, duration:duration})
     });
     var data = await r.json();
     if(data.status==="ok") loadClients();

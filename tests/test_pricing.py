@@ -262,3 +262,92 @@ def test_dashboard_warns_at_80_percent_and_at_the_cap():
     assert "renderPlanAlerts()" in DASH[DASH.index("async function loadUserPlan("):]
     assert 'id="planAlerts"' in (STATIC / "index.html").read_text(encoding="utf-8")
     assert "استعملت {x} من {y} رد هذا الشهر" in DASH
+
+
+# ── E. تاريخ انتهاء الاشتراك + 3 أيام سماح ─────────────────
+import time as _time
+
+DAY = 86_400_000
+
+
+def _now():
+    return int(_time.time() * 1000)
+
+
+@pytest.mark.parametrize("offset,state,plan", [
+    (10 * DAY, "active", "pro"),
+    (2 * DAY, "expiring", "pro"),      # تنبيه قبل الانتهاء بـ 3 أيام
+    (-1 * DAY, "grace", "pro"),        # خلال أيام السماح: الباقة باقية
+    (-4 * DAY, "expired", "free"),     # بعد السماح: free
+])
+def test_subscription_expiry_states(client, app, seed_owner, offset, state, plan):
+    exp = _now() + offset
+    owner = seed_owner(plan="pro", plan_period="monthly", plan_expires_at=exp)
+    data = _plan(client, owner)
+    sub = data["subscription"]
+    assert sub["state"] == state and data["plan"] == plan and app.get_user_plan(owner["uid"]) == plan
+    assert sub["expiresAt"] == exp and sub["graceEndsAt"] == exp + 3 * DAY and sub["period"] == "monthly"
+    assert data["features"]["bot"] is (plan == "pro")
+    assert app._bot_allowed_for({"plan": "pro", "plan_expires_at": exp}) is (plan == "pro")
+    if state == "expired":
+        assert sub["plan"] == "pro"  # الباقة اللي انتهات، باش اللوحة تقول للتاجر واش كان عندو
+
+
+@pytest.mark.parametrize("value", [None, 0, "", "abc", -5])
+def test_accounts_without_expiry_never_expire(client, seed_owner, value):
+    extra = {} if value is None else {"plan_expires_at": value}
+    owner = seed_owner(plan="pro", **extra)
+    data = _plan(client, owner)
+    assert data["plan"] == "pro" and data["subscription"]["state"] == "none"
+
+
+def test_admin_sets_the_duration(client, db, seed_owner):
+    owner = seed_owner(plan="free")
+    rec = lambda: db.get("users/owner1")
+    before = _now()
+    assert _set_plan(client, owner, "pro", duration="month").status_code == 200
+    assert rec()["plan_period"] == "monthly" and before + 30 * DAY <= rec()["plan_expires_at"] <= _now() + 30 * DAY
+    first = rec()["plan_expires_at"]
+    assert _set_plan(client, owner, "pro", duration="month").status_code == 200   # تجديد قبل الانتهاء: يتزاد
+    assert rec()["plan_expires_at"] == first + 30 * DAY
+    assert _set_plan(client, owner, "business", duration="year").status_code == 200
+    assert rec()["plan_period"] == "yearly" and rec()["plan_expires_at"] >= _now() + 364 * DAY
+    assert rec()["plan_expires_at"] <= _now() + 365 * DAY  # باقة أخرى: من اليوم، ماشي من الانتهاء القديم
+    assert _set_plan(client, owner, "pro", duration="none").status_code == 200
+    assert "plan_expires_at" not in rec() and "plan_period" not in rec()
+    assert _set_plan(client, owner, "pro", duration="week").status_code == 400
+    assert _set_plan(client, owner, "early").status_code == 200 and rec()["plan_period"] == "yearly"
+    assert _set_plan(client, owner, "free", duration="month").status_code == 200 and "plan_expires_at" not in rec()
+
+
+def test_create_client_with_duration(client, db):
+    r = client.post("/api/admin/createClient", headers=ADMIN, json={
+        "username": "d1", "password": "dummy-pass-123", "plan": "starter", "duration": "month"})
+    assert r.status_code == 200 and db.get("users/d1/plan_period") == "monthly"
+
+
+def test_merchant_cannot_change_the_expiry(client, db, seed_owner):
+    exp = _now() + DAY
+    owner = seed_owner(plan="pro", plan_expires_at=exp, plan_period="monthly")
+    client.post("/api/updateBotSettings", headers=owner["headers"],
+                json={"data": {"plan_expires_at": exp + 999 * DAY, "plan_period": "yearly", "AI_instructions": "x"}})
+    client.post("/api/saas", headers=owner["headers"],
+                json={"action": "updateBotSettings", "payload": {"plan_expires_at": 0}})
+    assert db.get("users/owner1/plan_expires_at") == exp and db.get("users/owner1/plan_period") == "monthly"
+
+
+def test_list_clients_shows_expiry(client, seed_owner):
+    exp = _now() + DAY
+    seed_owner(plan="pro", plan_expires_at=exp, plan_period="monthly")
+    row = client.get("/api/admin/listClients", headers=ADMIN).get_json()["data"][0]
+    assert row["planExpiresAt"] == exp and row["planPeriod"] == "monthly"
+
+
+def test_dashboard_warns_before_and_during_grace(client):
+    fn = DASH[DASH.index("function renderPlanAlerts("):]
+    fn = fn[:fn.index("\n}\n")]
+    for key in ("sub_expiring", "sub_grace", "sub_expired", "SUBSCRIPTION"):
+        assert key in fn
+    assert "SUBSCRIPTION = r.data.subscription" in DASH
+    admin = client.get("/admin").get_data(as_text=True)
+    assert 'id="newDurationLocal"' in admin and "duration" in admin

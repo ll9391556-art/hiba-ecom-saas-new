@@ -62,6 +62,7 @@ async function loadUserPlan(){
       merchantCurrency = r.data.currency || "DZD";
       BOT_LAUNCHED = !!r.data.botLaunched;
       PLAN_FEATURES = r.data.features || {};
+      SUBSCRIPTION = r.data.subscription || {};
       PLAN_USAGE = r.data.usage || {};
       USER_SOURCE = r.data.source || "local";
       EARLY_SLOTS_LEFT = r.data.earlySlotsLeft;
@@ -85,11 +86,20 @@ function planHas(feature){
   return !!(PLAN_FEATURES && PLAN_FEATURES[feature]);
 }
 
-// تنبيهات أعلى اللوحة: ردود البوت (من 80% ثم عند الحد)
+// تنبيهات أعلى اللوحة: الاشتراك (3 أيام قبل الانتهاء، وخلال 3 أيام السماح، ومن بعد)
+// وردود البوت (من 80% ثم عند الحد)
 function renderPlanAlerts(){
   var box = document.getElementById("planAlerts");
   if(!box) return;
   var alerts = [];
+  var sub = SUBSCRIPTION || {};
+  var day = function(ms){ return new Date(ms).toLocaleDateString(); };
+  if(sub.state==="expiring")
+    alerts.push({level:"warn", text:t("sub_expiring").replace("{date}", day(sub.expiresAt))});
+  else if(sub.state==="grace")
+    alerts.push({level:"danger", text:t("sub_grace").replace("{date}", day(sub.expiresAt)).replace("{grace}", day(sub.graceEndsAt))});
+  else if(sub.state==="expired")
+    alerts.push({level:"danger", text:t("sub_expired").replace("{plan}", String(sub.plan||"").toUpperCase())});
   var u = (PLAN_USAGE||{}).botMsgs;
   if(u && u.cap){
     var txt = t("bot_usage_x_of_y").replace("{x}", u.used).replace("{y}", u.cap);
