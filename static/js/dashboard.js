@@ -167,14 +167,11 @@ function highlightCurrentPlan(){
   box.innerHTML = keys.map(function(k){
     var u = PLAN_USAGE[k];
     var pct = Math.min(100, Math.round((u.used/u.cap)*100));
-    var color = pct>=100?"var(--red)":pct>=80?"var(--yellow)":"var(--green)";
-    return '<div class="table-wrap" style="padding:16px;margin-bottom:10px">'+
-      '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px">'+
-        '<span>'+(labels[k]||k)+'</span><strong>'+u.used+' / '+u.cap+'</strong>'+
-      '</div>'+
-      '<div style="background:var(--card2);border-radius:6px;height:8px;overflow:hidden">'+
-        '<div style="width:'+pct+'%;height:100%;background:'+color+'"></div>'+
-      '</div></div>';
+    var cls = pct>=100 ? " full" : pct>=80 ? " warn" : "";
+    return '<div class="usage-card">'+
+      '<div class="usage-row"><span>'+esc(labels[k]||k)+'</span><strong>'+fmtNum(u.used)+' / '+fmtNum(u.cap)+'</strong></div>'+
+      '<div class="usage-track"><div class="usage-fill'+cls+'" style="width:'+pct+'%"></div></div>'+
+    '</div>';
   }).join("");
 }
 

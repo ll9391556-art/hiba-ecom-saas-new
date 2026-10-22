@@ -157,6 +157,9 @@ html[dir=rtl] .modal-close{right:auto;left:16px}
 .plan-pro .plan-current-pill{background:#fff}
 .plan-card.current{box-shadow:0 0 0 3px var(--brand-dark)}
 .plan-pro.current{box-shadow:0 0 0 3px var(--volt),0 30px 60px rgba(59,43,255,.3)}
+.plan-contact{align-self:flex-start;margin-top:4px}
+.usage-card{border-radius:var(--r-card);background:var(--white);padding:18px 22px;margin-bottom:12px;display:flex;flex-direction:column;gap:10px}
+.usage-row{display:flex;justify-content:space-between;gap:12px;font-size:16px}
 /* /plans */
 .store-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px}
 .store-card{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;transition:.2s}

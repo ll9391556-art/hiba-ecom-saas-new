@@ -129,3 +129,27 @@ def test_current_plan_strip_and_pill():
     assert r[".plan-current"]["background"] == "var(--brand-light)"
     assert r[".plan-current-exp.warn"]["color"] == "var(--st-pending-fg)"
     assert r[".plan-current-exp.danger"]["color"] == "var(--st-refused-fg)"
+
+
+# ── 5. الدفع والتواصل والاستعمال ──
+SUPPORT_OPEN = """data-on-click="window.open('/static/features/support.html','_blank')\""""
+
+
+def test_payment_card_keeps_texts_and_has_contact_button():
+    sec = _plans_section()
+    info = sec[sec.index('<div class="plan-info">'):]
+    info = info[:info.index('id="usageBox"')]
+    assert 'data-i18n="plan_contact"' in info and 'data-i18n="plan_payment"' in info  # نفس النصوص
+    assert "BaridiMob" in info and "CCP" in info
+    assert f'<button type="button" class="btn-primary plan-contact" {SUPPORT_OPEN}>' in info
+    assert 'data-i18n="contact_us"' in info
+    assert "\"window.open('/static/features/support.html','_blank')\"" in _read(STATIC / "js" / "actions.js")
+
+
+def test_usage_box_uses_dashboard_style():
+    js = _dashboard_js()
+    fn = js[js.index('var box = document.getElementById("usageBox");'):]
+    fn = fn[:fn.index("\n}\n")]
+    assert "var(--red)" not in fn and "var(--green)" not in fn and "table-wrap" not in fn
+    assert "fmtNum(u.used)" in fn and "fmtNum(u.cap)" in fn and "esc(labels[k]||k)" in fn
+    assert 'class="usage-fill\'+cls+\'"' in fn

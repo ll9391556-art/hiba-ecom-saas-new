@@ -160,7 +160,8 @@ var I18N = {
     stock_ok:"Stock suffisant pour tous les produits",
     most_popular:"Le plus demandé",
     early_offer:"Offre premiers marchands",early_full:"Toutes les places sont prises",instead_of_year:"au lieu de {x} DA par an",
-    current_plan:"Votre plan actuel",plan_expires_on:"expire le {date}",plan_expires_soon:"expire bientôt : {date}",plan_grace_until:"expiré — délai de grâce jusqu'au {date}",plan_no_expiry:"sans date d'expiration"
+    current_plan:"Votre plan actuel",plan_expires_on:"expire le {date}",plan_expires_soon:"expire bientôt : {date}",plan_grace_until:"expiré — délai de grâce jusqu'au {date}",plan_no_expiry:"sans date d'expiration",
+    contact_us:"Nous contacter"
   },
   AR:{
     nav_dashboard:"الرئيسية",nav_orders:"الطلبات",nav_products:"المنتجات",
@@ -255,7 +256,8 @@ var I18N = {
     stock_ok:"المخزون كافي لكل المنتجات",
     most_popular:"الأكثر طلبًا",
     early_offer:"عرض أوائل التجار",early_full:"اكتملت البلايص",instead_of_year:"بدل {x} دج في العام",
-    current_plan:"باقتك الحالية",plan_expires_on:"تنتهي في {date}",plan_expires_soon:"تنتهي قريبًا: {date}",plan_grace_until:"انتهت — مهلة حتى {date}",plan_no_expiry:"بلا تاريخ انتهاء"
+    current_plan:"باقتك الحالية",plan_expires_on:"تنتهي في {date}",plan_expires_soon:"تنتهي قريبًا: {date}",plan_grace_until:"انتهت — مهلة حتى {date}",plan_no_expiry:"بلا تاريخ انتهاء",
+    contact_us:"تواصل معنا"
   },
   EN:{
     nav_dashboard:"Dashboard",nav_orders:"Orders",nav_products:"Products",
@@ -350,7 +352,8 @@ var I18N = {
     stock_ok:"Every product has enough stock",
     most_popular:"Most popular",
     early_offer:"Early merchants offer",early_full:"All spots are taken",instead_of_year:"instead of {x} DZD a year",
-    current_plan:"Your current plan",plan_expires_on:"expires on {date}",plan_expires_soon:"expires soon: {date}",plan_grace_until:"expired — grace period until {date}",plan_no_expiry:"no expiry date"
+    current_plan:"Your current plan",plan_expires_on:"expires on {date}",plan_expires_soon:"expires soon: {date}",plan_grace_until:"expired — grace period until {date}",plan_no_expiry:"no expiry date",
+    contact_us:"Contact us"
   }
 };
 
