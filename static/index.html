@@ -9,6 +9,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" integrity="sha384-NrKB+u6Ts6AtkIhwPixiKTzgSKNblyhlk0Sohlgar9UHUBzai/sgnNNWWd291xqt" crossorigin="anonymous"></script>
 <script defer src="/static/pixel-loader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.468.0/dist/umd/lucide.min.js" integrity="sha384-uTYyvsSSUZeaPhb5RbKlQa0zY/WpX/QHfvg2mczXyBQOpkWPEDy9lczyp+w7SKXu" crossorigin="anonymous"></script>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml"/>
 <link rel="icon" href="/static/favicon-32.png" sizes="32x32" type="image/png"/>
 <link rel="apple-touch-icon" href="/static/apple-touch-icon.png"/>
@@ -55,60 +56,60 @@
   </div>
   <div class="sidebar-nav">
     <div class="nav-item active" data-on-click="showSection('dashboard')">
-      <i class="bi bi-grid-1x2"></i><span data-i18n="nav_dashboard">Tableau de bord</span>
+      <i data-lucide="layout-dashboard"></i><span data-i18n="nav_dashboard">Tableau de bord</span>
     </div>
     <div class="nav-item" data-on-click="showSection('orders')">
-      <i class="bi bi-bag-check"></i><span data-i18n="nav_orders">Commandes</span>
+      <i data-lucide="shopping-bag"></i><span data-i18n="nav_orders">Commandes</span>
       <span id="navPendingBadge" class="nav-badge" hidden></span>
     </div>
     <div class="nav-item" data-on-click="showSection('products')">
-      <i class="bi bi-box-seam"></i><span data-i18n="nav_products">Produits</span>
+      <i data-lucide="package"></i><span data-i18n="nav_products">Produits</span>
     </div>
     <div class="nav-item" data-on-click="showSection('customers')">
-      <i class="bi bi-people"></i><span data-i18n="nav_customers">Clients</span>
+      <i data-lucide="users"></i><span data-i18n="nav_customers">Clients</span>
     </div>
     <div class="nav-item" data-on-click="showSection('cities')">
-      <i class="bi bi-geo-alt"></i><span data-i18n="nav_cities">Villes</span>
+      <i data-lucide="map-pin"></i><span data-i18n="nav_cities">Villes</span>
     </div>
     <div class="nav-item" data-on-click="showSection('store')">
-      <i class="bi bi-shop"></i><span data-i18n="nav_store">Boutique</span>
+      <i data-lucide="store"></i><span data-i18n="nav_store">Boutique</span>
     </div>
     <div class="nav-item" data-on-click="showSection('landing')">
-      <i class="bi bi-easel2"></i><span data-i18n="nav_landing">Pages de destination</span>
+      <i data-lucide="panels-top-left"></i><span data-i18n="nav_landing">Pages de destination</span>
     </div>
     <div class="nav-item" data-on-click="showSection('bot')">
-      <i class="bi bi-robot"></i><span data-i18n="nav_bot">Bot AI</span>
+      <i data-lucide="bot"></i><span data-i18n="nav_bot">Bot AI</span>
     </div>
     <div class="nav-item" data-on-click="showSection('messages')">
-      <i class="bi bi-chat-dots"></i><span data-i18n="nav_messages">Messages</span>
+      <i data-lucide="message-circle"></i><span data-i18n="nav_messages">Messages</span>
     </div>
     <div class="nav-item" data-on-click="showSection('integrations')">
-      <i class="bi bi-plug"></i><span data-i18n="nav_integrations">ربط المتجر</span>
+      <i data-lucide="plug"></i><span data-i18n="nav_integrations">ربط المتجر</span>
     </div>
     <div class="nav-item" id="navTeam" data-on-click="showSection('team')" style="display:none">
-      <i class="bi bi-person-badge"></i><span data-i18n="nav_team">الفريق</span>
+      <i data-lucide="id-card"></i><span data-i18n="nav_team">الفريق</span>
     </div>
     <div class="nav-item" id="navPlans" data-on-click="showSection('plans')">
-      <i class="bi bi-star"></i><span data-i18n="nav_plans">Abonnements</span>
+      <i data-lucide="star"></i><span data-i18n="nav_plans">Abonnements</span>
     </div>
     <div class="nav-item" data-on-click="showSection('settings')">
-      <i class="bi bi-gear"></i><span data-i18n="nav_settings">Paramètres</span>
+      <i data-lucide="settings"></i><span data-i18n="nav_settings">Paramètres</span>
     </div>
     <div class="nav-item" data-on-click="window.open('/static/features/discounts.html','_blank')">
-     <i class="bi bi-tag"></i><span data-i18n="nav_discounts">أكواد الخصم</span>
+     <i data-lucide="tag"></i><span data-i18n="nav_discounts">أكواد الخصم</span>
     </div>
     <div class="nav-item" data-on-click="window.open('/static/features/tracking.html','_blank')">
-     <i class="bi bi-graph-up-arrow"></i><span data-i18n="nav_tracking">التتبع الإعلاني</span>
+     <i data-lucide="trending-up"></i><span data-i18n="nav_tracking">التتبع الإعلاني</span>
     </div>
     <div class="nav-item disabled" title="قريبًا" aria-disabled="true">
-     <i class="bi bi-truck"></i><span data-i18n="nav_shipping">شركات الشحن</span>
+     <i data-lucide="truck"></i><span data-i18n="nav_shipping">شركات الشحن</span>
      <span class="soon-badge" data-i18n="soon">قريبًا</span>
     </div>
     <div class="nav-item" data-on-click="window.open('/static/features/assistant.html','_blank')">
-     <i class="bi bi-robot"></i><span data-i18n="nav_assistant">المساعد الإداري</span>
+     <i data-lucide="sparkles"></i><span data-i18n="nav_assistant">المساعد الإداري</span>
     </div>
     <div class="nav-item" data-on-click="window.open('/static/features/support.html','_blank')">
-     <i class="bi bi-headset"></i><span data-i18n="nav_support">الدعم الفني</span>
+     <i data-lucide="headset"></i><span data-i18n="nav_support">الدعم الفني</span>
     </div>
   </div>
   <div class="sidebar-footer">
@@ -124,7 +125,7 @@
       </div>
     </div>
     <div class="side-logout" data-on-click="logout()">
-      <i class="bi bi-box-arrow-left"></i> <span data-i18n="logout">Déconnexion</span>
+      <i data-lucide="log-out"></i> <span data-i18n="logout">Déconnexion</span>
     </div>
   </div>
 </div>
@@ -134,7 +135,7 @@
   <div class="topbar">
     <div style="display:flex;align-items:center;gap:12px">
       <button class="btn-primary btn-sm" id="menuToggle" data-on-click="toggleSidebar()" style="display:none" title="فتح القائمة">
-        <i class="bi bi-list"></i> <span data-i18n="menu">القائمة</span>
+        <i data-lucide="menu"></i> <span data-i18n="menu">القائمة</span>
       </button>
       <div class="topbar-title" id="pageTitle" data-i18n="nav_dashboard">الرئيسية</div>
     </div>
@@ -155,7 +156,7 @@
         <h1 class="dash-hello" id="dashHello"></h1>
         <p class="dash-sub" data-i18n="dash_summary">هذا ملخص متجرك</p>
       </div>
-      <button class="btn-primary" data-on-click="openModal('addOrderModal')"><i class="bi bi-plus-lg"></i> <span data-i18n="new_order">طلبية جديدة</span></button>
+      <button class="btn-primary" data-on-click="openModal('addOrderModal')"><i data-lucide="plus"></i> <span data-i18n="new_order">طلبية جديدة</span></button>
     </div>
     <div class="kpi-grid" id="dashCards">
       <div class="kpi kpi-brand">
@@ -183,13 +184,13 @@
     <div class="dash-row">
       <section class="dash-card dash-main">
         <div class="dash-card-head">
-          <h2 data-i18n="chart_trend">الأرباح خلال 7 أيام</h2>
+          <h2><i data-lucide="chart-line"></i> <span data-i18n="chart_trend">الأرباح خلال 7 أيام</span></h2>
           <span class="dash-card-meta" id="chartTrendCaption">—</span>
         </div>
         <div class="chart-canvas-wrap"><canvas id="chartTrend"></canvas></div>
       </section>
       <section class="dash-card dash-side">
-        <div class="dash-card-head"><h2 data-i18n="chart_status">حالة الطلبات</h2></div>
+        <div class="dash-card-head"><h2><i data-lucide="chart-pie"></i> <span data-i18n="chart_status">حالة الطلبات</span></h2></div>
         <div class="status-bar" id="statusBar" role="img"></div>
         <ul class="status-legend" id="statusLegend"></ul>
       </section>
@@ -198,7 +199,7 @@
     <div class="dash-row">
       <section class="dash-card dash-main" id="recentOrdersCard">
         <div class="dash-card-head">
-          <h2 data-i18n="recent_orders">آخر الطلبيات</h2>
+          <h2><i data-lucide="clipboard-list"></i> <span data-i18n="recent_orders">آخر الطلبيات</span></h2>
           <button type="button" class="dash-link" data-on-click="showSection('orders')"><span data-i18n="all_orders">كل الطلبيات</span></button>
         </div>
         <div class="dash-table-wrap">
@@ -213,7 +214,7 @@
       </section>
       <div class="dash-col">
         <section class="dash-card" id="botCard">
-          <div class="dash-card-head"><h2 data-i18n="bot_card_title">بوت المحادثة</h2></div>
+          <div class="dash-card-head"><h2><i data-lucide="bot"></i> <span data-i18n="bot_card_title">بوت المحادثة</span></h2></div>
           <ul class="channel-list" id="channelList"></ul>
           <div class="bot-usage" id="botUsage" hidden>
             <div class="bot-usage-text" id="botUsageText"></div>
@@ -221,14 +222,14 @@
           </div>
         </section>
         <section class="dash-card">
-          <div class="dash-card-head"><h2 data-i18n="chart_topproducts">الأكثر مبيعًا</h2></div>
+          <div class="dash-card-head"><h2><i data-lucide="trophy"></i> <span data-i18n="chart_topproducts">الأكثر مبيعًا</span></h2></div>
           <ul class="top-list" id="topProductsTbl"></ul>
         </section>
       </div>
     </div>
 
     <section class="dash-card" id="lowStockCard">
-      <div class="dash-card-head"><h2 data-i18n="low_stock">مخزون منخفض</h2></div>
+      <div class="dash-card-head"><h2><i data-lucide="triangle-alert"></i> <span data-i18n="low_stock">مخزون منخفض</span></h2></div>
       <div class="dash-table-wrap">
         <table class="dash-table dash-table-sm">
           <thead><tr><th data-i18n="product">المنتج</th><th data-i18n="remaining">المتبقي</th><th data-i18n="stock_status">حالة المخزون</th></tr></thead>
@@ -374,7 +375,7 @@
     </div>
     <div id="landingContent">
       <div class="topbar" style="margin-bottom:16px">
-        <h4 data-i18n="landing_title">🎯 Pages de destination</h4>
+        <h4><i data-lucide="target"></i> <span data-i18n="landing_title">Pages de destination</span></h4>
         <button class="btn-primary btn-sm" data-on-click="openModal('createLandingModal')">
           <i class="bi bi-plus-lg"></i> <span data-i18n="create_landing">Créer une page</span>
         </button>
@@ -390,7 +391,7 @@
   <div id="sec_bot" class="section">
     <div id="botComingSoon" class="plan-gate" style="display:none">
       <i class="bi bi-rocket-takeoff"></i>
-      <h5 data-i18n="bot_coming_soon_title">🚀 البوت قريباً</h5>
+      <h5><i data-lucide="rocket"></i> <span data-i18n="bot_coming_soon_title">البوت قريباً</span></h5>
       <p data-i18n="bot_coming_soon_desc">نعمل دروك على تفعيل المساعد الذكي رسمياً (بانتظار موافقة Meta على إنستغرام). راح نخبرك أول واحد وقت يطلع!</p>
     </div>
     <div id="botLocked" class="plan-gate" style="display:none">
@@ -403,7 +404,7 @@
     </div>
     <div id="botContent">
       <div class="table-wrap" style="padding:20px;margin-bottom:20px;border-color:rgba(37,99,235,.4)">
-        <h5 style="margin-bottom:14px">🔗 <span data-i18n="fb_ig_title">Connecter Facebook &amp; Instagram</span></h5>
+        <h5 style="margin-bottom:14px"><i data-lucide="link"></i> <span data-i18n="fb_ig_title">Connecter Facebook &amp; Instagram</span></h5>
         <div id="fbConnectStatus" style="font-size:13px;color:var(--muted);margin-bottom:14px">⏳ <span data-i18n="checking">جاري التحقق...</span></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <button data-on-click="connectFacebook()" style="background:linear-gradient(135deg,#1877f2,#0d5bbf);color:#fff;border:none;border-radius:8px;padding:9px 18px;font-weight:700;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:7px">
@@ -465,7 +466,7 @@
   <div id="sec_messages" class="section">
     <div id="messagesComingSoon" class="plan-gate" style="display:none">
       <i class="bi bi-chat-dots"></i>
-      <h5 data-i18n="bot_coming_soon_title">🚀 قريباً</h5>
+      <h5><i data-lucide="rocket"></i> <span data-i18n="bot_coming_soon_title">قريباً</span></h5>
       <p data-i18n="bot_coming_soon_desc">نعمل دروك على تفعيل المساعد الذكي رسمياً (بانتظار موافقة Meta على إنستغرام). راح نخبرك أول واحد وقت يطلع!</p>
     </div>
     <div id="messagesLocked" class="plan-gate" style="display:none">
@@ -517,7 +518,7 @@
     </div>
     <div id="integrationsContent">
       <div class="table-wrap" style="padding:20px;max-width:600px">
-        <h5 style="margin-bottom:14px">🛒 WooCommerce</h5>
+        <h5 style="margin-bottom:14px"><i data-lucide="shopping-cart"></i> WooCommerce</h5>
         <div id="wooDisconnected">
           <p style="font-size:13px;color:var(--muted);margin-bottom:16px" data-i18n="woo_desc">
             اربط متجر WooCommerce تبعك، وOrderFlow يسحب طلباته تلقائياً.

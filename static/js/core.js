@@ -95,7 +95,7 @@ var I18N = {
     woo_store_url:"URL de la boutique (https://...)",woo_consumer_key:"Consumer Key",woo_consumer_secret:"Consumer Secret",
     woo_connect_btn:"Connecter la boutique",woo_connected:"Connecté",woo_sync_now:"🔄 Synchroniser maintenant",
     woo_disconnect:"Déconnecter",woo_last_sync:"Dernière synchro",
-    bot_coming_soon_title:"🚀 Bientôt disponible",bot_coming_soon_desc:"Nous activons l'assistant IA officiellement (en attente de l'approbation Meta pour Instagram). Vous serez informé dès son lancement !",
+    bot_coming_soon_title:"Bientôt disponible",bot_coming_soon_desc:"Nous activons l'assistant IA officiellement (en attente de l'approbation Meta pour Instagram). Vous serez informé dès son lancement !",
     unit_month:"DZD/mois",unit_year:"DZD/an",or_yearly:"ou",plan_early:"Premiers marchands",export_excel:"Export Excel",soon:"Bientôt",sub_expiring:"Votre abonnement expire le {date} — renouvelez pour garder vos fonctionnalités",
     sub_grace:"Votre abonnement a expiré le {date} — délai de grâce jusqu'au {grace}, puis retour au plan Free",sub_expired:"Votre abonnement {plan} a expiré : vous êtes passé au plan Free",bot_usage_x_of_y:"Vous avez utilisé {x} sur {y} réponses ce mois-ci",
     bot_cap_reached:"Le bot est en pause : limite mensuelle atteinte, répondez manuellement",orders_this_month:"Commandes ce mois-ci",bot_replies_this_month:"Réponses du bot ce mois-ci",early_slots_left:"places restantes sur 50",
@@ -114,14 +114,14 @@ var I18N = {
     nav_messages:"Messages",locked_messages:"Messages non disponibles",
     upgrade_messages:"Passez au plan Pro ou Full",no_conversations:"Aucune conversation",
     select_conversation:"Sélectionnez une conversation",type_message:"Écrire un message...",
-    chart_status:"Statut des commandes",chart_trend:"📈 Bénéfice (7 derniers jours)",chart_topproducts:"Les plus vendus",
+    chart_status:"Statut des commandes",chart_trend:"Bénéfice — 7 derniers jours",chart_topproducts:"Les plus vendus",
     nav_team:"Équipe",add_member:"Ajouter un membre",member_username:"Nom d'utilisateur",member_name:"Nom",
     member_password:"Mot de passe",permissions:"Permissions",active:"Actif",inactive:"Inactif",
     locked_team:"Fonctionnalité Équipe non disponible",upgrade_team:"Passez au plan Starter ou supérieur",
     edit:"Modifier",delete:"Supprimer",confirm_delete_member:"Supprimer ce membre de l'équipe ?",
     team_count_of:"membre(s) sur",leave_blank_password:"Laisser vide pour ne pas changer",
     owner_only_feature:"Fonctionnalité réservée au propriétaire du compte",
-    nav_landing:"Pages de destination",landing_title:"🎯 Pages de destination",create_landing:"Créer une page",
+    nav_landing:"Pages de destination",landing_title:"Pages de destination",create_landing:"Créer une page",
     landing_name:"Nom du produit",landing_desc:"Description du produit",landing_images:"Images du produit (jusqu'à 4)",
     landing_cta_type:"Le bouton redirige vers",landing_cta_store:"🛍️ Ma boutique en ligne",landing_cta_whatsapp:"💬 WhatsApp",
     landing_whatsapp_number:"Numéro WhatsApp (format international)",landing_generate_btn:"Générer avec l'IA",
@@ -187,7 +187,7 @@ var I18N = {
     woo_store_url:"رابط المتجر (https://...)",woo_consumer_key:"Consumer Key",woo_consumer_secret:"Consumer Secret",
     woo_connect_btn:"ربط المتجر",woo_connected:"متصل",woo_sync_now:"🔄 مزامنة الآن",
     woo_disconnect:"فك الربط",woo_last_sync:"آخر مزامنة",
-    bot_coming_soon_title:"🚀 البوت قريباً",bot_coming_soon_desc:"نعمل دروك على تفعيل المساعد الذكي رسمياً (بانتظار موافقة Meta على إنستغرام). راح نخبرك أول واحد وقت يطلع!",
+    bot_coming_soon_title:"البوت قريباً",bot_coming_soon_desc:"نعمل دروك على تفعيل المساعد الذكي رسمياً (بانتظار موافقة Meta على إنستغرام). راح نخبرك أول واحد وقت يطلع!",
     unit_month:"DZD/شهر",unit_year:"DZD/سنة",or_yearly:"أو",plan_early:"أوائل التجار",export_excel:"تصدير Excel",soon:"قريبًا",sub_expiring:"اشتراكك ينتهي في {date} — جدّد باش تبقى عندك كل الميزات",
     sub_grace:"انتهى اشتراكك في {date} — عندك مهلة حتى {grace}، من بعد ترجع لـ Free",sub_expired:"انتهى اشتراك {plan} ورجعت لباقة Free",bot_usage_x_of_y:"استعملت {x} من {y} رد هذا الشهر",
     bot_cap_reached:"البوت متوقف: وصلت الحد الشهري، جاوب يدوياً",orders_this_month:"الطلبات هذا الشهر",bot_replies_this_month:"ردود البوت هذا الشهر",early_slots_left:"بلاصة باقية من 50",
@@ -206,14 +206,14 @@ var I18N = {
     nav_messages:"المحادثات",locked_messages:"المحادثات غير متاحة",
     upgrade_messages:"قم بالترقية إلى Pro أو Full",no_conversations:"لا توجد محادثات",
     select_conversation:"اختر محادثة لعرضها",type_message:"اكتب رسالة...",
-    chart_status:"حالة الطلبات",chart_trend:"📈 الأرباح خلال 7 أيام",chart_topproducts:"الأكثر مبيعًا",
+    chart_status:"حالة الطلبات",chart_trend:"الأرباح — آخر 7 أيام",chart_topproducts:"الأكثر مبيعًا",
     nav_team:"الفريق",add_member:"إضافة عضو",member_username:"اسم المستخدم",member_name:"الاسم",
     member_password:"كلمة السر",permissions:"الصلاحيات",active:"نشط",inactive:"معطّل",
     locked_team:"ميزة الفريق غير متاحة",upgrade_team:"قم بالترقية إلى Starter أو أعلى",
     edit:"تعديل",delete:"حذف",confirm_delete_member:"حذف هذا العضو من الفريق؟",
     team_count_of:"عضو من أصل",leave_blank_password:"اتركها فارغة إذا ما بغيتيش تبدّلها",
     owner_only_feature:"هذه الميزة متاحة فقط لصاحب الحساب",
-    nav_landing:"صفحات الهبوط",landing_title:"🎯 صفحات الهبوط",create_landing:"صمم صفحة جديدة",
+    nav_landing:"صفحات الهبوط",landing_title:"صفحات الهبوط",create_landing:"صمم صفحة جديدة",
     landing_name:"اسم المنتج",landing_desc:"وصف المنتج",landing_images:"صور المنتج (حتى 4)",
     landing_cta_type:"زر الطلب يوجّه إلى",landing_cta_store:"🛍️ متجري الإلكتروني",landing_cta_whatsapp:"💬 واتساب",
     landing_whatsapp_number:"رقم واتساب (بصيغة دولية)",landing_generate_btn:"صمم بالذكاء الاصطناعي",
@@ -279,7 +279,7 @@ var I18N = {
     woo_store_url:"Store URL (https://...)",woo_consumer_key:"Consumer Key",woo_consumer_secret:"Consumer Secret",
     woo_connect_btn:"Connect Store",woo_connected:"Connected",woo_sync_now:"🔄 Sync Now",
     woo_disconnect:"Disconnect",woo_last_sync:"Last sync",
-    bot_coming_soon_title:"🚀 Coming Soon",bot_coming_soon_desc:"We're officially activating the AI assistant soon (pending Meta's approval for Instagram). You'll be the first to know when it launches!",
+    bot_coming_soon_title:"Coming Soon",bot_coming_soon_desc:"We're officially activating the AI assistant soon (pending Meta's approval for Instagram). You'll be the first to know when it launches!",
     unit_month:"DZD/month",unit_year:"DZD/year",or_yearly:"or",plan_early:"Early merchants",export_excel:"Export to Excel",soon:"Soon",sub_expiring:"Your subscription expires on {date} — renew to keep your features",
     sub_grace:"Your subscription expired on {date} — grace period until {grace}, then back to Free",sub_expired:"Your {plan} subscription expired: you are now on Free",bot_usage_x_of_y:"You used {x} of {y} replies this month",
     bot_cap_reached:"The bot is paused: monthly limit reached, reply manually",orders_this_month:"Orders this month",bot_replies_this_month:"Bot replies this month",early_slots_left:"of 50 spots left",
@@ -298,14 +298,14 @@ var I18N = {
     nav_messages:"Messages",locked_messages:"Messages Unavailable",
     upgrade_messages:"Upgrade to Pro or Full",no_conversations:"No conversations",
     select_conversation:"Select a conversation",type_message:"Type a message...",
-    chart_status:"Order status",chart_trend:"📈 Profit (last 7 days)",chart_topproducts:"Best sellers",
+    chart_status:"Order status",chart_trend:"Profit — last 7 days",chart_topproducts:"Best sellers",
     nav_team:"Team",add_member:"Add Member",member_username:"Username",member_name:"Name",
     member_password:"Password",permissions:"Permissions",active:"Active",inactive:"Inactive",
     locked_team:"Team feature unavailable",upgrade_team:"Upgrade to Starter or higher",
     edit:"Edit",delete:"Delete",confirm_delete_member:"Delete this team member?",
     team_count_of:"member(s) of",leave_blank_password:"Leave blank to keep unchanged",
     owner_only_feature:"This feature is available to the account owner only",
-    nav_landing:"Landing Pages",landing_title:"🎯 Landing Pages",create_landing:"Create New Page",
+    nav_landing:"Landing Pages",landing_title:"Landing Pages",create_landing:"Create New Page",
     landing_name:"Product Name",landing_desc:"Product Description",landing_images:"Product Images (up to 4)",
     landing_cta_type:"Order button links to",landing_cta_store:"🛍️ My Online Store",landing_cta_whatsapp:"💬 WhatsApp",
     landing_whatsapp_number:"WhatsApp number (international format)",landing_generate_btn:"Generate with AI",
@@ -405,6 +405,11 @@ function applyLang(lang){
 }
 
 function setLang(l){ applyLang(l); }
+
+// أيقونات Lucide (lucide@0.468.0 من CDN): <i data-lucide="name"></i> → <svg>. بلا المكتبة: بلا أيقونات، والباقي يخدم
+function drawIcons(){
+  if(window.lucide) lucide.createIcons({icons: lucide.icons, attrs: {"aria-hidden": "true"}});
+}
 
 // =========================================================
 // TOAST

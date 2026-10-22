@@ -358,3 +358,45 @@ def test_low_stock_card():
     js = _dashboard_js()
     assert "esc(t(\"stock_ok\"))" in js
     assert _css_rules()[".dash-table-sm"]["min-width"] == "0"
+
+
+# ── 12. أيقونات Lucide بدل الإيموجي فالعناوين ──
+LUCIDE = ('<script src="https://cdn.jsdelivr.net/npm/lucide@0.468.0/dist/umd/lucide.min.js" '
+          'integrity="sha384-uTYyvsSSUZeaPhb5RbKlQa0zY/WpX/QHfvg2mczXyBQOpkWPEDy9lczyp+w7SKXu" '
+          'crossorigin="anonymous"></script>')
+EMOJI = re.compile("[\U0001F300-\U0001FAFF\u2600-\u27BF\u2B50\u23F3]")
+
+
+def test_lucide_is_pinned_with_sri_and_drawn():
+    html = _index()
+    assert LUCIDE in html and html.index(LUCIDE) < html.index('<script src="/static/js/core.js">')
+    assert "function drawIcons()" in CORE and "lucide.createIcons({icons: lucide.icons" in CORE
+    main = _read(STATIC / "js" / "main.js")
+    assert main.index("applyLang(currentLang);") < main.index("drawIcons();")
+
+
+def test_headings_have_icons_not_emoji():
+    html = _index()
+    for level, text in re.findall(r"<h([1-6])[^>]*>([\s\S]*?)</h\1>", html):
+        assert not EMOJI.search(text), text
+    heading_keys = set()
+    for _, text in re.findall(r"<h([1-6])[^>]*>([\s\S]*?)</h\1>", html):
+        heading_keys |= set(re.findall(r'data-i18n="(\w+)"', text))
+    heading_keys |= set(re.findall(r'<h[1-6][^>]*data-i18n="(\w+)"', html))
+    for lang in ("FR", "AR", "EN"):
+        block = re.search(r"\n  %s:\{(.*?)\n  \}" % lang, CORE, re.S).group(1)
+        for key in heading_keys:
+            m = re.search(r'[,{\s]%s:"([^"]*)"' % key, block)
+            assert m and not EMOJI.search(m.group(1)), f"{lang}.{key}"
+    sec = _dash_section()
+    for icon in ("chart-line", "chart-pie", "clipboard-list", "bot", "trophy", "triangle-alert"):
+        assert f'<i data-lucide="{icon}"></i>' in sec, icon
+
+
+def test_sidebar_uses_lucide():
+    html = _index()
+    side = html[html.index('<div id="sidebar">'):html.index('<div id="main">')]
+    assert 'class="bi ' not in side
+    assert len(re.findall(r'<i data-lucide="[a-z-]+"></i>', side)) >= 19
+    r = _css_rules()
+    assert r[".nav-item svg"]["width"] == "20px" and r[".nav-item svg"]["flex-shrink"] == "0"

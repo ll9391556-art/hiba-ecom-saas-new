@@ -14,6 +14,13 @@ html[dir=rtl] #sidebar{left:auto;right:0;border-right:none;border-left:1px solid
 .nav-item:hover{background:var(--bg);color:var(--ink)}
 .nav-item.active{background:var(--brand-light);color:var(--brand-dark)}
 .nav-item i{font-size:18px;width:20px;text-align:center;flex-shrink:0}
+/* أيقونات Lucide (svg.lucide) */
+svg.lucide{width:20px;height:20px;flex-shrink:0;vertical-align:middle}
+.nav-item svg{width:20px;height:20px;flex-shrink:0}
+.side-logout svg{width:18px;height:18px}
+.dash-card-head h2 svg{color:var(--brand)}
+.btn-primary svg,.btn-sm svg{width:18px;height:18px}
+h4 svg.lucide,h5 svg.lucide{color:var(--brand);margin-inline-end:4px}
 .nav-item>span:not(.nav-badge):not(.soon-badge){flex:1;min-width:0}
 .nav-badge{min-width:24px;height:22px;padding:0 6px;border-radius:var(--r-pill);background:var(--flash);color:#fff;font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center}
 .nav-badge[hidden]{display:none}

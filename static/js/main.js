@@ -3,6 +3,7 @@
 // =========================================================
 applyTheme();
 applyLang(currentLang);
+drawIcons();
 restoreSession();
 
 // حماية من bfcache: لو المتصفح رجّع نسخة محفوظة من الصفحة (زر "رجوع")
