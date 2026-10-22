@@ -376,3 +376,67 @@ def test_api_saas_cannot_write_tombstones(client, shop):
     r = client.post("/api/saas", headers=shop["headers"], json={
         "action": "firebaseSet", "path": f"data/{shop['uid']}/deletedOrders/ORD-1", "payload": {"x": 1}})
     assert r.status_code == 403
+
+
+# ── 4. تعديل منتج ────────────────────────────────────────
+def _update_product(client, headers, **data):
+    return client.post("/api/updateProduct", json={"data": data}, headers=headers)
+
+
+def _stock(client, headers):
+    return {p["name"]: p for p in client.get("/api/getProducts", headers=headers).get_json()["data"]}
+
+
+def test_update_product_changes_allowed_fields_only(client, app, db, shop):
+    uid = shop["uid"]
+    oid = _order(client, uid, qty=2)
+    _status(client, shop, oid, "Confirmed")
+    order_before = db.get(f"data/{uid}/orders/{oid}")
+    r = _update_product(client, shop["headers"], name="Sac", sell=1200, cost=700, init=20, category="Cuir",
+                        visible="no", sold=999, available=999, created_at=1, stat="Out of Stock")
+    assert r.status_code == 200, r.get_json()
+    p = db.get(f"data/{uid}/products/Sac")
+    assert (p["sell"], p["cost"], p["init"], p["category"], p["visible"]) == (1200, 700, 20, "Cuir", "no")
+    for k in ("sold", "available", "created_at", "stat"):
+        assert k not in p, k
+    assert _stock(client, shop["headers"])["Sac"]["available"] == 18           # init − ventes
+    assert db.get(f"data/{uid}/orders/{oid}") == order_before                  # الطلبيات القديمة بسعرها
+    _assert_exact(app, db, uid)
+    (entry,) = [e for e in _audit(db, uid) if e["action"] == "تعديل منتج"]
+    assert "sell: 1000 → 1200" in entry["details"] and "init: 10 → 20" in entry["details"]
+
+
+def test_update_product_invalidates_store_cache(client, app, db, shop):
+    uid = shop["uid"]
+    app._store_products_cache[uid] = ("cached", 10**12)
+    assert _update_product(client, shop["headers"], name="Sac", sell=1500).status_code == 200
+    assert uid not in app._store_products_cache
+
+
+def test_update_unknown_product_is_404_and_creates_nothing(client, db, shop):
+    assert _update_product(client, shop["headers"], name="Nouveau", sell=10).status_code == 404
+    assert db.get(f"data/{shop['uid']}/products/Nouveau") is None
+
+
+@pytest.mark.parametrize("data", [
+    {"sell": -1}, {"cost": "x"}, {"init": 1.5}, {"init": -2}, {"visible": "maybe"},
+    {"image": "javascript:alert(1)"}, {"images": "not-a-list"}, {"images": ["ftp://x"]},
+    {"category": "x" * 201}, {"description": "x" * 5001},
+])
+def test_update_product_rejects_bad_values(client, db, shop, data):
+    before = db.get(f"data/{shop['uid']}/products/Sac")
+    assert _update_product(client, shop["headers"], name="Sac", **data).status_code == 400
+    assert db.get(f"data/{shop['uid']}/products/Sac") == before
+
+
+def test_update_product_isolation_and_permissions(client, db, shop, seed_owner, seed_member):
+    uid = shop["uid"]
+    before = db.get(f"data/{uid}/products/Sac")
+    other = seed_owner(username="owner2", uid="2002")
+    assert _update_product(client, other["headers"], name="Sac", sell=1).status_code == 404
+    assert db.get(f"data/{uid}/products/Sac") == before and db.get("data/2002/products") is None
+    no = seed_member(shop, "m_orders", perms={"orders": True})
+    assert _update_product(client, no["headers"], name="Sac", sell=1).status_code == 403
+    yes = seed_member(shop, "m_products", perms={"products": True})
+    assert _update_product(client, yes["headers"], name="Sac", sell=1100).status_code == 200
+    assert [e["actor"] for e in _audit(db, uid)] == ["m_products"]

@@ -264,6 +264,10 @@
   "methods": "POST"
  },
  {
+  "rule": "/api/updateProduct",
+  "methods": "POST"
+ },
+ {
   "rule": "/api/updateStatus",
   "methods": "POST"
  },
