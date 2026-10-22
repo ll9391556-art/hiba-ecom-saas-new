@@ -258,7 +258,7 @@
           </button>
         </div>
       </div>
-      <div style="overflow-x:auto">
+      <div class="table-scroll">
         <table>
           <thead><tr>
             <th>#</th><th data-i18n="date">Date</th>
@@ -287,7 +287,7 @@
           <i class="bi bi-plus-lg"></i> <span data-i18n="add_product">Ajouter</span>
         </button>
       </div>
-      <div style="overflow-x:auto">
+      <div class="table-scroll">
         <table>
           <thead><tr>
             <th data-i18n="product">Produit</th><th data-i18n="category">Catégorie</th><th data-i18n="size">Taille</th>
@@ -306,15 +306,17 @@
         <h5 data-i18n="nav_customers">Clients</h5>
         <input class="search-input" id="custSearch" data-i18n-placeholder="search" placeholder="بحث..." data-on-input="filterCustomers()"/>
       </div>
-      <table>
-        <thead><tr>
-          <th data-i18n="client">Client</th><th data-i18n="phone">Téléphone</th>
-          <th data-i18n="city">Ville</th><th data-i18n="total">Total</th>
-          <th data-i18n="confirmed">Conf.</th><th data-i18n="delivered">Livré</th>
-          <th data-i18n="refused">Refusé</th><th data-i18n="customer_type">Type</th>
-        </tr></thead>
-        <tbody id="customersTbl"></tbody>
-      </table>
+      <div class="table-scroll">
+        <table>
+          <thead><tr>
+            <th data-i18n="client">Client</th><th data-i18n="phone">Téléphone</th>
+            <th data-i18n="city">Ville</th><th data-i18n="total">Total</th>
+            <th data-i18n="confirmed">Conf.</th><th data-i18n="delivered">Livré</th>
+            <th data-i18n="refused">Refusé</th><th data-i18n="customer_type">Type</th>
+          </tr></thead>
+          <tbody id="customersTbl"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -326,14 +328,16 @@
           <i class="bi bi-plus-lg"></i> <span data-i18n="add_city">Ajouter</span>
         </button>
       </div>
-      <table>
-        <thead><tr>
-            <th data-i18n="city">Ville</th><th data-i18n="home_cost_th">🏠 منزل (تكلفة)</th><th data-i18n="home_cust_th">🏠 منزل (زبون)</th>
-            <th data-i18n="desk_cost_th">🏢 مكتب (تكلفة)</th><th data-i18n="desk_cust_th">🏢 مكتب (زبون)</th><th data-i18n="return_fee_shared">Retour</th>
-            <th></th>
-        </tr></thead>
-        <tbody id="citiesTbl"></tbody>
-      </table>
+      <div class="table-scroll">
+        <table>
+          <thead><tr>
+              <th data-i18n="city">Ville</th><th data-i18n="home_cost_th">🏠 منزل (تكلفة)</th><th data-i18n="home_cust_th">🏠 منزل (زبون)</th>
+              <th data-i18n="desk_cost_th">🏢 مكتب (تكلفة)</th><th data-i18n="desk_cust_th">🏢 مكتب (زبون)</th><th data-i18n="return_fee_shared">Retour</th>
+              <th></th>
+          </tr></thead>
+          <tbody id="citiesTbl"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -572,7 +576,7 @@
             </button>
           </div>
         </div>
-        <div style="overflow-x:auto">
+        <div class="table-scroll">
           <table>
             <thead><tr>
               <th data-i18n="member_username">اسم المستخدم</th>
