@@ -595,9 +595,15 @@
   <div id="sec_plans" class="section">
     <div class="plans-head">
       <h2 class="plans-title" data-i18n="nav_plans">الاشتراكات</h2>
+      <div class="plan-current" id="planCurrentBox" hidden>
+        <span class="plan-current-lbl" data-i18n="current_plan">باقتك الحالية</span>
+        <strong id="planCurrentName"></strong>
+        <span class="plan-current-exp" id="planCurrentExp"></span>
+      </div>
     </div>
     <div class="plan-grid">
       <div class="plan-card" id="plan_free">
+        <span class="plan-current-pill" data-i18n="current_plan" hidden>باقتك الحالية</span>
         <h3 class="plan-name">Free</h3>
         <div class="plan-price"><span data-price="free-monthly">0</span> <small data-i18n="unit_month">دج / شهر</small></div>
         <ul class="plan-features">
@@ -610,6 +616,7 @@
         </ul>
       </div>
       <div class="plan-card" id="plan_starter">
+        <span class="plan-current-pill" data-i18n="current_plan" hidden>باقتك الحالية</span>
         <h3 class="plan-name">Starter</h3>
         <div class="plan-price"><span data-price="starter-monthly">1500</span> <small data-i18n="unit_month">دج / شهر</small></div>
         <ul class="plan-features">
@@ -622,6 +629,7 @@
         </ul>
       </div>
       <div class="plan-card plan-pro" id="plan_pro">
+        <span class="plan-current-pill" data-i18n="current_plan" hidden>باقتك الحالية</span>
         <span class="plan-top" data-i18n="most_popular">الأكثر طلبًا</span>
         <h3 class="plan-name">Pro</h3>
         <div class="plan-price"><span data-price="pro-monthly">2900</span> <small data-i18n="unit_month">دج / شهر</small></div>
@@ -636,6 +644,7 @@
         </ul>
       </div>
       <div class="plan-card plan-business" id="plan_business">
+        <span class="plan-current-pill" data-i18n="current_plan" hidden>باقتك الحالية</span>
         <h3 class="plan-name">Business</h3>
         <div class="plan-price"><span data-price="business-monthly">4900</span> <small data-i18n="unit_month">دج / شهر</small></div>
         <ul class="plan-features">
@@ -647,6 +656,7 @@
       </div>
     </div>
     <div class="plan-card plan-early" id="plan_early">
+      <span class="plan-current-pill" data-i18n="current_plan" hidden>باقتك الحالية</span>
       <span class="plan-offer" data-i18n="early_offer">عرض أوائل التجار</span>
       <h3 class="plan-name" data-i18n="plan_early">أوائل التجار</h3>
       <div id="earlySlotsBadge" class="plan-slots" style="display:none"></div>

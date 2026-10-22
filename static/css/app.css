@@ -145,6 +145,18 @@ html[dir=rtl] .modal-close{right:auto;left:16px}
 .plan-info{margin-top:16px;border-radius:var(--r-card);background:var(--white);padding:20px 22px;display:flex;flex-direction:column;gap:10px;font-size:16px;color:var(--text)}
 .plan-info p{margin:0;display:flex;align-items:flex-start;gap:10px}
 .plan-info svg{color:var(--brand);margin-top:2px}
+.plan-current{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;border-radius:var(--r-card);background:var(--brand-light);padding:14px 20px;font-size:16px;color:var(--ink)}
+.plan-current[hidden]{display:none}
+.plan-current-lbl{color:var(--brand-dark);font-weight:600}
+.plan-current strong{font-size:18px}
+.plan-current-exp{color:var(--muted);font-size:15px}
+.plan-current-exp.warn{color:var(--st-pending-fg);font-weight:700}
+.plan-current-exp.danger{color:var(--st-refused-fg);font-weight:700}
+.plan-current-pill{align-self:flex-start;padding:6px 12px;border-radius:var(--r-pill);background:var(--brand-light);color:var(--brand-dark);font-size:13px;font-weight:700}
+.plan-current-pill[hidden]{display:none}
+.plan-pro .plan-current-pill{background:#fff}
+.plan-card.current{box-shadow:0 0 0 3px var(--brand-dark)}
+.plan-pro.current{box-shadow:0 0 0 3px var(--volt),0 30px 60px rgba(59,43,255,.3)}
 /* /plans */
 .store-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px}
 .store-card{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;transition:.2s}

@@ -117,11 +117,36 @@ function renderPlanAlerts(){
   box.style.display = alerts.length ? "block" : "none";
 }
 
+// تاريخ بأرقام لاتينية: 21/11/2026 (كيما باقي اللوحة)
+function fmtDate(ms){
+  var d = new Date(ms), pad = function(n){ return (n<10?"0":"")+n; };
+  return pad(d.getDate())+"/"+pad(d.getMonth()+1)+"/"+d.getFullYear();
+}
+
 function highlightCurrentPlan(){
   ["free","starter","pro","business","early"].forEach(function(p){
     var el = document.getElementById("plan_"+p);
-    if(el) el.classList.toggle("current", p===currentPlan);
+    if(!el) return;
+    el.classList.toggle("current", p===currentPlan);
+    var pill = el.querySelector(".plan-current-pill");
+    if(pill) pill.hidden = p!==currentPlan;
   });
+  // "باقتك الحالية: Pro — تنتهي في …" (حتى لباقة قديمة بلا بطاقة: lifetime/full)
+  var currentBox = document.getElementById("planCurrentBox");
+  if(currentBox){
+    var names = {free:"Free", starter:"Starter", pro:"Pro", business:"Business", early:t("plan_early")};
+    var plan = String(currentPlan||"");
+    document.getElementById("planCurrentName").textContent = names[plan] || (plan.charAt(0).toUpperCase()+plan.slice(1));
+    var sub = SUBSCRIPTION||{}, exp = document.getElementById("planCurrentExp");
+    var text = "", level = "";
+    if(sub.expiresAt && sub.state==="active") text = t("plan_expires_on").replace("{date}", fmtDate(sub.expiresAt));
+    else if(sub.expiresAt && sub.state==="expiring"){ text = t("plan_expires_soon").replace("{date}", fmtDate(sub.expiresAt)); level = " warn"; }
+    else if(sub.expiresAt && sub.state==="grace"){ text = t("plan_grace_until").replace("{date}", fmtDate(sub.graceEndsAt)); level = " danger"; }
+    else if(plan!=="free") text = t("plan_no_expiry");
+    exp.textContent = text;
+    exp.className = "plan-current-exp"+level;
+    currentBox.hidden = !plan;
+  }
   var early = document.getElementById("earlySlotsBadge");
   if(early){
     var hasSlots = EARLY_SLOTS_LEFT!==null && EARLY_SLOTS_LEFT!==undefined;

@@ -104,3 +104,28 @@ def test_early_card_like_the_landing_offer(app):
     assert 't("instead_of_year")' in fn
     assert '"🔥' not in fn and 't("early_full")' in fn  # بلا إيموجي، و"اكتملت البلايص" عند 0
     assert "highlightCurrentPlan" in CORE[CORE.index("function applyLang("):CORE.index("function setLang(")]
+
+
+# ── 4. الباقة الحالية وتاريخ الانتهاء ──
+def test_current_plan_strip_and_pill():
+    sec = _plans_section()
+    strip = sec[sec.index('id="planCurrentBox"'):]
+    strip = strip[:strip.index("</div>")]
+    assert 'data-i18n="current_plan"' in strip and 'id="planCurrentName"' in strip and 'id="planCurrentExp"' in strip
+    for plan in ("free",) + PAID:
+        assert '<span class="plan-current-pill" data-i18n="current_plan" hidden>' in _card(plan), plan
+    js = _dashboard_js()
+    fn = js[js.index("function highlightCurrentPlan("):]
+    fn = fn[:fn.index("\n}\n")]
+    assert 'pill.hidden = p!==currentPlan' in fn
+    assert 'getElementById("planCurrentName").textContent' in fn  # اسم الباقة نص، ماشي HTML
+    for state, key in (("active", "plan_expires_on"), ("expiring", "plan_expires_soon"), ("grace", "plan_grace_until")):
+        assert f'"{state}"' in fn and f'"{key}"' in fn, state
+    assert 't("plan_no_expiry")' in fn and "fmtDate(" in fn
+    date = js[js.index("function fmtDate("):]
+    date = date[:date.index("\n}\n")]
+    assert "toLocale" not in date  # أرقام لاتينية: 21/11/2026
+    r = _css()
+    assert r[".plan-current"]["background"] == "var(--brand-light)"
+    assert r[".plan-current-exp.warn"]["color"] == "var(--st-pending-fg)"
+    assert r[".plan-current-exp.danger"]["color"] == "var(--st-refused-fg)"
