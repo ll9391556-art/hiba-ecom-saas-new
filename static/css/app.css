@@ -168,6 +168,7 @@ html[dir=rtl] .modal-close{right:auto;left:16px}
 .plan-pro .plan-cta:hover{background:#C6F21F;border-color:#C6F21F;color:var(--ink)}
 .plan-business .plan-cta,.plan-early .plan-cta{background:var(--brand);border-color:var(--brand);color:#fff}
 .plan-business .plan-cta:hover,.plan-early .plan-cta:hover{background:var(--brand-dark);border-color:var(--brand-dark)}
+@media (max-width:640px){.plan-grid{grid-template-columns:1fr}.plan-pro{order:-1}.plan-price{font-size:34px}}
 /* /plans */
 .store-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px}
 .store-card{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;transition:.2s}

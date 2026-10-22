@@ -57,7 +57,8 @@ def test_plan_cards_follow_the_landing_design():
     assert r[".plan-business"]["border"] == "2px solid var(--brand)"
     assert r[".plan-top"]["background"] == "var(--volt)" and r[".plan-top"]["color"] == "var(--ink)"
     assert r[".plan-pro .plan-feature svg"]["color"] == "var(--volt)"
-    assert r[".plan-grid"]["grid-template-columns"] == "repeat(auto-fit,minmax(min(100%,240px),1fr))"
+    # _rules ما يفرّقش @media (الهاتف: 1fr)، لذلك القاعدة الكاملة كنص
+    assert ".plan-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));" in _read(STATIC / "css" / "app.css")
     css = _read(STATIC / "css" / "app.css").lower()
     block = css[css.index(".plan-grid"):css.index("/* /plans */")]
     assert not any(d in block for d in DARK) and not any(d in sec.lower() for d in DARK)
@@ -187,3 +188,14 @@ def test_support_page_prefills_the_plan_safely():
     assert "Object.prototype.hasOwnProperty.call(PLAN_NAMES, plan)" in js  # قيمة من القائمة فقط
     assert '.value = "نحب نشترك في باقة "+PLAN_NAMES[plan]' in js  # نص فـ textarea، بلا innerHTML
     assert "innerHTML" not in js and 'getElementById("s_type").value = "other"' in js
+
+
+# ── 7. الهاتف: وحدة تحت الأخرى، وPro الأولى ──
+def test_mobile_stacks_cards_with_pro_first():
+    css = _read(STATIC / "css" / "app.css")
+    block = css[css.index("@media (max-width:640px){.plan-grid"):]
+    block = block[:block.index("}}") + 2]
+    assert ".plan-grid{grid-template-columns:1fr}" in block and ".plan-pro{order:-1}" in block
+    sec = _plans_section()  # ترتيب الـ HTML يبقى free، starter، pro، business (الحاسوب)
+    order = [sec.index(f'id="plan_{p}"') for p in ("free", "starter", "pro", "business", "early")]
+    assert order == sorted(order)
