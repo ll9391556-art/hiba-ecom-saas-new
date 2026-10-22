@@ -62,3 +62,26 @@ def test_plan_cards_follow_the_landing_design():
     block = css[css.index(".plan-grid"):css.index("/* /plans */")]
     assert not any(d in block for d in DARK) and not any(d in sec.lower() for d in DARK)
     assert "#f59e0b" not in sec.lower()
+
+
+# ── 2. الأسعار بلا فاصل آلاف ──
+CORE = _read(STATIC / "js" / "core.js")
+
+
+def _i18n(lang, key):
+    block = re.search(r"\n  %s:\{(.*?)\n  \}" % lang, CORE, re.S).group(1)
+    m = re.search(r'[,{\s]%s:"([^"]*)"' % key, block)
+    return m.group(1) if m else None
+
+
+def test_prices_have_no_thousands_separator(app):
+    sec = _plans_section()
+    prices = dict(re.findall(r'data-price="([a-z]+-[a-z]+)">([^<]*)<', sec))
+    want = {f"{k}-{period}": str(v) for k in ("free",) + PAID for period, v in app.PLANS[k]["price"].items()}
+    assert prices == want  # "2900"، ماشي "2,900"
+    assert sec.count('data-i18n="unit_month"') == 4 and "<small>DZD</small>" not in sec  # free تاني بالوحدة
+    units = {"AR": ("دج / شهر", "دج / سنة"), "FR": ("DA / mois", "DA / an"), "EN": ("DZD / month", "DZD / year")}
+    for lang, (month, year) in units.items():
+        assert _i18n(lang, "unit_month") == month and _i18n(lang, "unit_year") == year, lang
+        for key in ("pf_bot_1500", "pf_bot_5000"):
+            assert not re.search(r"\d[ ,\u00a0\u202f]\d{3}", _i18n(lang, key)), (lang, key)
