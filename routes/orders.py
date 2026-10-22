@@ -30,10 +30,20 @@ from core.security import (
     require_auth,
     require_perm,
 )
+from core.util import (
+    _safe_int,
+)
 from services.orders import (
+    OrderConflict,
+    OrderGone,
+    _apply_status_dates,
     _calc_order_profit,
+    _claimed,
+    _mutate_order,
+    _phone_digits,
     _save_order,
     _ship_values,
+    _valid_order_id,
 )
 
 from services.users import (
@@ -173,10 +183,7 @@ def api_update_status():
     profit = 0
     now    = time.strftime("%Y-%m-%d %H:%M")
     delivery_type = order.get("deliveryType") or "home"
-    if status == "Confirmed" and not order.get("date_sent"):
-        order["date_sent"] = now
-    if status == "Delivered" and not order.get("date_delivered"):
-        order["date_delivered"] = now
+    _apply_status_dates(order, status, now)
     if status in ("Confirmed", "Refused", "Delivered"):
         p_data = _fb_get(f"data/{uid}/products/{order.get('product')}")
         c_data = _fb_get(f"data/{uid}/cities/{order.get('city')}")
@@ -211,3 +218,148 @@ def api_update_order_delivery():
         order["profit"] = _calc_order_profit(p_data, c_data, order.get("qty", 1), dtype, order.get("status",""), order.get("profit", 0))
     _save_order(uid, oid, order, before=before)
     return ok_json(True)
+
+
+# ── تعديل طلب (المهمة 3) ──────────────────────────────────
+_ORDER_STATUSES = ("Pending", "Confirmed", "Delivered", "Refused", "No Answer")
+_EDIT_FIELDS    = ("name", "phone", "product", "qty", "city", "deliveryType", "total", "status")
+_PRICING_FIELDS = ("product", "qty", "city", "deliveryType", "total", "status")
+_MAX_ORDER_TOTAL = 10_000_000
+
+
+def _parse_order_edit(d):
+    """whitelist + فحص لحقول التعديل. يرجّع (fields, None) ولا (None, رسالة الخطأ).
+    profit/id/createdAt/source/couponCode/discountApplied... ما يتقبلوش من الواجهة أبداً."""
+    if not isinstance(d, dict):
+        return None, "Missing fields"
+    out = {}
+    if "name" in d:
+        name = str(d.get("name") or "").strip()
+        if not 1 <= len(name) <= 100:
+            return None, "الاسم غير صالح"
+        out["name"] = name
+    if "phone" in d:
+        phone = str(d.get("phone") or "").strip()
+        if len(phone) > 30 or not 9 <= len(_phone_digits(phone)) <= 15:
+            return None, "رقم الهاتف غير صالح"
+        out["phone"] = phone
+    for key, msg in (("product", "المنتج غير صالح"), ("city", "الولاية غير صالحة")):
+        if key in d:
+            v = str(d.get(key) or "").strip()
+            if not 1 <= len(v) <= 200:
+                return None, msg
+            out[key] = v
+    if "qty" in d:
+        q = d.get("qty")
+        try:
+            q = int(str(q).strip()) if not isinstance(q, bool) else 0
+        except ValueError:
+            q = 0
+        if not 1 <= q <= 999:
+            return None, "الكمية غير صالحة"
+        out["qty"] = q
+    if "deliveryType" in d:
+        if d.get("deliveryType") not in ("home", "desk"):
+            return None, "نوع التوصيل غير صالح"
+        out["deliveryType"] = d["deliveryType"]
+    if "status" in d:
+        if d.get("status") not in _ORDER_STATUSES:
+            return None, "الحالة غير صالحة"
+        out["status"] = d["status"]
+    if "total" in d:
+        t = d.get("total")
+        try:
+            t = float(t) if not isinstance(t, bool) else -1.0
+        except (TypeError, ValueError):
+            t = -1.0
+        if not 0 <= t <= _MAX_ORDER_TOTAL:  # يرفض NaN كذلك
+            return None, "المجموع غير صالح"
+        out["total"] = round(t, 2)
+    return out, None
+
+
+def _price_order(order, p_data, c_data, total_given):
+    """المجموع والربح بعد تعديل. المجموع التلقائي = sell×qty + ship_cust − discountApplied؛ مجموع
+    مكتوب باليد (مختلف على التلقائي) يبقى، والربح منو: total − cost×qty − ship_cost (نفس المعادلة
+    كي يكون المجموع عادي). الربح بنفس قواعد updateStatus. منتج ولا ولاية ماعادوش: القيم القديمة."""
+    status = order.get("status", "")
+    dtype  = order.get("deliveryType") or "home"
+    qty    = _safe_int(order.get("qty", 1), 1)
+    known  = isinstance(p_data, dict) and isinstance(c_data, dict)
+    auto   = None
+    if known:
+        ship_cust, ship_cost = _ship_values(c_data, dtype)
+        auto = max(0, round(float(p_data.get("sell", 0)) * qty + ship_cust
+                            - float(order.get("discountApplied") or 0), 2))
+    manual = total_given and (auto is None or abs(float(order.get("total") or 0) - auto) > 0.005)
+    if not manual and auto is not None:
+        order["total"] = auto
+    if status in ("Confirmed", "Delivered"):
+        if known:
+            order["profit"] = (round(order["total"] - float(p_data.get("cost", 0)) * qty - ship_cost, 2)
+                               if manual else _calc_order_profit(p_data, c_data, qty, dtype, status))
+    elif status == "Refused":
+        if isinstance(c_data, dict):
+            order["profit"] = -float(c_data.get("returnFee", 0))
+    else:
+        order["profit"] = 0
+
+
+def _order_diff(before, after, keys):
+    return [f"{k}: {before.get(k, '—')} → {after.get(k, '—')}" for k in keys if before.get(k) != after.get(k)]
+
+
+def _actor():
+    return getattr(request, "auth_member_username", "") or "owner"
+
+
+@bp.route("/api/editOrder", methods=["POST"])
+@require_auth
+@require_perm("orders")
+def api_edit_order():
+    body = request.get_json(silent=True) or {}
+    uid  = request.auth_uid
+    oid  = body.get("orderId")
+    if not _valid_order_id(oid):
+        return err_json("Invalid order id")
+    fields, error = _parse_order_edit(body.get("data"))
+    if error:
+        return err_json(error)
+    order = _fb_get(f"data/{uid}/orders/{oid}")
+    if not isinstance(order, dict) or _claimed(order):
+        return err_json("Order not found", 404)
+    # المنتج والولاية يتقراو قبل الـ transaction (دالتها لازم تكون بلا شبكة)
+    product = fields.get("product", order.get("product"))
+    city    = fields.get("city", order.get("city"))
+    p_data  = _fb_get(f"data/{uid}/products/{product}") if product else None
+    c_data  = _fb_get(f"data/{uid}/cities/{city}") if city else None
+    if "product" in fields and fields["product"] != order.get("product") and not isinstance(p_data, dict):
+        return err_json("المنتج غير موجود")
+    if "city" in fields and fields["city"] != order.get("city") and not isinstance(c_data, dict):
+        return err_json("الولاية غير موجودة")
+    now = time.strftime("%Y-%m-%d %H:%M")
+
+    def build(cur):
+        if (cur.get("product"), cur.get("city")) != (order.get("product"), order.get("city")):
+            raise OrderConflict()  # p_data/c_data اللي قريناهم ماعادوش تاع هاد الطلب
+        new = {**cur, **fields}
+        if any(k in fields and fields[k] != cur.get(k) for k in _PRICING_FIELDS):
+            _price_order(new, p_data, c_data, "total" in fields)
+        if "status" in fields:
+            _apply_status_dates(new, new["status"], now)
+        return None if new == cur else new
+
+    try:
+        before, after = _mutate_order(uid, oid, build)
+    except OrderGone:
+        return err_json("Order not found", 404)
+    except OrderConflict:
+        return err_json("الطلب تبدّل فنفس الوقت — عاود حمّل الطلبات وحاول", 409)
+    except Exception as e:
+        logging.error(f"editOrder failed ({type(e).__name__})")
+        return err_json("تعذّر حفظ التعديل — حاول بعد قليل", 503)
+    if after is None:
+        return ok_json(before)
+    log_audit_entry(uid, _actor(), "تعديل طلب",
+                    f"الطلب {oid}: " + "، ".join(_order_diff(before, after, _EDIT_FIELDS)))
+    return ok_json(after)
