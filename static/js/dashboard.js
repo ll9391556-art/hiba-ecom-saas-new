@@ -343,7 +343,7 @@ async function loadTrendChart(cur){
           data: values,
           borderColor: cssVar("--brand"),
           backgroundColor: cssVar("--brand-light"),
-          fill: true, tension: .35, pointRadius: 3, pointBackgroundColor: cssVar("--brand"), borderWidth: 2
+          fill: true, cubicInterpolationMode: "monotone", pointRadius: 3, pointBackgroundColor: cssVar("--brand"), borderWidth: 2
         }]
       },
       options: {
@@ -352,7 +352,7 @@ async function loadTrendChart(cur){
         plugins: { legend: { display:false }, tooltip: { callbacks: { label:function(ctx){ return " "+ctx.parsed.y.toLocaleString()+" "+(cur||""); } } } },
         scales: {
           x: { ticks:{ color: chartTextColor(), font:{size:11} }, grid:{ display:false } },
-          y: { ticks:{ color: chartTextColor() }, grid:{ color: chartGridColor() } }
+          y: { beginAtZero: true, min: 0, ticks:{ color: chartTextColor() }, grid:{ color: chartGridColor() } }
         }
       }
     });

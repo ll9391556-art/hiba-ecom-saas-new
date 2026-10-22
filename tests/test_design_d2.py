@@ -411,3 +411,16 @@ def test_dashboard_tables_fit_their_cards():
     assert r[".dash-table td"]["white-space"] == "nowrap"
     assert r[".dash-table-sm td:first-child"]["white-space"] == "normal"
     assert r[".dash-table-wrap"]["margin"] == "0"
+
+
+# ── تصليحات بعد المراجعة ──
+def _trend_chart_js():
+    js = _dashboard_js()
+    return js[js.index("async function loadTrendChart("):]
+
+
+def test_profit_curve_never_dips_below_zero():
+    """tension .35 كان يرسم المنحنى تحت 0 (-2000) بين نقطتين."""
+    fn = _trend_chart_js()
+    assert 'cubicInterpolationMode: "monotone"' in fn and "tension:" not in fn
+    assert "y: { beginAtZero: true, min: 0," in fn
