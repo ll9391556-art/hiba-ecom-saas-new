@@ -153,8 +153,21 @@ var chartStatusInstance   = null;
 var chartTrendInstance    = null;
 var chartProductsInstance = null;
 
-function chartTextColor(){ return DARK_MODE ? "#8899bb" : "#64748b"; }
-function chartGridColor(){ return DARK_MODE ? "rgba(255,255,255,.07)" : "rgba(0,0,0,.07)"; }
+// ألوان المخططات من tokens.css (ما كاين حتى لون مكتوب هنا)
+function cssVar(name){
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+function chartTextColor(){ return cssVar("--muted"); }
+function chartGridColor(){ return cssVar("--soft"); }
+// تم التسليم volt، مؤكدة brand، قيد الانتظار برتقالي، مرفوضة أحمر
+function statusColors(){
+  return {
+    delivered: cssVar("--volt"),
+    confirmed: cssVar("--brand"),
+    pending: cssVar("--yellow"),
+    refused: cssVar("--flash")
+  };
+}
 
 // أرقام اللوحة بأرقام لاتينية وفاصل آلاف: 11 000 (كيما التصميم، فكل اللغات)
 function fmtNum(v){
@@ -234,7 +247,7 @@ function renderStatusChart(d, cur){
       labels: labels,
       datasets: [{
         data: data,
-        backgroundColor: ["#3b82f6","#10b981","#ef4444","#f59e0b"],
+        backgroundColor: (function(c){ return [c.confirmed, c.delivered, c.refused, c.pending]; })(statusColors()),
         borderColor: "transparent",
         borderWidth: 2,
         hoverOffset: 6
@@ -272,7 +285,7 @@ function renderProductsChart(d){
       datasets: [{
         label: t("sold"),
         data: top.map(function(p){ return p.qty; }),
-        backgroundColor: "#2563eb",
+        backgroundColor: cssVar("--brand"),
         borderRadius: 6,
         maxBarThickness: 26
       }]
@@ -332,9 +345,9 @@ async function loadTrendChart(cur){
         datasets: [{
           label: t("total_profit"),
           data: values,
-          borderColor: "#10b981",
-          backgroundColor: "rgba(16,185,129,.15)",
-          fill: true, tension: .35, pointRadius: 3, pointBackgroundColor: "#10b981", borderWidth: 2
+          borderColor: cssVar("--brand"),
+          backgroundColor: cssVar("--brand-light"),
+          fill: true, tension: .35, pointRadius: 3, pointBackgroundColor: cssVar("--brand"), borderWidth: 2
         }]
       },
       options: {

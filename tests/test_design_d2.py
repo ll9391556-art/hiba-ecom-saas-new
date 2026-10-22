@@ -230,3 +230,28 @@ def test_kpi_values_and_details():
     for key in ("kpi_pending", "kpi_delivered_of", "kpi_refuse_rate", "kpi_week_profit"):
         assert f't("{key}")' in js, key
     assert "function fmtNum(" in js
+
+
+# ── 6. ألوان Chart.js من tokens.css ──
+CHART_JS = ('<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" '
+            'integrity="sha384-NrKB+u6Ts6AtkIhwPixiKTzgSKNblyhlk0Sohlgar9UHUBzai/sgnNNWWd291xqt" '
+            'crossorigin="anonymous"></script>')
+
+
+def test_chart_colors_come_from_tokens():
+    js = _dashboard_js()
+    assert "function cssVar(name)" in js and "getComputedStyle(document.documentElement)" in js
+    assert re.findall(r"#[0-9a-fA-F]{3,8}\b", js) == []      # ولا لون مكتوب فـ dashboard.js
+    assert "rgba(" not in js and "DARK_MODE" not in js
+    assert 'borderColor: cssVar("--brand")' in js             # المنحنى
+    assert "function statusColors()" in js
+    for name, var in (("delivered", "--volt"), ("confirmed", "--brand"), ("pending", "--yellow"), ("refused", "--flash")):
+        assert f'{name}: cssVar("{var}")' in js, name
+    from tests.test_design_d1 import _rules
+    root = _rules(_read(STATIC / "css" / "tokens.css"))[":root"]
+    assert root["--yellow"].upper() == "#FFB020" and root["--flash"].upper() == "#D9230F"
+
+
+def test_chart_js_is_pinned_with_sri():
+    for page in ("index.html", "shop.html"):
+        assert CHART_JS in _read(STATIC / page), page
