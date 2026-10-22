@@ -370,6 +370,8 @@ function stockLabel(s){
   var k = {"In Stock":"stock_in",InStock:"stock_in","Low Stock":"stock_low",LowStock:"stock_low","Out of Stock":"stock_out",OutOfStock:"stock_out"}[s];
   return k ? t(k) : s;
 }
+// عنوان خانة فالجدول، يبان فوقها غير فبطاقة الهاتف (D3.5، CSS ::before). النص مهرّب
+function dataLabel(key){ return ' data-label="'+esc(t(key))+'"'; }
 function custLabel(s){
   var k = {Good:"cust_good",Bad:"cust_bad",Neutral:"cust_neutral"}[s];
   return k ? t(k) : s;

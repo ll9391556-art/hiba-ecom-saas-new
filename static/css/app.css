@@ -67,9 +67,9 @@ table{width:100%;border-collapse:collapse;font-size:13px}
    فوق 640px الجدول كما هو (.m-only مخفي) */
 .m-only{display:none}
 @media (max-width:640px){/* D3.5 */
-  #sec_orders thead{display:none}
-  #sec_orders .table-scroll table{display:block}
-  #ordersTbl{display:flex;flex-direction:column;gap:12px;padding:12px}
+  #sec_orders thead,#sec_products thead{display:none}
+  #sec_orders .table-scroll table,#sec_products .table-scroll table{display:block}
+  #ordersTbl,#productsTbl{display:flex;flex-direction:column;gap:12px;padding:12px}
   #ordersTbl tr{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px 14px;grid-template-areas:"date date" "name phone" "product qty" "city delivery" "total profit" "status status" "actions actions";border:1px solid var(--line);border-radius:20px;padding:16px;background:var(--white)}
   #ordersTbl td{display:block;min-width:0;padding:0;border:0;white-space:normal;font-size:16px;overflow-wrap:anywhere}
   #ordersTbl tr:hover td{background:none}
@@ -93,6 +93,19 @@ table{width:100%;border-collapse:collapse;font-size:13px}
   #ordersTbl .oc-delivery .badge{display:none}
   #ordersTbl .oc-delivery .status-sel{width:100%}
   #ordersTbl .oc-actions{position:static;box-shadow:none;background:none;grid-area:actions;display:flex;justify-content:flex-end;padding-top:10px;border-top:1px solid var(--soft)}
+  /* بطاقة المنتج: صورة، الاسم، السعر، المخزون، الحذف */
+  #productsTbl tr{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px 14px;grid-template-areas:"name name" "price avail" "stat actions";border:1px solid var(--line);border-radius:20px;padding:16px;background:var(--white)}
+  #productsTbl td{display:block;min-width:0;padding:0;border:0;white-space:normal;font-size:16px;overflow-wrap:anywhere}
+  #productsTbl tr:hover td{background:none}
+  #productsTbl td[data-label]::before{content:attr(data-label);display:block;font-size:13px;font-weight:500;color:var(--muted);margin-bottom:2px}
+  #productsTbl td[colspan]{grid-column:1/-1}
+  #productsTbl .pc-cat,#productsTbl .pc-size,#productsTbl .pc-colors,#productsTbl .pc-cost,#productsTbl .pc-init,#productsTbl .pc-sold{display:none}
+  #productsTbl .pc-name{grid-area:name;display:flex;align-items:center;gap:12px;font-size:17px}
+  #productsTbl .pc-thumb{display:flex;align-items:center;justify-content:center;width:56px;height:56px;flex-shrink:0;border-radius:14px;object-fit:cover;background:var(--bg);color:var(--muted);font-size:22px}
+  #productsTbl .pc-price{grid-area:price}
+  #productsTbl .pc-avail{grid-area:avail}
+  #productsTbl .pc-stat{grid-area:stat;align-self:end}
+  #productsTbl .pc-actions{position:static;box-shadow:none;background:none;grid-area:actions;display:flex;justify-content:flex-end;align-items:end}
 }
 /* عمود الأزرار (آخر عمود) يبقى ظاهر: مثبّت فآخر السطر، يسار فـ RTL ويمين فـ FR/EN */
 .has-actions td:last-child,.has-actions th:last-child{position:sticky;inset-inline-end:0;z-index:1;background:var(--white);box-shadow:8px 0 10px -8px rgba(11,11,31,.18)}
