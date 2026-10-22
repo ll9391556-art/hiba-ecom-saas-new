@@ -178,7 +178,7 @@ function highlightCurrentPlan(){
     var pct = Math.min(100, Math.round((u.used/u.cap)*100));
     var cls = pct>=100 ? " full" : pct>=80 ? " warn" : "";
     return '<div class="usage-card">'+
-      '<div class="usage-row"><span>'+esc(labels[k]||k)+'</span><strong>'+fmtNum(u.used)+' / '+fmtNum(u.cap)+'</strong></div>'+
+      '<div class="usage-row"><span>'+esc(labels[k]||k)+'</span><strong dir="ltr">'+fmtNum(u.used)+' / '+fmtNum(u.cap)+'</strong></div>'+
       '<div class="usage-track"><div class="usage-fill'+cls+'" style="width:'+pct+'%"></div></div>'+
     '</div>';
   }).join("");

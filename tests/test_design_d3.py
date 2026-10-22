@@ -211,3 +211,9 @@ def test_four_cards_fit_one_row_on_a_computer():
     r = _css()
     assert r[".plan-card"]["padding"] == "24px"
     assert '<h2 class="plans-title"' not in _plans_section()  # #pageTitle فيه "الاشتراكات" من قبل
+
+
+def test_usage_numbers_read_left_to_right():
+    """فـ RTL "1240 / 1500" كانت تبان "1500 / 1240"."""
+    js = _dashboard_js()
+    assert "<strong dir=\"ltr\">'+fmtNum(u.used)+' / '+fmtNum(u.cap)+'</strong>" in js
