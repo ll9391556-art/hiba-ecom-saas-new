@@ -180,21 +180,22 @@
       </div>
     </div>
 
+    <div class="dash-row">
+      <section class="dash-card dash-main">
+        <div class="dash-card-head">
+          <h2 data-i18n="chart_trend">الأرباح خلال 7 أيام</h2>
+          <span class="dash-card-meta" id="chartTrendCaption">—</span>
+        </div>
+        <div class="chart-canvas-wrap"><canvas id="chartTrend"></canvas></div>
+      </section>
+      <section class="dash-card dash-side">
+        <div class="dash-card-head"><h2 data-i18n="chart_status">حالة الطلبات</h2></div>
+        <div class="status-bar" id="statusBar" role="img"></div>
+        <ul class="status-legend" id="statusLegend"></ul>
+      </section>
+    </div>
+
     <div class="row g-3 mb-4">
-      <div class="col-md-4">
-        <div class="chart-card">
-          <h5 data-i18n="chart_status">📊 توزيع حالة الطلبات</h5>
-          <div class="chart-canvas-wrap"><canvas id="chartStatus"></canvas></div>
-          <div class="chart-caption" id="chartStatusCaption">—</div>
-        </div>
-      </div>
-      <div class="col-md-4">
-        <div class="chart-card">
-          <h5 data-i18n="chart_trend">📈 الأرباح خلال 7 أيام</h5>
-          <div class="chart-canvas-wrap"><canvas id="chartTrend"></canvas></div>
-          <div class="chart-caption" id="chartTrendCaption">—</div>
-        </div>
-      </div>
       <div class="col-md-4">
         <div class="chart-card">
           <h5 data-i18n="chart_topproducts">🏆 أفضل المنتجات مبيعاً</h5>

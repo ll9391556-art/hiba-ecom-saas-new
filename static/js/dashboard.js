@@ -149,7 +149,6 @@ function highlightCurrentPlan(){
 // =========================================================
 // DASHBOARD
 // =========================================================
-var chartStatusInstance   = null;
 var chartTrendInstance    = null;
 var chartProductsInstance = null;
 
@@ -159,15 +158,6 @@ function cssVar(name){
 }
 function chartTextColor(){ return cssVar("--muted"); }
 function chartGridColor(){ return cssVar("--soft"); }
-// تم التسليم volt، مؤكدة brand، قيد الانتظار برتقالي، مرفوضة أحمر
-function statusColors(){
-  return {
-    delivered: cssVar("--volt"),
-    confirmed: cssVar("--brand"),
-    pending: cssVar("--yellow"),
-    refused: cssVar("--flash")
-  };
-}
 
 // أرقام اللوحة بأرقام لاتينية وفاصل آلاف: 11 000 (كيما التصميم، فكل اللغات)
 function fmtNum(v){
@@ -224,52 +214,26 @@ async function loadDashboard(){
       return "<tr><td>"+esc(p.name)+"</td><td>"+esc(p.rem)+"</td><td><span class='badge "+cl+"'>"+esc(stockLabel(p.stat))+"</span></td></tr>";
     }).join("") || '<tr><td colspan="3" class="empty-state">✅</td></tr>';
 
-    renderStatusChart(d, cur);
+    renderStatusBar(d);
     renderProductsChart(d);
     loadTrendChart(cur);
   }catch(e){ console.error(e); }
 }
 
-function renderStatusChart(d, cur){
-  var canvas = document.getElementById("chartStatus");
-  if(!canvas || typeof Chart==="undefined") return;
-  var deliveredOnly = d.delivered||0;
-  var confirmedOnly = Math.max(0, (d.confirmed||0) - deliveredOnly);
-  var refusedOnly   = d.refused||0;
-  var pendingOnly   = Math.max(0, (d.totalOrders||0) - confirmedOnly - deliveredOnly - refusedOnly);
-  var labels = [t("confirmed"), t("delivered"), t("refused"), t("st_pending")];
-  var data   = [confirmedOnly, deliveredOnly, refusedOnly, pendingOnly];
-
-  if(chartStatusInstance) chartStatusInstance.destroy();
-  chartStatusInstance = new Chart(canvas, {
-    type: "doughnut",
-    data: {
-      labels: labels,
-      datasets: [{
-        data: data,
-        backgroundColor: (function(c){ return [c.confirmed, c.delivered, c.refused, c.pending]; })(statusColors()),
-        borderColor: "transparent",
-        borderWidth: 2,
-        hoverOffset: 6
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      cutout: "62%",
-      plugins: {
-        legend: { position: "bottom", labels: { color: chartTextColor(), font:{size:11}, padding:12, usePointStyle:true, boxWidth:8 } },
-        tooltip: { callbacks: { label: function(ctx){ return " "+ctx.label+": "+ctx.parsed; } } }
-      }
-    }
-  });
-
-  var cap = document.getElementById("chartStatusCaption");
-  if(cap){
-    cap.innerHTML = "<strong>"+(d.totalOrders||0)+"</strong> "+t("total_orders")+" — "+
-      "<strong style='color:var(--green)'>"+(d.confirmRate||0)+"%</strong> "+t("confirmed")+" · "+
-      "<strong style='color:var(--red)'>"+(d.refuseRate||0)+"%</strong> "+t("refused");
-  }
+// توزيع الحالات (Dashboard.dc.html): شريط HTML وتحتو القائمة. الألوان من CSS (.seg-*)
+function renderStatusBar(d){
+  var bar = document.getElementById("statusBar"), legend = document.getElementById("statusLegend");
+  if(!bar || !legend) return;
+  var n = dashCounts(d);
+  var rows = [["delivered","st_delivered",n.delivered], ["confirmed","st_confirmed",n.confirmedOnly],
+              ["pending","st_pending",n.pending], ["refused","st_refused",n.refused]];
+  bar.innerHTML = rows.filter(function(r){ return r[2]>0; }).map(function(r){
+    return '<span class="seg-'+r[0]+'" style="flex:'+r[2]+'"></span>';
+  }).join("");
+  bar.setAttribute("aria-label", rows.map(function(r){ return r[2]+" "+t(r[1]); }).join(" · "));
+  legend.innerHTML = rows.map(function(r){
+    return '<li><span class="status-dot seg-'+r[0]+'"></span><span class="status-name">'+esc(t(r[1]))+'</span><strong>'+fmtNum(r[2])+'</strong></li>';
+  }).join("");
 }
 
 function renderProductsChart(d){

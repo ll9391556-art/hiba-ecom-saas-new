@@ -244,9 +244,7 @@ def test_chart_colors_come_from_tokens():
     assert re.findall(r"#[0-9a-fA-F]{3,8}\b", js) == []      # ولا لون مكتوب فـ dashboard.js
     assert "rgba(" not in js and "DARK_MODE" not in js
     assert 'borderColor: cssVar("--brand")' in js             # المنحنى
-    assert "function statusColors()" in js
-    for name, var in (("delivered", "--volt"), ("confirmed", "--brand"), ("pending", "--yellow"), ("refused", "--flash")):
-        assert f'{name}: cssVar("{var}")' in js, name
+    # ألوان الحالات (شريط HTML من البند 7) من نفس tokens: .seg-* فـ app.css
     from tests.test_design_d1 import _rules
     root = _rules(_read(STATIC / "css" / "tokens.css"))[":root"]
     assert root["--yellow"].upper() == "#FFB020" and root["--flash"].upper() == "#D9230F"
@@ -255,3 +253,29 @@ def test_chart_colors_come_from_tokens():
 def test_chart_js_is_pinned_with_sri():
     for page in ("index.html", "shop.html"):
         assert CHART_JS in _read(STATIC / page), page
+
+
+# ── 7. توزيع الحالات: شريط HTML وقائمة (بلا doughnut) ──
+STATUS_SEGMENTS = {"delivered": "--volt", "confirmed": "--brand", "pending": "--yellow", "refused": "--flash"}
+
+
+def test_status_bar_replaces_doughnut():
+    sec = _dash_section()
+    assert 'id="chartStatus"' not in sec and "doughnut" not in _dashboard_js()
+    assert 'class="status-bar" id="statusBar" role="img"' in sec and 'id="statusLegend"' in sec
+    row = sec[sec.index('<div class="dash-row">'):]
+    assert row.index('id="chartTrend"') < row.index('id="statusBar"')  # المنحنى ثم الحالات، كيما التصميم
+    r = _css_rules()
+    assert r[".status-bar"]["height"] == "18px" and r[".status-bar"]["border-radius"] == "var(--r-pill)"
+    for name, var in STATUS_SEGMENTS.items():
+        assert r[f".seg-{name}"]["background"] == f"var({var})", name
+    assert r[".dash-card"]["border-radius"] == "var(--r-card)" and r[".dash-card"]["background"] == "var(--white)"
+
+
+def test_status_bar_order_and_escaping():
+    js = _dashboard_js()
+    fn = js[js.index("function renderStatusBar("):]
+    fn = fn[:fn.index("\n}\n")]
+    order = [fn.index(f'["{s}"') for s in ("delivered", "confirmed", "pending", "refused")]
+    assert order == sorted(order)
+    assert "esc(t(r[1]))" in fn and "fmtNum(r[2])" in fn and 'setAttribute("aria-label"' in fn

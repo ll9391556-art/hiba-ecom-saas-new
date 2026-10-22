@@ -268,6 +268,26 @@ select.status-sel{min-height:var(--h-btn-sm);background:var(--white);border:1px 
 .kpi-volt{background:var(--volt);color:var(--ink)}
 .kpi-volt .kpi-lbl,.kpi-volt .kpi-sub{color:var(--st-delivered-fg)}
 .kpi-volt .kpi-sub{font-weight:700}
+/* صفوف اللوحة: عمود عريض وعمود جانبي، يرجعو تحت بعض فالهاتف */
+.dash-row{display:flex;flex-wrap:wrap;gap:16px;margin-bottom:16px}
+.dash-main{flex:2 1 420px}
+.dash-side{flex:1 1 280px}
+.dash-col{flex:1 1 280px;min-width:0;display:flex;flex-direction:column;gap:16px}
+.dash-card{min-width:0;border-radius:var(--r-card);background:var(--white);padding:22px;display:flex;flex-direction:column;gap:16px}
+.dash-card-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px}
+.dash-card-head h2{margin:0;font-size:18px;font-weight:700;color:var(--ink);display:flex;align-items:center;gap:8px}
+.dash-card-meta{font-size:14px;color:var(--muted)}
+.dash-card .chart-canvas-wrap{height:220px;flex:none}
+/* توزيع الحالات */
+.status-bar{display:flex;height:18px;border-radius:var(--r-pill);overflow:hidden;gap:3px;background:var(--soft)}
+.status-legend{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+.status-legend li{display:flex;align-items:center;gap:10px;font-size:15px}
+.status-name{flex:1}
+.status-dot{width:12px;height:12px;border-radius:4px;flex-shrink:0}
+.seg-delivered{background:var(--volt)}
+.seg-confirmed{background:var(--brand)}
+.seg-pending{background:var(--yellow)}
+.seg-refused{background:var(--flash)}
 /* تنبيهات الباقة أعلى اللوحة (ردود البوت، الانتهاء) */
 #planAlerts{margin-bottom:16px}
 .plan-alert{padding:14px 18px;border-radius:16px;font-size:16px;font-weight:600;margin-bottom:8px;border:1px solid}
