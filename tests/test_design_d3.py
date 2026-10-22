@@ -153,3 +153,37 @@ def test_usage_box_uses_dashboard_style():
     assert "var(--red)" not in fn and "var(--green)" not in fn and "table-wrap" not in fn
     assert "fmtNum(u.used)" in fn and "fmtNum(u.cap)" in fn and "esc(labels[k]||k)" in fn
     assert 'class="usage-fill\'+cls+\'"' in fn
+
+
+# ── 6. "اطلب هذه الباقة" → صفحة الدعم بـ ?plan= ──
+REQUEST = 'data-on-click="requestPlan(this.dataset.plan)"'
+
+
+def test_request_button_on_paid_cards_only():
+    for plan in PAID:
+        card = _card(plan)
+        assert f'<button type="button" class="plan-cta" data-plan="{plan}" {REQUEST}>' in card, plan
+        assert 'data-i18n="request_plan"' in card
+    assert "requestPlan" not in _card("free")
+    actions = _read(STATIC / "js" / "actions.js")
+    assert '"requestPlan(this.dataset.plan)": function(event){ requestPlan(this.dataset.plan); }' in actions
+    js = _dashboard_js()
+    fn = js[js.index("function requestPlan("):]
+    fn = fn[:fn.index("\n}\n")]
+    assert "REQUESTABLE_PLANS.indexOf(plan)<0" in fn  # غير الباقات المعروفة
+    assert "window.open(\"/static/features/support.html?plan=\"+encodeURIComponent(plan), \"_blank\")" in fn
+    assert 'var REQUESTABLE_PLANS = ["starter","pro","business","early"];' in js
+    hl = js[js.index("function highlightCurrentPlan("):]
+    hl = hl[:hl.index("\n}\n")]
+    assert "cta.hidden = p===currentPlan" in hl  # باقتك الحالية: بلا زر
+
+
+def test_support_page_prefills_the_plan_safely():
+    html = _read(STATIC / "features" / "support.html")
+    assert 'var PLAN_NAMES = {starter:"Starter", pro:"Pro", business:"Business", early:"أوائل التجار"};' in html
+    js = html[html.index("var PLAN_NAMES"):]
+    js = js[:js.index("})();") + 5]
+    assert 'new URLSearchParams(location.search).get("plan")' in js
+    assert "Object.prototype.hasOwnProperty.call(PLAN_NAMES, plan)" in js  # قيمة من القائمة فقط
+    assert '.value = "نحب نشترك في باقة "+PLAN_NAMES[plan]' in js  # نص فـ textarea، بلا innerHTML
+    assert "innerHTML" not in js and 'getElementById("s_type").value = "other"' in js

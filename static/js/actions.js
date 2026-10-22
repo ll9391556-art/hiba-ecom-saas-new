@@ -62,6 +62,7 @@ registerActions({
   "removeLandingImage(Number(this.dataset.i))": function(event){ removeLandingImage(Number(this.dataset.i)); },
   "removeProductImage(Number(this.dataset.i))": function(event){ removeProductImage(Number(this.dataset.i)); },
   "removeStoreLogoImage()": function(event){ removeStoreLogoImage(); },
+  "requestPlan(this.dataset.plan)": function(event){ requestPlan(this.dataset.plan); },
   "saveBotSettings()": function(event){ saveBotSettings(); },
   "saveStoreSettings()": function(event){ saveStoreSettings(); },
   "saveTeamMember()": function(event){ saveTeamMember(); },

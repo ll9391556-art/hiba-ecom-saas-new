@@ -160,6 +160,14 @@ html[dir=rtl] .modal-close{right:auto;left:16px}
 .plan-contact{align-self:flex-start;margin-top:4px}
 .usage-card{border-radius:var(--r-card);background:var(--white);padding:18px 22px;margin-bottom:12px;display:flex;flex-direction:column;gap:10px}
 .usage-row{display:flex;justify-content:space-between;gap:12px;font-size:16px}
+.plan-cta{margin-top:auto;min-height:54px;border-radius:16px;border:2px solid var(--brand-light);background:var(--brand-light);color:var(--brand-dark);font-family:inherit;font-size:17px;font-weight:700;cursor:pointer;transition:background .2s,color .2s}
+.plan-cta:hover{background:var(--brand);border-color:var(--brand);color:#fff}
+.plan-cta[hidden]{display:none}
+.plan-cta:focus-visible{outline:none;box-shadow:var(--focus-ring)}
+.plan-pro .plan-cta{background:var(--volt);border-color:var(--volt);color:var(--ink)}
+.plan-pro .plan-cta:hover{background:#C6F21F;border-color:#C6F21F;color:var(--ink)}
+.plan-business .plan-cta,.plan-early .plan-cta{background:var(--brand);border-color:var(--brand);color:#fff}
+.plan-business .plan-cta:hover,.plan-early .plan-cta:hover{background:var(--brand-dark);border-color:var(--brand-dark)}
 /* /plans */
 .store-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px}
 .store-card{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;transition:.2s}

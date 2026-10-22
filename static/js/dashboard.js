@@ -117,6 +117,13 @@ function renderPlanAlerts(){
   box.style.display = alerts.length ? "block" : "none";
 }
 
+// "اطلب هذه الباقة": الاشتراك يدوي (الأدمين يفعّل)، فالزر يفتح صفحة الدعم والرسالة معمّرة
+var REQUESTABLE_PLANS = ["starter","pro","business","early"];
+function requestPlan(plan){
+  if(REQUESTABLE_PLANS.indexOf(plan)<0) return;
+  window.open("/static/features/support.html?plan="+encodeURIComponent(plan), "_blank");
+}
+
 // تاريخ بأرقام لاتينية: 21/11/2026 (كيما باقي اللوحة)
 function fmtDate(ms){
   var d = new Date(ms), pad = function(n){ return (n<10?"0":"")+n; };
@@ -130,6 +137,8 @@ function highlightCurrentPlan(){
     el.classList.toggle("current", p===currentPlan);
     var pill = el.querySelector(".plan-current-pill");
     if(pill) pill.hidden = p!==currentPlan;
+    var cta = el.querySelector(".plan-cta");
+    if(cta) cta.hidden = p===currentPlan || (p==="early" && EARLY_SLOTS_LEFT===0);
   });
   // "باقتك الحالية: Pro — تنتهي في …" (حتى لباقة قديمة بلا بطاقة: lifetime/full)
   var currentBox = document.getElementById("planCurrentBox");
