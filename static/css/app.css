@@ -307,7 +307,7 @@ select.status-sel{min-height:var(--h-btn-sm);background:var(--white);border:1px 
 html[dir=ltr] .dash-order-id{text-align:left}
 .dash-amount{font-weight:600}
 .dash-table-sm{min-width:0}
-.dash-table-sm td:first-child{white-space:normal;overflow-wrap:anywhere}
+.dash-table-sm td:first-child{max-width:0;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dash-ellipsis{max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dash-empty{text-align:center;color:var(--muted);padding:24px 8px}
 .dash-card[hidden]{display:none}

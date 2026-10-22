@@ -409,7 +409,6 @@ def test_dashboard_tables_fit_their_cards():
     assert r[".dash-table"]["min-width"] == "520px"
     assert r[".dash-ellipsis"]["max-width"] == "140px" and r[".dash-ellipsis"]["white-space"] == "nowrap"
     assert r[".dash-table td"]["white-space"] == "nowrap"
-    assert r[".dash-table-sm td:first-child"]["white-space"] == "normal"
     assert r[".dash-table-wrap"]["margin"] == "0"
 
 
@@ -436,3 +435,14 @@ def test_dashboard_numbers_have_no_thousands_separator():
     trend = _trend_chart_js()
     assert "ticks:{ color: chartTextColor(), callback: function(v){ return fmtNum(v); } }" in trend
     assert "fmtNum(ctx.parsed.y)" in trend and "fmtNum(total7)" in trend
+
+
+def test_low_stock_name_is_cut_on_one_line():
+    """على الهاتف: اسم المنتج فسطر واحد بـ "…"، والاسم كامل فـ title (ماشي على 5 أسطر)."""
+    cell = _css_rules()[".dash-table-sm td:first-child"]
+    assert cell["white-space"] == "nowrap" and cell["overflow"] == "hidden" and cell["text-overflow"] == "ellipsis"
+    assert cell["max-width"] == "0" and cell["width"] == "100%"  # العمود ياخذ الباقي ويتقطّع
+    js = _dashboard_js()
+    row = js[js.index('getElementById("lowStockTbl")'):]
+    row = row[:row.index('.join("")')]
+    assert '"<tr><td title=\\""+esc(p.name)+"\\">"+esc(p.name)+"</td>' in row
