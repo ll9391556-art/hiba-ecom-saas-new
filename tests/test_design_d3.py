@@ -85,3 +85,22 @@ def test_prices_have_no_thousands_separator(app):
         assert _i18n(lang, "unit_month") == month and _i18n(lang, "unit_year") == year, lang
         for key in ("pf_bot_1500", "pf_bot_5000"):
             assert not re.search(r"\d[ ,\u00a0\u202f]\d{3}", _i18n(lang, key)), (lang, key)
+
+
+# ── 3. بطاقة أوائل التجار ──
+def test_early_card_like_the_landing_offer(app):
+    card = _card("early")
+    assert '<span class="plan-offer" data-i18n="early_offer">' in card
+    assert 'id="earlySlotsBadge"' in card and 'id="earlyInsteadOf"' in card
+    r = _css()
+    assert r[".plan-early"]["border"] == "2px solid var(--brand)" and r[".plan-offer"]["background"] == "var(--volt)"
+    js = _dashboard_js()
+    fn = js[js.index("function highlightCurrentPlan("):]
+    fn = fn[:fn.index("\n}\n")]
+    # "بدل 34800": سعر Pro الشهري × 12، من data-price (اللي test_pricing يربطو بـ PLANS)، ماشي مكتوب باليد
+    assert 'querySelector(\'[data-price="pro-monthly"]\')' in fn and "*12" in fn
+    assert "34800" not in _index() + js + CORE
+    assert app.PLANS["pro"]["price"]["monthly"] * 12 == 34800  # القيمة اللي تبان اليوم
+    assert 't("instead_of_year")' in fn
+    assert '"🔥' not in fn and 't("early_full")' in fn  # بلا إيموجي، و"اكتملت البلايص" عند 0
+    assert "highlightCurrentPlan" in CORE[CORE.index("function applyLang("):CORE.index("function setLang(")]

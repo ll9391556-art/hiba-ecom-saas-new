@@ -139,6 +139,9 @@ html[dir=rtl] .modal-close{right:auto;left:16px}
 .plan-pro .plan-feature svg{color:var(--volt)}
 .plan-business{border:2px solid var(--brand)}
 .plan-early{margin-top:16px;border:2px solid var(--brand)}
+.plan-offer{align-self:flex-start;padding:6px 12px;border-radius:var(--r-pill);background:var(--volt);color:var(--ink);font-size:14px;font-weight:700}
+.plan-slots{align-self:flex-start;padding:4px 12px;border-radius:var(--r-pill);background:var(--brand-light);color:var(--brand-dark);font-size:14px;font-weight:700}
+.plan-early .plan-note s{text-decoration-thickness:2px}
 .plan-info{margin-top:16px;border-radius:var(--r-card);background:var(--white);padding:20px 22px;display:flex;flex-direction:column;gap:10px;font-size:16px;color:var(--text)}
 .plan-info p{margin:0;display:flex;align-items:flex-start;gap:10px}
 .plan-info svg{color:var(--brand);margin-top:2px}

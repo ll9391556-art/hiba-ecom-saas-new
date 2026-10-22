@@ -158,7 +158,8 @@ var I18N = {
     bot_card_title:"Bot de discussion",bot_not_in_plan:"Pas inclus dans votre plan",plan_locked:"Pro et plus",ch_messenger:"Facebook Messenger",ch_instagram:"Instagram",ch_whatsapp:"WhatsApp",
     sales_unit:"ventes",no_sales_yet:"Aucune vente pour l'instant",
     stock_ok:"Stock suffisant pour tous les produits",
-    most_popular:"Le plus demandé"
+    most_popular:"Le plus demandé",
+    early_offer:"Offre premiers marchands",early_full:"Toutes les places sont prises",instead_of_year:"au lieu de {x} DA par an"
   },
   AR:{
     nav_dashboard:"الرئيسية",nav_orders:"الطلبات",nav_products:"المنتجات",
@@ -251,7 +252,8 @@ var I18N = {
     bot_card_title:"بوت المحادثة",bot_not_in_plan:"غير متاح في باقتك",plan_locked:"Pro وأعلى",ch_messenger:"فيسبوك ماسنجر",ch_instagram:"إنستغرام",ch_whatsapp:"واتساب",
     sales_unit:"مبيعات",no_sales_yet:"ما كاين حتى مبيعات بعد",
     stock_ok:"المخزون كافي لكل المنتجات",
-    most_popular:"الأكثر طلبًا"
+    most_popular:"الأكثر طلبًا",
+    early_offer:"عرض أوائل التجار",early_full:"اكتملت البلايص",instead_of_year:"بدل {x} دج في العام"
   },
   EN:{
     nav_dashboard:"Dashboard",nav_orders:"Orders",nav_products:"Products",
@@ -344,7 +346,8 @@ var I18N = {
     bot_card_title:"Chat bot",bot_not_in_plan:"Not included in your plan",plan_locked:"Pro and up",ch_messenger:"Facebook Messenger",ch_instagram:"Instagram",ch_whatsapp:"WhatsApp",
     sales_unit:"sales",no_sales_yet:"No sales yet",
     stock_ok:"Every product has enough stock",
-    most_popular:"Most popular"
+    most_popular:"Most popular",
+    early_offer:"Early merchants offer",early_full:"All spots are taken",instead_of_year:"instead of {x} DZD a year"
   }
 };
 
@@ -405,6 +408,7 @@ function applyLang(lang){
   var activeSec = document.querySelector(".section.active");
   if(activeSec && activeSec.id==="sec_dashboard" && currentUser) loadDashboard();
   if(activeSec && activeSec.id==="sec_team" && currentUser) renderTeamTable(TEAM_MEMBERS);
+  if(activeSec && activeSec.id==="sec_plans" && typeof highlightCurrentPlan==="function") highlightCurrentPlan();
 }
 
 function setLang(l){ applyLang(l); }

@@ -126,7 +126,13 @@ function highlightCurrentPlan(){
   if(early){
     var hasSlots = EARLY_SLOTS_LEFT!==null && EARLY_SLOTS_LEFT!==undefined;
     early.style.display = hasSlots ? "inline-block" : "none";
-    if(hasSlots) early.textContent = "🔥 "+EARLY_SLOTS_LEFT+" "+t("early_slots_left");
+    if(hasSlots) early.textContent = EARLY_SLOTS_LEFT>0 ? EARLY_SLOTS_LEFT+" "+t("early_slots_left") : t("early_full");
+  }
+  // "بدل X دج في العام" تحت أوائل التجار: سعر Pro الشهري × 12 من البطاقة (test_pricing يربطو بـ PLANS)، بلا رقم مكتوب باليد
+  var instead = document.getElementById("earlyInsteadOf");
+  var proMonthly = document.querySelector('[data-price="pro-monthly"]');
+  if(instead && proMonthly){
+    instead.textContent = t("instead_of_year").replace("{x}", fmtNum(Number(proMonthly.textContent)*12));
   }
   var box = document.getElementById("usageBox");
   var keys = Object.keys(PLAN_USAGE||{});
