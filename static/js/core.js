@@ -49,7 +49,7 @@ async function setMerchantCurrency(code){
     var r = await apiPost("/updateStoreSettings", {data:{currency:code}});
     if(r.status==="ok") toast("✅ "+code,"ok");
     else toast("❌ "+r.message,"err");
-  }catch(e){ toast("Erreur réseau","err"); }
+  }catch(e){ toast(t("network_error"),"err"); }
   // تحديث الأرقام المعروضة فالقسم الحالي فوراً بلا حاجة لإعادة تحميل الصفحة
   var activeSec = document.querySelector(".section.active");
   if(activeSec){
@@ -131,7 +131,26 @@ var I18N = {
     landing_views:"vues",landing_preview:"Aperçu",landing_copy_link:"Copier le lien",
     landing_delete_confirm:"Supprimer cette page ?",landing_post_ig:"Publier sur Instagram",
     landing_post_ig_confirm:"Publier cette page sur votre compte Instagram connecté ?",
-    locked_landing:"Pages de destination non disponibles",upgrade_landing:"Passez au plan Starter ou supérieur"
+    locked_landing:"Pages de destination non disponibles",upgrade_landing:"Passez au plan Starter ou supérieur",
+    sold:"Vendu",remaining:"Reste",stock_status:"État",available:"Dispo",stock_init:"Stock initial",
+    st_all:"Tous",st_pending:"En attente",st_confirmed:"Confirmée",st_delivered:"Livrée",st_refused:"Refusée",st_no_answer:"Pas de réponse",
+    stock_in:"En stock",stock_low:"Stock faible",stock_out:"Rupture",cust_good:"Bon",cust_bad:"Mauvais",cust_neutral:"Neutre",customer_type:"Type",
+    total_7days:"Total 7 jours : {x}",menu:"Menu",search:"Rechercher...",load_older:"Charger les commandes plus anciennes",
+    category:"Catégorie",size:"Taille",colors:"Couleurs",cost:"Coût",price:"Prix",sell_price:"Prix de vente",description:"Description",
+    product_images:"Images (jusqu'à 4)",copy:"Copier",open:"Ouvrir",my_store:"Ma boutique",
+    fb_ig_title:"Connecter Facebook et Instagram",fb_ig_btn:"Connecter FB et Instagram",refresh:"Actualiser",checking:"Vérification...",
+    connected_pages:"Pages connectées",connected:"Connecté",not_connected:"Non connecté",fb_connected_ok:"Facebook connecté !",
+    confirm_disconnect_fb:"Déconnecter Facebook ?",disconnected:"Déconnecté",gemini_key:"Clé API Gemini",wa_token:"Token WhatsApp",
+    wa_phone_id:"ID du numéro WhatsApp (Phone Number ID)",fb_token:"Token d'accès Facebook",fb_page_id:"ID de la page Facebook",
+    ig_token:"Token d'accès Instagram",ig_page_id:"ID du compte Instagram",ig_token_ph:"Souvent le même que le token FB",
+    ig_page_ph:"Identifiant du compte Instagram",bot_inst_ph:"Comportement du bot...",user_id:"ID utilisateur",
+    store_name:"Nom de la boutique",slogan:"Slogan",logo_emoji:"Logo (emoji)",logo_image:"Image du logo (facultatif — remplace l'emoji)",
+    currency:"Devise",cur_dzd:"دج — Dinar algérien (DZD)",cur_eur:"€ — Euro (EUR)",cur_usd:"$ — Dollar (USD)",
+    no_logs:"Aucun log",log_client:"Client",log_bot:"Bot",error:"Erreur",server_error:"Erreur serveur",network_error:"Erreur réseau",
+    fill_all:"Remplissez tous les champs",bad_credentials:"Identifiants incorrects",fill_required:"Remplissez les champs obligatoires",
+    status_updated:"Statut mis à jour : {s}",order_added:"Commande ajoutée",enter_product_name:"Entrez un nom de produit",
+    product_added:"Produit ajouté",confirm_delete:"Supprimer {name} ?",deleted:"Supprimé",enter_city_name:"Entrez un nom de ville",
+    city_added:"Ville ajoutée",saved:"Enregistré",link_copied:"Lien copié !",copied:"Copié !"
   },
   AR:{
     nav_dashboard:"الرئيسية",nav_orders:"الطلبات",nav_products:"المنتجات",
@@ -197,7 +216,26 @@ var I18N = {
     landing_views:"مشاهدة",landing_preview:"معاينة",landing_copy_link:"نسخ الرابط",
     landing_delete_confirm:"حذف هذه الصفحة؟",landing_post_ig:"نشر على إنستغرام",
     landing_post_ig_confirm:"نشر هذه الصفحة على حساب إنستغرام المرتبط؟",
-    locked_landing:"صفحات الهبوط غير متاحة",upgrade_landing:"قم بالترقية إلى Starter أو أعلى"
+    locked_landing:"صفحات الهبوط غير متاحة",upgrade_landing:"قم بالترقية إلى Starter أو أعلى",
+    sold:"المبيعات",remaining:"المتبقي",stock_status:"حالة المخزون",available:"المتوفر",stock_init:"المخزون الأولي",
+    st_all:"الكل",st_pending:"قيد الانتظار",st_confirmed:"مؤكدة",st_delivered:"تم التسليم",st_refused:"مرفوضة",st_no_answer:"لا يرد",
+    stock_in:"متوفر",stock_low:"مخزون قليل",stock_out:"نفد المخزون",cust_good:"زبون جيد",cust_bad:"زبون سيئ",cust_neutral:"عادي",customer_type:"النوع",
+    total_7days:"إجمالي 7 أيام: {x}",menu:"القائمة",search:"بحث...",load_older:"تحميل الطلبات الأقدم",
+    category:"الفئة",size:"المقاس",colors:"الألوان",cost:"التكلفة",price:"السعر",sell_price:"سعر البيع",description:"الوصف",
+    product_images:"الصور (حتى 4)",copy:"نسخ",open:"فتح",my_store:"متجري",
+    fb_ig_title:"ربط فيسبوك وإنستغرام",fb_ig_btn:"ربط فيسبوك وإنستغرام",refresh:"تحديث",checking:"جاري التحقق...",
+    connected_pages:"الصفحات المربوطة",connected:"متصل",not_connected:"غير مربوط",fb_connected_ok:"تم ربط فيسبوك!",
+    confirm_disconnect_fb:"قطع الاتصال بفيسبوك؟",disconnected:"تم قطع الاتصال",gemini_key:"مفتاح Gemini API",wa_token:"رمز واتساب (Token)",
+    wa_phone_id:"معرّف رقم واتساب (Phone Number ID)",fb_token:"رمز الوصول لفيسبوك (Access Token)",fb_page_id:"معرّف صفحة فيسبوك",
+    ig_token:"رمز الوصول لإنستغرام (Access Token)",ig_page_id:"معرّف حساب إنستغرام",ig_token_ph:"عادة نفس رمز فيسبوك",
+    ig_page_ph:"معرّف حساب إنستغرام",bot_inst_ph:"كيفاش يتصرف البوت...",user_id:"معرّف المستخدم",
+    store_name:"اسم المتجر",slogan:"الشعار النصي",logo_emoji:"الشعار (إيموجي)",logo_image:"صورة اللوغو (اختياري — تُستعمل بدل الإيموجي إذا رُفعت)",
+    currency:"العملة",cur_dzd:"دج — الدينار الجزائري (DZD)",cur_eur:"€ — اليورو (EUR)",cur_usd:"$ — الدولار (USD)",
+    no_logs:"لا توجد سجلات",log_client:"الزبون",log_bot:"البوت",error:"خطأ",server_error:"خطأ في السيرفر",network_error:"خطأ في الاتصال",
+    fill_all:"املأ كل الحقول",bad_credentials:"اسم المستخدم أو كلمة المرور غير صحيحة",fill_required:"املأ الحقول الإجبارية",
+    status_updated:"تم تحديث الحالة: {s}",order_added:"تمت إضافة الطلبية",enter_product_name:"أدخل اسم المنتج",
+    product_added:"تمت إضافة المنتج",confirm_delete:"حذف {name}؟",deleted:"تم الحذف",enter_city_name:"أدخل اسم المدينة",
+    city_added:"تمت إضافة المدينة",saved:"تم الحفظ",link_copied:"تم نسخ الرابط!",copied:"تم النسخ!"
   },
   EN:{
     nav_dashboard:"Dashboard",nav_orders:"Orders",nav_products:"Products",
@@ -263,11 +301,43 @@ var I18N = {
     landing_views:"views",landing_preview:"Preview",landing_copy_link:"Copy Link",
     landing_delete_confirm:"Delete this page?",landing_post_ig:"Post to Instagram",
     landing_post_ig_confirm:"Post this page to your connected Instagram account?",
-    locked_landing:"Landing Pages Unavailable",upgrade_landing:"Upgrade to Starter or higher"
+    locked_landing:"Landing Pages Unavailable",upgrade_landing:"Upgrade to Starter or higher",
+    sold:"Sold",remaining:"Left",stock_status:"Stock",available:"Available",stock_init:"Initial stock",
+    st_all:"All",st_pending:"Pending",st_confirmed:"Confirmed",st_delivered:"Delivered",st_refused:"Refused",st_no_answer:"No answer",
+    stock_in:"In stock",stock_low:"Low stock",stock_out:"Out of stock",cust_good:"Good",cust_bad:"Bad",cust_neutral:"Neutral",customer_type:"Type",
+    total_7days:"7-day total: {x}",menu:"Menu",search:"Search...",load_older:"Load older orders",
+    category:"Category",size:"Size",colors:"Colors",cost:"Cost",price:"Price",sell_price:"Selling price",description:"Description",
+    product_images:"Images (up to 4)",copy:"Copy",open:"Open",my_store:"My store",
+    fb_ig_title:"Connect Facebook & Instagram",fb_ig_btn:"Connect FB & Instagram",refresh:"Refresh",checking:"Checking...",
+    connected_pages:"Connected pages",connected:"Connected",not_connected:"Not connected",fb_connected_ok:"Facebook connected!",
+    confirm_disconnect_fb:"Disconnect Facebook?",disconnected:"Disconnected",gemini_key:"Gemini API key",wa_token:"WhatsApp token",
+    wa_phone_id:"WhatsApp Phone Number ID",fb_token:"Facebook access token",fb_page_id:"Facebook Page ID",
+    ig_token:"Instagram access token",ig_page_id:"Instagram account ID",ig_token_ph:"Usually the same as the FB token",
+    ig_page_ph:"Instagram account ID",bot_inst_ph:"How the bot should behave...",user_id:"User ID",
+    store_name:"Store name",slogan:"Tagline",logo_emoji:"Logo (emoji)",logo_image:"Logo image (optional — replaces the emoji)",
+    currency:"Currency",cur_dzd:"DZD — Algerian dinar",cur_eur:"€ — Euro (EUR)",cur_usd:"$ — US dollar (USD)",
+    no_logs:"No logs",log_client:"Customer",log_bot:"Bot",error:"Error",server_error:"Server error",network_error:"Network error",
+    fill_all:"Fill in all fields",bad_credentials:"Wrong username or password",fill_required:"Fill in the required fields",
+    status_updated:"Status updated: {s}",order_added:"Order added",enter_product_name:"Enter a product name",
+    product_added:"Product added",confirm_delete:"Delete {name}?",deleted:"Deleted",enter_city_name:"Enter a city name",
+    city_added:"City added",saved:"Saved",link_copied:"Link copied!",copied:"Copied!"
   }
 };
 
 function t(k){ return (I18N[currentLang]||I18N.FR)[k] || k; }
+// قيم السيرفر (status، stat، type) تبقى بالإنجليزية فالبيانات؛ هنا غير الاسم المعروض
+function stLabel(s){
+  var k = {Pending:"st_pending",Confirmed:"st_confirmed",Delivered:"st_delivered",Refused:"st_refused","No Answer":"st_no_answer"}[s];
+  return k ? t(k) : s;
+}
+function stockLabel(s){
+  var k = {"In Stock":"stock_in",InStock:"stock_in","Low Stock":"stock_low",LowStock:"stock_low","Out of Stock":"stock_out",OutOfStock:"stock_out"}[s];
+  return k ? t(k) : s;
+}
+function custLabel(s){
+  var k = {Good:"cust_good",Bad:"cust_bad",Neutral:"cust_neutral"}[s];
+  return k ? t(k) : s;
+}
 // ── حماية من XSS: escape إجباري لأي نص جاي من مصدر غير موثوق (زبون/عميل)
 // قبل إدراجه فـ innerHTML. بيانات الطلبات (name/phone/city/product) تجي من
 // /api/addOrder العام بلا مصادقة — أي زبون يقدر يدخل <script> أو onerror=...

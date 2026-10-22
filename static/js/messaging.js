@@ -150,8 +150,8 @@ async function loadConversationMessages(senderId, quiet){
       _setMsgKeys();
       renderConversationMessages(CONV_MSGS);
     }
-    else if(!quiet) box.innerHTML = '<div class="empty-state">'+esc(r.message||"Erreur")+'</div>';
-  }catch(e){ if(!quiet) box.innerHTML = '<div class="empty-state">Erreur</div>'; }
+    else if(!quiet) box.innerHTML = '<div class="empty-state">'+esc(r.message||t("error"))+'</div>';
+  }catch(e){ if(!quiet) box.innerHTML = '<div class="empty-state">'+t("error")+'</div>'; }
 }
 
 async function pollConversationMessages(){
@@ -208,7 +208,7 @@ async function sendCustomerMessage(){
       pollConversationMessages();
       loadConversations();
     } else { toast("❌ "+r.message,"err"); }
-  }catch(e){ toast("Erreur réseau","err"); }
+  }catch(e){ toast(t("network_error"),"err"); }
   finally{ btn.disabled = false; }
 }
 

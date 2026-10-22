@@ -97,9 +97,9 @@ async function loadTeam(){
       var addBtn = document.getElementById("addMemberBtn");
       if(addBtn) addBtn.disabled = TEAM_MEMBERS.length >= TEAM_MAX;
     } else {
-      tbl.innerHTML = '<tr><td colspan="5" class="empty-state">'+(r.message||"Erreur")+'</td></tr>';
+      tbl.innerHTML = '<tr><td colspan="5" class="empty-state">'+esc(r.message||t("error"))+'</td></tr>';
     }
-  }catch(e){ tbl.innerHTML = '<tr><td colspan="5" class="empty-state">Erreur</td></tr>'; }
+  }catch(e){ tbl.innerHTML = '<tr><td colspan="5" class="empty-state">'+t("error")+'</td></tr>'; }
 }
 
 function renderTeamTable(list){
@@ -205,7 +205,7 @@ async function saveTeamMember(){
     } else {
       toast("❌ "+r.message,"err");
     }
-  }catch(e){ toast("Erreur réseau","err"); }
+  }catch(e){ toast(t("network_error"),"err"); }
 }
 
 async function deleteTeamMember(username){
@@ -214,7 +214,7 @@ async function deleteTeamMember(username){
     var r = await apiPost("/team/deleteMember", {username:username});
     if(r.status==="ok"){ toast("✅ "+t("delete"),"ok"); loadTeam(); }
     else toast("❌ "+r.message,"err");
-  }catch(e){ toast("Erreur réseau","err"); }
+  }catch(e){ toast(t("network_error"),"err"); }
 }
 
 async function saveBotSettings(){
@@ -240,7 +240,7 @@ async function loadBotLogs(){
     var r = await apiPost("/saas", {action:"getBotLogs", limit:100});
     if(r.status==="ok"){
       var logs = r.data||[];
-      if(!logs.length){ div.innerHTML='<div style="text-align:center;padding:20px;color:var(--muted)">Aucun log</div>'; return; }
+      if(!logs.length){ div.innerHTML='<div style="text-align:center;padding:20px;color:var(--muted)">'+esc(t("no_logs"))+'</div>'; return; }
       div.innerHTML = logs.map(function(l){
         var date     = l.date     || (l.timestamp ? new Date(l.timestamp*1000).toLocaleString("fr-DZ") : "—");
         var platform = l.platform || "FB";
@@ -249,12 +249,12 @@ async function loadBotLogs(){
         var sender   = l.sender_id   ? '<span style="font-size:9px;color:var(--muted);margin-left:6px">'+esc(l.sender_id.substring(0,8))+'...</span>' : "";
         return '<div style="border-bottom:1px solid var(--border);padding:10px 0">'+
           '<div style="color:var(--muted);font-size:10px;margin-bottom:4px">'+esc(date)+' • '+esc(platform)+sender+'</div>'+
-          (userMsg  ? '<div style="background:rgba(37,99,235,.08);border-radius:8px;padding:6px 10px;margin-bottom:4px;font-size:12px"><span style="color:var(--muted);font-size:10px">👤 Client</span><br>'+esc(userMsg.substring(0,200))+'</div>' : '')+
-          (botReply ? '<div style="background:rgba(16,185,129,.08);border-radius:8px;padding:6px 10px;font-size:12px"><span style="color:var(--muted);font-size:10px">🤖 Bot</span><br>'+esc(botReply.substring(0,300))+'</div>' : '')+
+          (userMsg  ? '<div style="background:rgba(37,99,235,.08);border-radius:8px;padding:6px 10px;margin-bottom:4px;font-size:12px"><span style="color:var(--muted);font-size:10px">👤 '+esc(t("log_client"))+'</span><br>'+esc(userMsg.substring(0,200))+'</div>' : '')+
+          (botReply ? '<div style="background:rgba(16,185,129,.08);border-radius:8px;padding:6px 10px;font-size:12px"><span style="color:var(--muted);font-size:10px">🤖 '+esc(t("log_bot"))+'</span><br>'+esc(botReply.substring(0,300))+'</div>' : '')+
         '</div>';
       }).join("");
     }
-  }catch(e){ div.innerHTML='<div style="color:var(--red);padding:10px">Erreur: '+e.message+'</div>'; }
+  }catch(e){ div.innerHTML='<div style="color:var(--red);padding:10px">'+esc(t("error")+": "+e.message)+'</div>'; }
 }
 
 // =========================================================
@@ -276,9 +276,9 @@ async function fetchFbStatus(targetElId){
     });
     var d = await r.json();
     if(d.connected){
-      el.innerHTML = '<span style="color:var(--green)"><i class="bi bi-check-circle"></i> Connecté</span> — '+(d.updated_at||"");
+      el.innerHTML = '<span style="color:var(--green)"><i class="bi bi-check-circle"></i> '+t("connected")+'</span> — '+esc(d.updated_at||"");
     } else {
-      el.innerHTML = '<span style="color:var(--muted)"><i class="bi bi-x-circle"></i> Non connecté</span>';
+      el.innerHTML = '<span style="color:var(--muted)"><i class="bi bi-x-circle"></i> '+t("not_connected")+'</span>';
     }
   }catch(e){}
 }
@@ -306,12 +306,12 @@ async function connectFacebook(){
   function handler(ev){
     if(ev.origin!==FB_ORIGIN || ev.source!==win || !ev.data) return;
     if(ev.data.type==="FB_AUTH_SUCCESS"){
-      toast("✅ Facebook connecté!","ok");
+      toast("✅ "+t("fb_connected_ok"),"ok");
       window.removeEventListener("message", handler);
       reloadFromServer();
     }
     if(ev.data.type==="FB_AUTH_ERROR"){
-      toast("❌ Erreur: "+String(ev.data.message||""),"err");
+      toast("❌ "+t("error")+": "+String(ev.data.message||""),"err");
       window.removeEventListener("message", handler);
     }
   }
@@ -323,12 +323,12 @@ async function connectFacebook(){
 }
 
 async function disconnectFacebook(){
-  if(!confirm("Déconnecter Facebook?")) return;
+  if(!confirm(t("confirm_disconnect_fb"))) return;
   await fetch(FB_BACKEND+"/fb-disconnect", {
     method:"POST",
     headers: authToken ? {"Authorization":"Bearer "+authToken} : {}
   });
-  toast("✅ Déconnecté","ok");
+  toast("✅ "+t("disconnected"),"ok");
   loadSettings();
 }
 
@@ -337,14 +337,14 @@ async function checkFbStatus(){
   var pl = document.getElementById("fbPagesList");
   var pc = document.getElementById("fbPagesContent");
   if(!el) return;
-  el.textContent = "⏳ Vérification...";
+  el.textContent = "⏳ "+t("checking");
   try{
     var r = await fetch(FB_BACKEND+"/fb-status", {
       headers: authToken ? {"Authorization":"Bearer "+authToken} : {}
     });
     var d = await r.json();
     if(d.connected){
-      el.innerHTML = '<span style="color:var(--green)">✅ Connecté — '+esc(d.updated_at||"—")+'</span>';
+      el.innerHTML = '<span style="color:var(--green)">✅ '+t("connected")+' — '+esc(d.updated_at||"—")+'</span>';
       if(d.pages&&d.pages.length){
         pl.style.display="block";
         pc.innerHTML = d.pages.map(function(p){
@@ -355,11 +355,11 @@ async function checkFbStatus(){
         }).join("");
       } else { pl.style.display="none"; }
     } else {
-      el.innerHTML = '<span style="color:var(--red)">❌ Non connecté</span>';
+      el.innerHTML = '<span style="color:var(--red)">❌ '+t("not_connected")+'</span>';
       if(pl) pl.style.display="none";
     }
   }catch(e){
-    if(el) el.innerHTML = '<span style="color:var(--muted)">⚠️ Erreur serveur</span>';
+    if(el) el.innerHTML = '<span style="color:var(--muted)">⚠️ '+t("server_error")+'</span>';
   }
 }
  

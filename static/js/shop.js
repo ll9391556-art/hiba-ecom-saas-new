@@ -141,7 +141,7 @@ async function sh_trackOrder(){
         }
         return '<div class="track-result"><div style="display:flex;justify-content:space-between;align-items:center">'+
           '<div><strong>'+esc(o.product)+'</strong> × '+esc(o.qty)+'<div style="font-size:11px;color:var(--muted)">'+esc(o.date)+'</div></div>'+
-          '<span class="badge '+stCls+'">'+esc(o.status)+'</span></div>'+rateBlock+'</div>';
+          '<span class="badge '+stCls+'">'+esc(stLabel(o.status))+'</span></div>'+rateBlock+'</div>';
       }).join("");
     } else {
       resBox.innerHTML = '<div class="track-result">لا توجد طلبات بهذا الرقم</div>';

@@ -4,7 +4,7 @@
 async function doLogin(){
   var u = document.getElementById("loginUser").value.trim();
   var p = document.getElementById("loginPass").value.trim();
-  if(!u||!p){ showLoginErr("Remplissez tous les champs"); return; }
+  if(!u||!p){ showLoginErr(t("fill_all")); return; }
   var btn = document.getElementById("loginBtn");
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>';
@@ -15,9 +15,9 @@ async function doLogin(){
       if(authToken) localStorage.setItem("of_token", authToken);
       enterDashboard(r.data, u);
     } else {
-      showLoginErr(r.message||"Identifiants incorrects");
+      showLoginErr(r.message||t("bad_credentials"));
     }
-  }catch(e){ showLoginErr("Erreur serveur"); }
+  }catch(e){ showLoginErr(t("server_error")); }
   finally{ btn.disabled=false; btn.innerHTML='<span id="loginBtnTxt">'+t("login_btn")+'</span>'; }
 }
 

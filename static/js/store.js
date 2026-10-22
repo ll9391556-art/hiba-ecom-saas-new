@@ -89,7 +89,7 @@ async function saveStoreSettings(){
   if(r.status==="ok"){
     merchantCurrency = document.getElementById("ss_currency").value;
     renderCurrencyButtons();
-    toast("✅ Sauvegardé","ok"); closeModal("storeSettingsModal"); loadStore();
+    toast("✅ "+t("saved"),"ok"); closeModal("storeSettingsModal"); loadStore();
   }
   else { toast("❌ "+r.message,"err"); }
 }
@@ -168,7 +168,7 @@ async function lp_goToQuestions(){
     } else {
       toast("❌ "+r.message,"err");
     }
-  }catch(e){ toast("Erreur réseau","err"); }
+  }catch(e){ toast(t("network_error"),"err"); }
   finally{ btn.disabled=false; btn.innerHTML=orig; }
 }
 
@@ -222,7 +222,7 @@ async function generateLandingPage(){
     } else {
       toast("❌ "+r.message,"err");
     }
-  }catch(e){ toast("Erreur réseau","err"); }
+  }catch(e){ toast(t("network_error"),"err"); }
   finally{ btn.disabled=false; btn.innerHTML=origHtml; }
 }
 
@@ -282,7 +282,7 @@ async function toggleLandingPublish(pageId){
     var r = await apiPost("/landing/togglePublish", {pageId:pageId});
     if(r.status==="ok"){ toast("✅","ok"); loadLanding(); }
     else toast("❌ "+r.message,"err");
-  }catch(e){ toast("Erreur réseau","err"); }
+  }catch(e){ toast(t("network_error"),"err"); }
 }
 
 async function deleteLandingPage(pageId){
@@ -291,7 +291,7 @@ async function deleteLandingPage(pageId){
     var r = await apiPost("/landing/delete", {pageId:pageId});
     if(r.status==="ok"){ toast("✅ "+t("delete"),"ok"); loadLanding(); }
     else toast("❌ "+r.message,"err");
-  }catch(e){ toast("Erreur réseau","err"); }
+  }catch(e){ toast(t("network_error"),"err"); }
 }
 
 async function postLandingToInstagram(pageId){
@@ -300,6 +300,6 @@ async function postLandingToInstagram(pageId){
     var r = await apiPost("/landing/postToInstagram", {pageId:pageId});
     if(r.status==="ok"){ toast("✅ تم النشر على إنستغرام","ok"); loadLanding(); }
     else toast("❌ "+r.message,"err");
-  }catch(e){ toast("Erreur réseau","err"); }
+  }catch(e){ toast(t("network_error"),"err"); }
 }
 

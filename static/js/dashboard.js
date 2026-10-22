@@ -19,7 +19,9 @@ function showSection(s){
     bot:t("nav_bot"),messages:t("nav_messages"),integrations:t("nav_integrations"),
     team:t("nav_team"),plans:t("nav_plans"),settings:t("nav_settings"),landing:t("nav_landing")
   };
-  document.getElementById("pageTitle").textContent = titles[s]||s;
+  var title = document.getElementById("pageTitle");
+  title.textContent = titles[s]||s;
+  title.setAttribute("data-i18n", "nav_"+s);  // applyLang يعاود يترجمو
 
   if(s==="dashboard") loadDashboard();
   else if(s==="orders") loadOrders();
@@ -77,7 +79,7 @@ async function loadUserPlan(){
       renderCurrencyButtons();
       renderPlanAlerts();
       var pd = document.getElementById("planDisplay");
-      if(pd) pd.innerHTML = 'Plan: <span class="plan-badge plan-'+currentPlan+'">'+currentPlan.toUpperCase()+'</span>';
+      if(pd) pd.innerHTML = esc(t("plan"))+': <span class="plan-badge plan-'+currentPlan+'">'+currentPlan.toUpperCase()+'</span>';
       document.getElementById("s_plan").value = currentPlan;
     }
   }catch(e){}
@@ -173,7 +175,7 @@ async function loadDashboard(){
     var lowTbl = document.getElementById("lowStockTbl");
     lowTbl.innerHTML = (d.lowStock||[]).map(function(p){
       var cl = p.rem<=0?"br":"bn";
-      return "<tr><td>"+esc(p.name)+"</td><td>"+esc(p.rem)+"</td><td><span class='badge "+cl+"'>"+esc(p.stat)+"</span></td></tr>";
+      return "<tr><td>"+esc(p.name)+"</td><td>"+esc(p.rem)+"</td><td><span class='badge "+cl+"'>"+esc(stockLabel(p.stat))+"</span></td></tr>";
     }).join("") || '<tr><td colspan="3" class="empty-state">✅</td></tr>';
 
     renderStatusChart(d, cur);
@@ -189,7 +191,7 @@ function renderStatusChart(d, cur){
   var confirmedOnly = Math.max(0, (d.confirmed||0) - deliveredOnly);
   var refusedOnly   = d.refused||0;
   var pendingOnly   = Math.max(0, (d.totalOrders||0) - confirmedOnly - deliveredOnly - refusedOnly);
-  var labels = [t("confirmed"), t("delivered"), t("refused"), "Pending"];
+  var labels = [t("confirmed"), t("delivered"), t("refused"), t("st_pending")];
   var data   = [confirmedOnly, deliveredOnly, refusedOnly, pendingOnly];
 
   if(chartStatusInstance) chartStatusInstance.destroy();
@@ -315,8 +317,8 @@ async function loadTrendChart(cur){
 
     var total7 = values.reduce(function(s,v){ return s+v; },0);
     var cap = document.getElementById("chartTrendCaption");
-    if(cap) cap.innerHTML = (currentLang==="AR"?"إجمالي 7 أيام: ":currentLang==="EN"?"7-day total: ":"Total 7 jours: ")+
-      "<strong style='color:"+(total7>=0?"var(--green)":"var(--red)")+"'>"+total7.toLocaleString()+" "+(cur||"")+"</strong>";
+    if(cap) cap.innerHTML = esc(t("total_7days")).replace("{x}",
+      "<strong style='color:"+(total7>=0?"var(--green)":"var(--red)")+"'>"+total7.toLocaleString()+" "+(cur||"")+"</strong>");
   }catch(e){ console.error(e); }
 }
 

@@ -41,8 +41,8 @@ async function loadOrders(){
       ORDERS_CURSOR = r.cursor;
       _applyOrdersPage(r);
       filterOrders();
-    } else { tbl.innerHTML='<tr><td colspan="15" class="empty-state">'+esc(r.message||"Erreur")+'</td></tr>'; }
-  }catch(e){ tbl.innerHTML='<tr><td colspan="15" class="empty-state">Erreur</td></tr>'; }
+    } else { tbl.innerHTML='<tr><td colspan="15" class="empty-state">'+esc(r.message||t("error"))+'</td></tr>'; }
+  }catch(e){ tbl.innerHTML='<tr><td colspan="15" class="empty-state">'+t("error")+'</td></tr>'; }
 }
 
 async function loadOlderOrders(){
@@ -50,8 +50,8 @@ async function loadOlderOrders(){
   try{
     var r = await apiGet("/getOrders", {limit: ORDERS_PAGE, before: ORDERS_OLDEST});
     if(r.status==="ok"){ _applyOrdersPage(r); filterOrders(); }
-    else toast("❌ "+(r.message||"Erreur"),"err");
-  }catch(e){ toast("Erreur réseau","err"); }
+    else toast("❌ "+(r.message||t("error")),"err");
+  }catch(e){ toast(t("network_error"),"err"); }
 }
 
 // تبدّلات فقط من بعد آخر cursor. ما كاين حتى نداء كي يكون التبويب مخفي.
@@ -79,7 +79,7 @@ function renderOrders(orders){
   tbl.innerHTML = orders.map(function(o,i){
     var stCls = {Pending:"bp",Confirmed:"bc",Delivered:"bi",Refused:"br","No Answer":"bn"}[o.status]||"bp";
     var opts = ["Pending","Confirmed","Delivered","Refused","No Answer"].map(function(s){
-      return '<option value="'+s+'"'+(o.status===s?" selected":"")+'>'+s+'</option>';
+      return '<option value="'+s+'"'+(o.status===s?" selected":"")+'>'+stLabel(s)+'</option>';
     }).join("");
     var safeId = esc(o.id);
     return '<tr>'+
@@ -103,7 +103,7 @@ function renderOrders(orders){
       '<td style="font-size:11px;color:var(--muted)">'+esc(o.date_sent||"—")+'</td>'+
       '<td style="font-size:11px;color:var(--muted)">'+esc(o.date_delivered||"—")+'</td>'+
           '<td>'+
-        '<span class="badge '+stCls+' me-1">'+esc(o.status)+'</span>'+
+        '<span class="badge '+stCls+' me-1">'+esc(stLabel(o.status))+'</span>'+
         '<select class="status-sel" data-on-change="updateStatus(this.dataset.id,this.value)" data-id="'+safeId+'">'+opts+'</select>'+
       '</td>'+
       '<td><button class="btn-outline btn-sm" data-id="'+safeId+'" data-on-click="printOrderSlip(this.dataset.id)" title="طباعة بون دو كوموند"><i class="bi bi-printer"></i></button></td>'+
@@ -129,7 +129,7 @@ async function updateStatus(orderId, newStatus){
   try{
     var r = await apiPost("/updateStatus", {orderId:orderId, status:newStatus});
     if(r.status==="ok"){
-      toast("✅ Statut mis à jour: "+newStatus, "ok");
+      toast("✅ "+t("status_updated").replace("{s}", stLabel(newStatus)), "ok");
       var o = allOrders.find(function(x){ return x.id===orderId; });
       if(o){
         o.status = newStatus;
@@ -139,7 +139,7 @@ async function updateStatus(orderId, newStatus){
       }
       renderOrders(allOrders);
     } else { toast("❌ "+r.message, "err"); }
-  }catch(e){ toast("Erreur réseau","err"); }
+  }catch(e){ toast(t("network_error"),"err"); }
 }
 
 async function updateOrderDelivery(orderId, newType){
@@ -149,7 +149,7 @@ async function updateOrderDelivery(orderId, newType){
       toast("✅ تم تحديث نوع التوصيل","ok");
       loadOrders(); // إعادة تحميل لضمان دقة الإجمالي والربح المُعاد حسابهما من السيرفر
     } else { toast("❌ "+r.message, "err"); }
-  }catch(e){ toast("Erreur réseau","err"); }
+  }catch(e){ toast(t("network_error"),"err"); }
 }
 
 async function addOrder(){
@@ -164,14 +164,14 @@ async function addOrder(){
     notes:   document.getElementById("o_notes").value.trim(),
   };
   if(!data.name||!data.phone||!data.product||!data.city){
-    toast("Remplissez les champs obligatoires","err"); return;
+    toast(t("fill_required"),"err"); return;
   }
   if(!data.deliveryType){
     toast("اختر نوع التوصيل (منزل أو مكتب الاستلام)","err"); return;
   }
   var r = await apiPost("/addOrder", {userId:uid(), data:data}, true);  // التوكن: طلب يدوي من التاجر (حتى فـ Free)
   if(r.status==="ok"){
-    toast("✅ Commande ajoutée","ok");
+    toast("✅ "+t("order_added"),"ok");
     closeModal("addOrderModal");
     loadOrders();
   } else { toast("❌ "+r.message,"err"); }
@@ -272,5 +272,5 @@ async function exportOrders(){
     document.body.appendChild(a);
     a.click();
     setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
-  }catch(e){ toast("Erreur réseau", "err"); }
+  }catch(e){ toast(t("network_error"), "err"); }
 }

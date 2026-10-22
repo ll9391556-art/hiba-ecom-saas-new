@@ -35,6 +35,7 @@ def test_top_products_row_escapes_every_value():
 
 def test_low_stock_row_escapes_every_value():
     row = _row_builder("lowStockTbl")
-    for f in ("name", "rem", "stat"):
+    for f in ("name", "rem"):
         assert f"esc(p.{f})" in row
+    assert "esc(stockLabel(p.stat))" in row  # D2: الحالة تتترجم، والتهريب يبقى
     assert not re.search(r'\+p\.(name|rem|stat)\+', row)
