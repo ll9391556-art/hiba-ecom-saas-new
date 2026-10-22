@@ -82,31 +82,33 @@ function renderOrders(orders){
       return '<option value="'+s+'"'+(o.status===s?" selected":"")+'>'+stLabel(s)+'</option>';
     }).join("");
     var safeId = esc(o.id);
+    // تحت 640px نفس السطر يولّي بطاقة (CSS، D3.5): class لكل خانة، وdata-label مترجم يبان فوقها
+    var lbl = function(k){ return ' data-label="'+esc(t(k))+'"'; };
     return '<tr>'+
-      '<td>'+(i+1)+'</td>'+
-      '<td style="font-size:11px">'+esc(o.date||"—")+'</td>'+
-      '<td><strong>'+esc(o.name||"—")+'</strong></td>'+
-      '<td><a href="tel:'+esc(o.phone||"")+'" style="color:var(--accent)">'+esc(o.phone||"—")+'</a></td>'+
-      '<td>'+esc(o.product||"—")+'</td>'+
-      '<td>'+esc(o.qty||1)+'</td>'+
-      '<td>'+esc(o.city||"—")+'</td>'+
-      '<td>'+
+      '<td class="oc-num">'+(i+1)+'</td>'+
+      '<td class="oc-date" style="font-size:11px"><span class="m-only oc-id" dir="ltr">'+safeId+'</span>'+esc(o.date||"—")+'</td>'+
+      '<td class="oc-name"'+lbl("client")+'><strong>'+esc(o.name||"—")+'</strong></td>'+
+      '<td class="oc-phone"'+lbl("phone")+'><a href="tel:'+esc(o.phone||"")+'" style="color:var(--accent)" dir="ltr">'+esc(o.phone||"—")+'</a></td>'+
+      '<td class="oc-product"'+lbl("product")+'>'+esc(o.product||"—")+'</td>'+
+      '<td class="oc-qty"'+lbl("qty")+'>'+esc(o.qty||1)+'</td>'+
+      '<td class="oc-city"'+lbl("city")+'>'+esc(o.city||"—")+'</td>'+
+      '<td class="oc-delivery"'+lbl("delivery_col")+'>'+
         '<span class="badge bn me-1">'+(o.deliveryType==="desk"?t("desk_short"):t("home_short"))+'</span>'+
         '<select class="status-sel" data-id="'+safeId+'" data-on-change="updateOrderDelivery(this.dataset.id,this.value)">'+
           '<option value="home"'+(o.deliveryType!=="desk"?" selected":"")+'>'+t("home_delivery")+'</option>'+
           '<option value="desk"'+(o.deliveryType==="desk"?" selected":"")+'>'+t("desk_delivery")+'</option>'+
         '</select>'+
       '</td>'+
-      '<td><strong>'+esc(o.total||0)+' '+cur+'</strong></td>'+
-      '<td style="color:'+(parseFloat(o.profit||0)>=0?"var(--green)":"var(--red)")+'">'+esc(o.profit||0)+' '+cur+'</td>'+
-      '<td><span class="badge bn">'+esc(o.source||"manual")+'</span></td>'+
-      '<td style="font-size:11px;color:var(--muted)">'+esc(o.date_sent||"—")+'</td>'+
-      '<td style="font-size:11px;color:var(--muted)">'+esc(o.date_delivered||"—")+'</td>'+
-          '<td>'+
+      '<td class="oc-total"'+lbl("total")+'><strong>'+esc(o.total||0)+' '+cur+'</strong></td>'+
+      '<td class="oc-profit"'+lbl("profit")+' style="color:'+(parseFloat(o.profit||0)>=0?"var(--green)":"var(--red)")+'">'+esc(o.profit||0)+' '+cur+'</td>'+
+      '<td class="oc-source"><span class="badge bn">'+esc(o.source||"manual")+'</span></td>'+
+      '<td class="oc-sent" style="font-size:11px;color:var(--muted)">'+esc(o.date_sent||"—")+'</td>'+
+      '<td class="oc-delivered" style="font-size:11px;color:var(--muted)">'+esc(o.date_delivered||"—")+'</td>'+
+      '<td class="oc-status"'+lbl("status")+'>'+
         '<span class="badge '+stCls+' me-1">'+esc(stLabel(o.status))+'</span>'+
         '<select class="status-sel" data-on-change="updateStatus(this.dataset.id,this.value)" data-id="'+safeId+'">'+opts+'</select>'+
       '</td>'+
-      '<td><button class="btn-outline btn-sm" data-id="'+safeId+'" data-on-click="printOrderSlip(this.dataset.id)" title="طباعة بون دو كوموند"><i class="bi bi-printer"></i></button></td>'+
+      '<td class="oc-actions"><button class="btn-outline btn-sm" data-id="'+safeId+'" data-on-click="printOrderSlip(this.dataset.id)" title="طباعة بون دو كوموند"><i class="bi bi-printer"></i></button></td>'+
     '</tr>';
   }).join("");
 }

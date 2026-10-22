@@ -63,6 +63,37 @@ table{width:100%;border-collapse:collapse;font-size:13px}
 .table-scroll{overflow-x:auto;max-width:100%;min-width:0;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
 .table-scroll thead th{position:sticky;top:0;z-index:2}
 @media (min-width:769px){.table-scroll{max-height:calc(100vh - 220px);overflow-y:auto}}
+/* D3.5: تحت 640px الطلبيات (والمنتجات) بطاقات: نفس الـ <tr>، بالـ CSS فقط، ونفس الأزرار والقوائم.
+   فوق 640px الجدول كما هو (.m-only مخفي) */
+.m-only{display:none}
+@media (max-width:640px){/* D3.5 */
+  #sec_orders thead{display:none}
+  #sec_orders .table-scroll table{display:block}
+  #ordersTbl{display:flex;flex-direction:column;gap:12px;padding:12px}
+  #ordersTbl tr{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px 14px;grid-template-areas:"date date" "name phone" "product qty" "city delivery" "total profit" "status status" "actions actions";border:1px solid var(--line);border-radius:20px;padding:16px;background:var(--white)}
+  #ordersTbl td{display:block;min-width:0;padding:0;border:0;white-space:normal;font-size:16px;overflow-wrap:anywhere}
+  #ordersTbl tr:hover td{background:none}
+  #ordersTbl td[data-label]::before{content:attr(data-label);display:block;font-size:13px;font-weight:500;color:var(--muted);margin-bottom:2px}
+  #ordersTbl td[colspan]{grid-column:1/-1}
+  #ordersTbl .oc-num,#ordersTbl .oc-source,#ordersTbl .oc-sent,#ordersTbl .oc-delivered{display:none}
+  #ordersTbl .oc-date{grid-area:date;display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:13px!important;color:var(--muted);padding-bottom:10px;border-bottom:1px solid var(--soft)}
+  #ordersTbl .oc-id{display:inline;font-size:16px;font-weight:700;color:var(--ink)}
+  #ordersTbl .oc-name{grid-area:name}
+  #ordersTbl .oc-phone{grid-area:phone}
+  #ordersTbl .oc-phone a{display:inline-flex;align-items:center;min-height:44px;font-size:17px;font-weight:700}
+  #ordersTbl .oc-product{grid-area:product}
+  #ordersTbl .oc-qty{grid-area:qty}
+  #ordersTbl .oc-city{grid-area:city}
+  #ordersTbl .oc-delivery{grid-area:delivery}
+  #ordersTbl .oc-total{grid-area:total}
+  #ordersTbl .oc-profit{grid-area:profit}
+  #ordersTbl .oc-status{grid-area:status;display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+  #ordersTbl .oc-status::before{flex-basis:100%;margin-bottom:0}
+  #ordersTbl .oc-status .status-sel{flex:1;min-width:0}
+  #ordersTbl .oc-delivery .badge{display:none}
+  #ordersTbl .oc-delivery .status-sel{width:100%}
+  #ordersTbl .oc-actions{position:static;box-shadow:none;background:none;grid-area:actions;display:flex;justify-content:flex-end;padding-top:10px;border-top:1px solid var(--soft)}
+}
 /* عمود الأزرار (آخر عمود) يبقى ظاهر: مثبّت فآخر السطر، يسار فـ RTL ويمين فـ FR/EN */
 .has-actions td:last-child,.has-actions th:last-child{position:sticky;inset-inline-end:0;z-index:1;background:var(--white);box-shadow:8px 0 10px -8px rgba(11,11,31,.18)}
 html[dir=ltr] .has-actions td:last-child,html[dir=ltr] .has-actions th:last-child{box-shadow:-8px 0 10px -8px rgba(11,11,31,.18)}
