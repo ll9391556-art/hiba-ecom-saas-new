@@ -279,3 +279,22 @@ def test_status_bar_order_and_escaping():
     order = [fn.index(f'["{s}"') for s in ("delivered", "confirmed", "pending", "refused")]
     assert order == sorted(order)
     assert "esc(t(r[1]))" in fn and "fmtNum(r[2])" in fn and 'setAttribute("aria-label"' in fn
+
+
+# ── 8. آخر الطلبيات ──
+def test_recent_orders_table():
+    sec = _dash_section()
+    card = sec[sec.index('id="recentOrdersCard"'):]
+    card = card[:card.index("</section>")]
+    heads = re.findall(r'<th data-i18n="(\w+)"', card)
+    assert heads == ["order_col", "client", "product", "city", "total", "status"]  # 6 أعمدة كيما التصميم
+    assert 'id="recentOrdersTbl"' in card and """data-on-click="showSection('orders')\"""" in card
+    js = _dashboard_js()
+    fn = js[js.index("async function loadRecentOrders("):]
+    fn = fn[:fn.index("\n}\n")]
+    assert 'apiGet("/getOrders", {limit:5})' in fn
+    for f in ("o.id", "o.name", "o.product", "o.city"):
+        assert f"esc({f}" in fn, f
+    assert "esc(stLabel(o.status))" in fn and 'Confirmed:"bc"' in fn
+    assert not re.search(r"\+o\.\w+\+", fn)  # حتى قيمة بلا esc
+    assert "loadRecentOrders();" in js

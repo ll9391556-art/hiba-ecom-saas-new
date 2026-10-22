@@ -288,6 +288,20 @@ select.status-sel{min-height:var(--h-btn-sm);background:var(--white);border:1px 
 .seg-confirmed{background:var(--brand)}
 .seg-pending{background:var(--yellow)}
 .seg-refused{background:var(--flash)}
+/* آخر الطلبيات: الجدول يتمرّر داخل البطاقة فالهاتف، ماشي الصفحة */
+.dash-link{background:none;border:0;padding:0;font-family:inherit;font-size:14px;font-weight:600;color:var(--brand);cursor:pointer}
+.dash-link:hover{color:var(--brand-dark)}
+.dash-table-wrap{overflow-x:auto;margin:0 -4px}
+.dash-table{width:100%;min-width:560px;border-collapse:collapse;font-size:14px}
+.dash-table th{background:none;padding:10px 8px;font-size:14px;font-weight:600;color:var(--muted);text-transform:none;letter-spacing:0}
+.dash-table td{padding:14px 8px;border-bottom:0;border-top:1px solid var(--soft)}
+.dash-table tr:hover td{background:none}
+.dash-order-id{font-weight:600;max-width:150px;overflow:hidden;text-overflow:ellipsis;text-align:right}
+html[dir=ltr] .dash-order-id{text-align:left}
+.dash-amount{font-weight:600}
+.dash-ellipsis{max-width:180px;overflow:hidden;text-overflow:ellipsis}
+.dash-empty{text-align:center;color:var(--muted);padding:24px 8px}
+.dash-card[hidden]{display:none}
 /* تنبيهات الباقة أعلى اللوحة (ردود البوت، الانتهاء) */
 #planAlerts{margin-bottom:16px}
 .plan-alert{padding:14px 18px;border-radius:16px;font-size:16px;font-weight:600;margin-bottom:8px;border:1px solid}

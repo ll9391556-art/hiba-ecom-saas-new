@@ -215,8 +215,33 @@ async function loadDashboard(){
     }).join("") || '<tr><td colspan="3" class="empty-state">✅</td></tr>';
 
     renderStatusBar(d);
+    loadRecentOrders();
     renderProductsChart(d);
     loadTrendChart(cur);
+  }catch(e){ console.error(e); }
+}
+
+// آخر 5 طلبيات (الأحدث أولاً). عضو بلا صلاحية orders: البطاقة تتخبّى
+async function loadRecentOrders(){
+  var card = document.getElementById("recentOrdersCard");
+  var tbl = document.getElementById("recentOrdersTbl");
+  if(!card || !tbl) return;
+  try{
+    var r = await apiGet("/getOrders", {limit:5});
+    card.hidden = r.status!=="ok";
+    if(r.status!=="ok") return;
+    var cur = curSym();
+    tbl.innerHTML = (r.data||[]).map(function(o){
+      var cls = {Pending:"bp",Confirmed:"bc",Delivered:"bi",Refused:"br","No Answer":"bn"}[o.status]||"bp";
+      return '<tr>'+
+        '<td class="dash-order-id" dir="ltr">'+esc(o.id||"—")+'</td>'+
+        '<td>'+esc(o.name||"—")+'</td>'+
+        '<td class="dash-ellipsis">'+esc(o.product||"—")+'</td>'+
+        '<td>'+esc(o.city||"—")+'</td>'+
+        '<td class="dash-amount">'+esc(fmtNum(o.total))+' '+cur+'</td>'+
+        '<td><span class="badge '+cls+'">'+esc(stLabel(o.status))+'</span></td>'+
+      '</tr>';
+    }).join("") || '<tr><td colspan="6" class="dash-empty">'+esc(t("no_orders_yet"))+'</td></tr>';
   }catch(e){ console.error(e); }
 }
 

@@ -195,6 +195,24 @@
       </section>
     </div>
 
+    <div class="dash-row">
+      <section class="dash-card dash-main" id="recentOrdersCard">
+        <div class="dash-card-head">
+          <h2 data-i18n="recent_orders">آخر الطلبيات</h2>
+          <button type="button" class="dash-link" data-on-click="showSection('orders')"><span data-i18n="all_orders">كل الطلبيات</span></button>
+        </div>
+        <div class="dash-table-wrap">
+          <table class="dash-table">
+            <thead><tr>
+              <th data-i18n="order_col">الطلبية</th><th data-i18n="client">العميل</th><th data-i18n="product">المنتج</th>
+              <th data-i18n="city">المدينة</th><th data-i18n="total">المجموع</th><th data-i18n="status">الحالة</th>
+            </tr></thead>
+            <tbody id="recentOrdersTbl"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
     <div class="row g-3 mb-4">
       <div class="col-md-4">
         <div class="chart-card">
