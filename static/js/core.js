@@ -15,7 +15,8 @@ var currentUser  = null;
 var authToken    = localStorage.getItem("of_token") || null;
 var allOrders    = [];
 var allCustomers = [];
-var currentLang  = localStorage.getItem("of_lang") || "FR";
+// العربية افتراضيًا (D2)؛ اللي اختار FR أو EN محفوظ فـ of_lang ويبقالو
+var currentLang  = localStorage.getItem("of_lang") || "AR";
 var currentPlan  = "free";
 var currentRole  = "owner";
 var merchantCurrency = "DZD";
