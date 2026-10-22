@@ -154,7 +154,8 @@ var I18N = {
     your_plan:"Votre plan",manage_plan:"Gérer l'abonnement",
     hello_morning:"Bonjour, {name}",hello_evening:"Bonsoir, {name}",dash_summary:"Voici le résumé de votre boutique",new_order:"Nouvelle commande",
     kpi_pending:"{x} en attente",kpi_delivered_of:"dont {x} livrées",kpi_refuse_rate:"{x}% des commandes",kpi_week_profit:"{x} cette semaine",
-    recent_orders:"Dernières commandes",all_orders:"Toutes les commandes",order_col:"Commande",no_orders_yet:"Aucune commande pour l'instant"
+    recent_orders:"Dernières commandes",all_orders:"Toutes les commandes",order_col:"Commande",no_orders_yet:"Aucune commande pour l'instant",
+    bot_card_title:"Bot de discussion",bot_not_in_plan:"Pas inclus dans votre plan",plan_locked:"Pro et plus",ch_messenger:"Facebook Messenger",ch_instagram:"Instagram",ch_whatsapp:"WhatsApp"
   },
   AR:{
     nav_dashboard:"الرئيسية",nav_orders:"الطلبات",nav_products:"المنتجات",
@@ -243,7 +244,8 @@ var I18N = {
     your_plan:"باقتك",manage_plan:"إدارة الاشتراك",
     hello_morning:"صباح الخير، {name}",hello_evening:"مساء الخير، {name}",dash_summary:"هذا ملخص متجرك",new_order:"طلبية جديدة",
     kpi_pending:"{x} قيد الانتظار",kpi_delivered_of:"منها {x} تم تسليمها",kpi_refuse_rate:"{x}% من الطلبات",kpi_week_profit:"{x} هذا الأسبوع",
-    recent_orders:"آخر الطلبيات",all_orders:"كل الطلبيات",order_col:"الطلبية",no_orders_yet:"ما كاين حتى طلبية بعد"
+    recent_orders:"آخر الطلبيات",all_orders:"كل الطلبيات",order_col:"الطلبية",no_orders_yet:"ما كاين حتى طلبية بعد",
+    bot_card_title:"بوت المحادثة",bot_not_in_plan:"غير متاح في باقتك",plan_locked:"Pro وأعلى",ch_messenger:"فيسبوك ماسنجر",ch_instagram:"إنستغرام",ch_whatsapp:"واتساب"
   },
   EN:{
     nav_dashboard:"Dashboard",nav_orders:"Orders",nav_products:"Products",
@@ -332,7 +334,8 @@ var I18N = {
     your_plan:"Your plan",manage_plan:"Manage subscription",
     hello_morning:"Good morning, {name}",hello_evening:"Good evening, {name}",dash_summary:"Here is your store summary",new_order:"New order",
     kpi_pending:"{x} pending",kpi_delivered_of:"{x} of them delivered",kpi_refuse_rate:"{x}% of orders",kpi_week_profit:"{x} this week",
-    recent_orders:"Latest orders",all_orders:"All orders",order_col:"Order",no_orders_yet:"No orders yet"
+    recent_orders:"Latest orders",all_orders:"All orders",order_col:"Order",no_orders_yet:"No orders yet",
+    bot_card_title:"Chat bot",bot_not_in_plan:"Not included in your plan",plan_locked:"Pro and up",ch_messenger:"Facebook Messenger",ch_instagram:"Instagram",ch_whatsapp:"WhatsApp"
   }
 };
 

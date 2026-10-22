@@ -302,6 +302,16 @@ html[dir=ltr] .dash-order-id{text-align:left}
 .dash-ellipsis{max-width:180px;overflow:hidden;text-overflow:ellipsis}
 .dash-empty{text-align:center;color:var(--muted);padding:24px 8px}
 .dash-card[hidden]{display:none}
+/* بطاقة البوت */
+.channel-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+.channel-list li{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:15px}
+.bot-usage{display:flex;flex-direction:column;gap:8px;padding-top:14px;border-top:1px solid var(--soft)}
+.bot-usage[hidden]{display:none}
+.bot-usage-text{font-size:14px;color:var(--text)}
+.usage-track{height:8px;border-radius:var(--r-pill);background:var(--soft);overflow:hidden}
+.usage-fill{height:8px;border-radius:var(--r-pill);background:var(--brand);width:0}
+.usage-fill.warn{background:var(--yellow)}
+.usage-fill.full{background:var(--flash)}
 /* تنبيهات الباقة أعلى اللوحة (ردود البوت، الانتهاء) */
 #planAlerts{margin-bottom:16px}
 .plan-alert{padding:14px 18px;border-radius:16px;font-size:16px;font-weight:600;margin-bottom:8px;border:1px solid}

@@ -298,3 +298,32 @@ def test_recent_orders_table():
     assert "esc(stLabel(o.status))" in fn and 'Confirmed:"bc"' in fn
     assert not re.search(r"\+o\.\w+\+", fn)  # حتى قيمة بلا esc
     assert "loadRecentOrders();" in js
+
+
+# ── 9. بطاقة البوت: القنوات وعدّاد الردود ──
+def test_bot_card_markup():
+    sec = _dash_section()
+    card = sec[sec.index('id="botCard"'):]
+    card = card[:card.index("</section>")]
+    assert 'data-i18n="bot_card_title"' in card and 'id="channelList"' in card
+    for i in ("botUsage", "botUsageText", "botUsageFill"):
+        assert f'id="{i}"' in card, i
+    row = sec[sec.index('id="recentOrdersCard"'):]
+    assert row.index('class="dash-col"') < row.index('id="botCard"')  # جنب آخر الطلبيات
+
+
+def test_bot_card_logic():
+    js = _dashboard_js()
+    fn = js[js.index("async function loadBotCard("):]
+    fn = fn[:fn.index("\n}\n")]
+    assert 'planHas("bot")' in fn and "BOT_LAUNCHED" in fn and 'apiGet("/getBotSettings", {})' in fn
+    for field in ("page_id_FB", "fb_access_token", "Page_ID_instgram", "instgram_access_token",
+                  "phone_number_id", "whtsapp_token"):
+        assert f"s.{field}" in fn, field
+    assert 't("bot_usage_x_of_y")' in fn and "PLAN_USAGE" in fn and 't("bot_not_in_plan")' in fn
+    assert "esc(t(" in fn
+    plan = js[js.index("async function loadUserPlan("):js.index("function planHas(")]
+    assert "loadBotCard();" in plan  # PLAN_FEATURES يوصل من بعد اللوحة
+    r = _css_rules()
+    assert r[".usage-track"]["height"] == "8px" and r[".usage-fill"]["background"] == "var(--brand)"
+    assert r[".usage-fill.warn"]["background"] == "var(--yellow)" and r[".usage-fill.full"]["background"] == "var(--flash)"

@@ -76,6 +76,7 @@ async function loadUserPlan(){
       if(navTeamEl) navTeamEl.style.display = (currentRole==="owner" && planHas("team")) ? "flex" : "none";
       renderCurrencyButtons();
       renderPlanAlerts();
+      loadBotCard();
       var pn = document.getElementById("planName");
       if(pn) pn.textContent = currentPlan.charAt(0).toUpperCase()+currentPlan.slice(1);
       var mp = document.getElementById("managePlanLink");
@@ -216,6 +217,7 @@ async function loadDashboard(){
 
     renderStatusBar(d);
     loadRecentOrders();
+    if(Object.keys(PLAN_FEATURES||{}).length) loadBotCard();  // وإلا loadUserPlan ينادي عليها
     renderProductsChart(d);
     loadTrendChart(cur);
   }catch(e){ console.error(e); }
@@ -242,6 +244,45 @@ async function loadRecentOrders(){
         '<td><span class="badge '+cls+'">'+esc(stLabel(o.status))+'</span></td>'+
       '</tr>';
     }).join("") || '<tr><td colspan="6" class="dash-empty">'+esc(t("no_orders_yet"))+'</td></tr>';
+  }catch(e){ console.error(e); }
+}
+
+// بطاقة البوت: حالة القنوات (من إعدادات البوت) + "استعملت X من Y رد هذا الشهر"
+async function loadBotCard(){
+  var list = document.getElementById("channelList");
+  var usage = document.getElementById("botUsage");
+  if(!list || !usage) return;
+  var pill = function(cls, key){ return '<span class="badge '+cls+'">'+esc(t(key))+'</span>'; };
+  var u = (PLAN_USAGE||{}).botMsgs;
+  usage.hidden = !(u && u.cap);
+  if(u && u.cap){
+    var pct = Math.min(100, Math.round(u.used/u.cap*100));
+    document.getElementById("botUsageText").textContent =
+      t("bot_usage_x_of_y").replace("{x}", fmtNum(u.used)).replace("{y}", fmtNum(u.cap));
+    var fill = document.getElementById("botUsageFill");
+    fill.style.width = pct+"%";
+    fill.className = "usage-fill"+(pct>=100 ? " full" : pct>=80 ? " warn" : "");
+  }
+  if(!planHas("bot")){
+    list.innerHTML = '<li><span>'+esc(t("bot_not_in_plan"))+'</span>'+pill("bn", "plan_locked")+'</li>';
+    return;
+  }
+  if(!BOT_LAUNCHED){
+    list.innerHTML = '<li><span>'+esc(t("nav_bot"))+'</span>'+pill("bp", "soon")+'</li>';
+    return;
+  }
+  try{
+    var r = await apiGet("/getBotSettings", {});
+    if(r.status!=="ok"){ list.innerHTML = ""; return; }
+    var s = r.data||{};
+    var channels = [
+      ["ch_messenger", s.page_id_FB && s.fb_access_token],
+      ["ch_instagram", s.Page_ID_instgram && s.instgram_access_token],
+      ["ch_whatsapp", s.phone_number_id && s.whtsapp_token]
+    ];
+    list.innerHTML = channels.map(function(c){
+      return '<li><span>'+esc(t(c[0]))+'</span>'+(c[1] ? pill("bs", "connected") : pill("bn", "not_connected"))+'</li>';
+    }).join("");
   }catch(e){ console.error(e); }
 }
 
