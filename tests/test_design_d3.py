@@ -58,7 +58,7 @@ def test_plan_cards_follow_the_landing_design():
     assert r[".plan-top"]["background"] == "var(--volt)" and r[".plan-top"]["color"] == "var(--ink)"
     assert r[".plan-pro .plan-feature svg"]["color"] == "var(--volt)"
     # _rules ما يفرّقش @media (الهاتف: 1fr)، لذلك القاعدة الكاملة كنص
-    assert ".plan-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));" in _read(STATIC / "css" / "app.css")
+    assert ".plan-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));" in _read(STATIC / "css" / "app.css")
     css = _read(STATIC / "css" / "app.css").lower()
     block = css[css.index(".plan-grid"):css.index("/* /plans */")]
     assert not any(d in block for d in DARK) and not any(d in sec.lower() for d in DARK)
@@ -199,3 +199,15 @@ def test_mobile_stacks_cards_with_pro_first():
     sec = _plans_section()  # ترتيب الـ HTML يبقى free، starter، pro، business (الحاسوب)
     order = [sec.index(f'id="plan_{p}"') for p in ("free", "starter", "pro", "business", "early")]
     assert order == sorted(order)
+
+
+# ── لقطة 1280: الأربع بطاقات فسطر واحد، والعنوان مرة وحدة ──
+def test_four_cards_fit_one_row_on_a_computer():
+    """المحتوى ~966px: بـ 240px تطلع 3 بطاقات وBusiness وحدها فسطر ثاني."""
+    css = _read(STATIC / "css" / "app.css")
+    m = re.search(r"\.plan-grid\{display:grid;grid-template-columns:repeat\(auto-fit,minmax\(min\(100%,(\d+)px\),1fr\)\);gap:(\d+)px", css)
+    card_min, gap = int(m.group(1)), int(m.group(2))
+    assert 4 * card_min + 3 * gap <= 966
+    r = _css()
+    assert r[".plan-card"]["padding"] == "24px"
+    assert '<h2 class="plans-title"' not in _plans_section()  # #pageTitle فيه "الاشتراكات" من قبل

@@ -120,13 +120,12 @@ html[dir=rtl] .modal-close{right:auto;left:16px}
 .plan-gate i{font-size:56px;opacity:.3;margin-bottom:16px;display:block}
 /* الاشتراكات (D3، قسم الأسعار فـ Landing.dc.html): Pro بـ brand و"الأكثر طلبًا"، Business بيضاء بإطار brand */
 .plans-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px}
-.plans-title{margin:0;font-size:26px;font-weight:700;color:var(--ink)}
-.plan-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:16px;align-items:stretch}
-.plan-card{position:relative;border-radius:28px;background:var(--white);color:var(--ink);border:1px solid var(--line);padding:28px;display:flex;flex-direction:column;gap:14px;min-width:0;transition:.2s}
+.plan-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:16px;align-items:stretch}
+.plan-card{position:relative;border-radius:28px;background:var(--white);color:var(--ink);border:1px solid var(--line);padding:24px;display:flex;flex-direction:column;gap:14px;min-width:0;transition:.2s}
 .plan-card:hover{transform:translateY(-2px)}
 .plan-name{margin:0;font-size:20px;font-weight:700}
-.plan-price{font-size:40px;font-weight:700;line-height:1.1;white-space:nowrap}
-.plan-price small{font-size:17px;font-weight:500;color:var(--muted)}
+.plan-price{font-size:36px;font-weight:700;line-height:1.1;white-space:nowrap}
+.plan-price small{font-size:16px;font-weight:500;color:var(--muted)}
 .plan-note{min-height:22px;font-size:15px;font-weight:600;color:var(--muted)}
 .plan-features{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px;font-size:16px}
 .plan-feature{display:flex;align-items:flex-start;gap:10px;line-height:1.5}
