@@ -227,15 +227,15 @@
       </div>
     </div>
 
-    <div class="row g-3">
-      <div class="col-md-6">
-        <div class="table-wrap">
-          <div class="table-head"><h5 data-i18n="low_stock">Stock Faible</h5></div>
-          <table><thead><tr><th data-i18n="product">Produit</th><th data-i18n="remaining">Reste</th><th data-i18n="stock_status">Stat</th></tr></thead>
-          <tbody id="lowStockTbl"></tbody></table>
-        </div>
+    <section class="dash-card" id="lowStockCard">
+      <div class="dash-card-head"><h2 data-i18n="low_stock">مخزون منخفض</h2></div>
+      <div class="dash-table-wrap">
+        <table class="dash-table dash-table-sm">
+          <thead><tr><th data-i18n="product">المنتج</th><th data-i18n="remaining">المتبقي</th><th data-i18n="stock_status">حالة المخزون</th></tr></thead>
+          <tbody id="lowStockTbl"></tbody>
+        </table>
       </div>
-    </div>
+    </section>
   </div>
 
   <div id="sec_orders" class="section">

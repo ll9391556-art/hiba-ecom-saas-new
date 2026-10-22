@@ -345,3 +345,16 @@ def test_top_sellers_list_replaces_chart_and_table():
     name = r[".top-name"]
     assert name["text-overflow"] == "ellipsis" and name["white-space"] == "nowrap" and name["overflow"] == "hidden"
     assert name["min-width"] == "0"
+
+
+# ── 11. مخزون منخفض ──
+def test_low_stock_card():
+    sec = _dash_section()
+    assert not re.search(r'class="(row|col-[\w-]+|table-wrap|chart-card)[ "]', sec)  # كل اللوحة بالبطاقات الجديدة
+    card = sec[sec.index('id="lowStockCard"'):]
+    card = card[:card.index("</section>")]
+    assert re.findall(r'<th data-i18n="(\w+)"', card) == ["product", "remaining", "stock_status"]
+    assert '<table class="dash-table dash-table-sm">' in card and 'id="lowStockTbl"' in card
+    js = _dashboard_js()
+    assert "esc(t(\"stock_ok\"))" in js
+    assert _css_rules()[".dash-table-sm"]["min-width"] == "0"

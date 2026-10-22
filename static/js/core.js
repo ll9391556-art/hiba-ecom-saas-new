@@ -156,7 +156,8 @@ var I18N = {
     kpi_pending:"{x} en attente",kpi_delivered_of:"dont {x} livrées",kpi_refuse_rate:"{x}% des commandes",kpi_week_profit:"{x} cette semaine",
     recent_orders:"Dernières commandes",all_orders:"Toutes les commandes",order_col:"Commande",no_orders_yet:"Aucune commande pour l'instant",
     bot_card_title:"Bot de discussion",bot_not_in_plan:"Pas inclus dans votre plan",plan_locked:"Pro et plus",ch_messenger:"Facebook Messenger",ch_instagram:"Instagram",ch_whatsapp:"WhatsApp",
-    sales_unit:"ventes",no_sales_yet:"Aucune vente pour l'instant"
+    sales_unit:"ventes",no_sales_yet:"Aucune vente pour l'instant",
+    stock_ok:"Stock suffisant pour tous les produits"
   },
   AR:{
     nav_dashboard:"الرئيسية",nav_orders:"الطلبات",nav_products:"المنتجات",
@@ -247,7 +248,8 @@ var I18N = {
     kpi_pending:"{x} قيد الانتظار",kpi_delivered_of:"منها {x} تم تسليمها",kpi_refuse_rate:"{x}% من الطلبات",kpi_week_profit:"{x} هذا الأسبوع",
     recent_orders:"آخر الطلبيات",all_orders:"كل الطلبيات",order_col:"الطلبية",no_orders_yet:"ما كاين حتى طلبية بعد",
     bot_card_title:"بوت المحادثة",bot_not_in_plan:"غير متاح في باقتك",plan_locked:"Pro وأعلى",ch_messenger:"فيسبوك ماسنجر",ch_instagram:"إنستغرام",ch_whatsapp:"واتساب",
-    sales_unit:"مبيعات",no_sales_yet:"ما كاين حتى مبيعات بعد"
+    sales_unit:"مبيعات",no_sales_yet:"ما كاين حتى مبيعات بعد",
+    stock_ok:"المخزون كافي لكل المنتجات"
   },
   EN:{
     nav_dashboard:"Dashboard",nav_orders:"Orders",nav_products:"Products",
@@ -338,7 +340,8 @@ var I18N = {
     kpi_pending:"{x} pending",kpi_delivered_of:"{x} of them delivered",kpi_refuse_rate:"{x}% of orders",kpi_week_profit:"{x} this week",
     recent_orders:"Latest orders",all_orders:"All orders",order_col:"Order",no_orders_yet:"No orders yet",
     bot_card_title:"Chat bot",bot_not_in_plan:"Not included in your plan",plan_locked:"Pro and up",ch_messenger:"Facebook Messenger",ch_instagram:"Instagram",ch_whatsapp:"WhatsApp",
-    sales_unit:"sales",no_sales_yet:"No sales yet"
+    sales_unit:"sales",no_sales_yet:"No sales yet",
+    stock_ok:"Every product has enough stock"
   }
 };
 

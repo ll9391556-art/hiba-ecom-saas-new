@@ -218,7 +218,7 @@ async function loadDashboard(){
     lowTbl.innerHTML = (d.lowStock||[]).map(function(p){
       var cl = p.rem<=0?"br":"bn";
       return "<tr><td>"+esc(p.name)+"</td><td>"+esc(p.rem)+"</td><td><span class='badge "+cl+"'>"+esc(stockLabel(p.stat))+"</span></td></tr>";
-    }).join("") || '<tr><td colspan="3" class="empty-state">✅</td></tr>';
+    }).join("") || '<tr><td colspan="3" class="dash-empty">'+esc(t("stock_ok"))+'</td></tr>';
 
     renderStatusBar(d);
     loadRecentOrders();

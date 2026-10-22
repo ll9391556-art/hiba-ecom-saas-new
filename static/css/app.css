@@ -299,6 +299,7 @@ select.status-sel{min-height:var(--h-btn-sm);background:var(--white);border:1px 
 .dash-order-id{font-weight:600;max-width:150px;overflow:hidden;text-overflow:ellipsis;text-align:right}
 html[dir=ltr] .dash-order-id{text-align:left}
 .dash-amount{font-weight:600}
+.dash-table-sm{min-width:0}
 .dash-ellipsis{max-width:180px;overflow:hidden;text-overflow:ellipsis}
 .dash-empty{text-align:center;color:var(--muted);padding:24px 8px}
 .dash-card[hidden]{display:none}
