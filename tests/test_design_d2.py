@@ -400,3 +400,14 @@ def test_sidebar_uses_lucide():
     assert len(re.findall(r'<i data-lucide="[a-z-]+"></i>', side)) >= 19
     r = _css_rules()
     assert r[".nav-item svg"]["width"] == "20px" and r[".nav-item svg"]["flex-shrink"] == "0"
+
+
+# ── لقطات 360/1280: الجداول تبقى داخل بطاقاتها ──
+def test_dashboard_tables_fit_their_cards():
+    """لقطة 1280: شارة الحالة تتقصّ فآخر الطلبيات. لقطة 360: أعمدة المخزون تختفي (اسم طويل nowrap)."""
+    r = _css_rules()
+    assert r[".dash-table"]["min-width"] == "520px"
+    assert r[".dash-ellipsis"]["max-width"] == "140px" and r[".dash-ellipsis"]["white-space"] == "nowrap"
+    assert r[".dash-table td"]["white-space"] == "nowrap"
+    assert r[".dash-table-sm td:first-child"]["white-space"] == "normal"
+    assert r[".dash-table-wrap"]["margin"] == "0"
