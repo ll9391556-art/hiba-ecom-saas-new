@@ -249,6 +249,10 @@ select.status-sel{min-height:var(--h-btn-sm);background:var(--white);border:1px 
 .perm-chip{display:flex;align-items:center;gap:6px;background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:12px;cursor:pointer;user-select:none}
 .perm-chip input{cursor:pointer}
 .member-perm-badge{display:inline-block;background:var(--brand-light);color:var(--brand-dark);border-radius:6px;padding:2px 7px;font-size:10px;margin:1px}
+/* لوحة التحكم (D2، Dashboard.dc.html) */
+.dash-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;margin-bottom:24px}
+.dash-hello{margin:0;font-size:30px;font-weight:700;color:var(--ink);line-height:1.25}
+.dash-sub{margin:4px 0 0;font-size:16px;color:var(--muted)}
 /* تنبيهات الباقة أعلى اللوحة (ردود البوت، الانتهاء) */
 #planAlerts{margin-bottom:16px}
 .plan-alert{padding:14px 18px;border-radius:16px;font-size:16px;font-weight:600;margin-bottom:8px;border:1px solid}

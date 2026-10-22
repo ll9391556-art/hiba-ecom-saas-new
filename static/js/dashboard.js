@@ -164,6 +164,16 @@ function dashCounts(d){
           pending:Math.max(0, total - confirmedOnly - delivered - refused)};
 }
 
+// "صباح الخير، هبة" قبل 12:00، وإلا "مساء الخير، هبة". الاسم يدخل كنص (textContent)
+function renderGreeting(){
+  var el = document.getElementById("dashHello");
+  if(!el) return;
+  var hour = new Date().getHours();
+  var name = currentUser ? (currentUser.name || uname()) : "";
+  var text = t(hour<12 ? "hello_morning" : "hello_evening");
+  el.textContent = name ? text.replace("{name}", name) : text.split("{name}")[0].replace(/[،,]\s*$/, "");
+}
+
 async function loadDashboard(){
   try{
     var r = await apiGet("/getDashboard", {});
@@ -171,6 +181,7 @@ async function loadDashboard(){
     var d = r.data;
     var cur = curSym();
     var n = dashCounts(d);
+    renderGreeting();
     var badge = document.getElementById("navPendingBadge");
     if(badge){ badge.textContent = n.pending>99 ? "99+" : n.pending; badge.hidden = !n.pending; }
     document.getElementById("d_total").textContent  = d.totalOrders||0;

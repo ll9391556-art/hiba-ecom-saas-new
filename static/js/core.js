@@ -151,7 +151,8 @@ var I18N = {
     status_updated:"Statut mis à jour : {s}",order_added:"Commande ajoutée",enter_product_name:"Entrez un nom de produit",
     product_added:"Produit ajouté",confirm_delete:"Supprimer {name} ?",deleted:"Supprimé",enter_city_name:"Entrez un nom de ville",
     city_added:"Ville ajoutée",saved:"Enregistré",link_copied:"Lien copié !",copied:"Copié !",
-    your_plan:"Votre plan",manage_plan:"Gérer l'abonnement"
+    your_plan:"Votre plan",manage_plan:"Gérer l'abonnement",
+    hello_morning:"Bonjour, {name}",hello_evening:"Bonsoir, {name}",dash_summary:"Voici le résumé de votre boutique",new_order:"Nouvelle commande"
   },
   AR:{
     nav_dashboard:"الرئيسية",nav_orders:"الطلبات",nav_products:"المنتجات",
@@ -237,7 +238,8 @@ var I18N = {
     status_updated:"تم تحديث الحالة: {s}",order_added:"تمت إضافة الطلبية",enter_product_name:"أدخل اسم المنتج",
     product_added:"تمت إضافة المنتج",confirm_delete:"حذف {name}؟",deleted:"تم الحذف",enter_city_name:"أدخل اسم المدينة",
     city_added:"تمت إضافة المدينة",saved:"تم الحفظ",link_copied:"تم نسخ الرابط!",copied:"تم النسخ!",
-    your_plan:"باقتك",manage_plan:"إدارة الاشتراك"
+    your_plan:"باقتك",manage_plan:"إدارة الاشتراك",
+    hello_morning:"صباح الخير، {name}",hello_evening:"مساء الخير، {name}",dash_summary:"هذا ملخص متجرك",new_order:"طلبية جديدة"
   },
   EN:{
     nav_dashboard:"Dashboard",nav_orders:"Orders",nav_products:"Products",
@@ -323,7 +325,8 @@ var I18N = {
     status_updated:"Status updated: {s}",order_added:"Order added",enter_product_name:"Enter a product name",
     product_added:"Product added",confirm_delete:"Delete {name}?",deleted:"Deleted",enter_city_name:"Enter a city name",
     city_added:"City added",saved:"Saved",link_copied:"Link copied!",copied:"Copied!",
-    your_plan:"Your plan",manage_plan:"Manage subscription"
+    your_plan:"Your plan",manage_plan:"Manage subscription",
+    hello_morning:"Good morning, {name}",hello_evening:"Good evening, {name}",dash_summary:"Here is your store summary",new_order:"New order"
   }
 };
 

@@ -179,3 +179,20 @@ def test_sidebar_shows_pending_count_and_plan_name():
     js = _dashboard_js()
     assert 'getElementById("navPendingBadge")' in js and "badge.hidden = !n.pending" in js
     assert 'getElementById("planName")' in js and "Plan: " not in js
+
+
+# ── 4. رأس اللوحة ──
+def _dash_section():
+    html = _index()
+    return html[html.index('<div id="sec_dashboard"'):html.index('<div id="sec_orders"')]
+
+
+def test_dashboard_header_greets_and_offers_new_order():
+    sec = _dash_section()
+    head = sec[sec.index('class="dash-head"'):sec.index('id="dashCards"')]
+    assert '<h1 class="dash-hello" id="dashHello">' in head and 'data-i18n="dash_summary"' in head
+    assert """data-on-click="openModal('addOrderModal')\"""" in head and 'data-i18n="new_order"' in head
+    js = _dashboard_js()
+    assert 'getElementById("dashHello")' in js and 't(hour<12 ? "hello_morning" : "hello_evening")' in js
+    r = _css_rules()
+    assert r[".dash-hello"]["font-size"] == "30px" and r[".dash-sub"]["color"] == "var(--muted)"
