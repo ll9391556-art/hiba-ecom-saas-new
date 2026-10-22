@@ -253,6 +253,21 @@ select.status-sel{min-height:var(--h-btn-sm);background:var(--white);border:1px 
 .dash-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;margin-bottom:24px}
 .dash-hello{margin:0;font-size:30px;font-weight:700;color:var(--ink);line-height:1.25}
 .dash-sub{margin:4px 0 0;font-size:16px;color:var(--muted)}
+/* KPI: الرقم كبير فسطر واحد (ما يتكسرش)، والتفصيل تحتو بخط صغير */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:16px;margin-bottom:16px}
+.kpi{border-radius:var(--r-card);background:var(--white);color:var(--ink);padding:22px;display:flex;flex-direction:column;align-items:flex-start;gap:10px;min-width:0}
+.kpi-lbl{font-size:15px;color:var(--muted)}
+.kpi-num{display:block;max-width:100%;font-size:clamp(28px,7vw,44px);font-weight:700;line-height:1;white-space:nowrap;font-variant-numeric:tabular-nums}
+.kpi-num small{font-size:.5em;font-weight:700}
+.kpi-num-flash{color:var(--flash)}
+.kpi-sub{display:block;font-size:14px;color:#3A3B4F}
+.kpi-pill{padding:4px 10px;border-radius:var(--r-pill);background:var(--volt);color:var(--ink);font-size:13px;font-weight:700}
+.kpi-pill[hidden],.kpi-sub:empty{display:none}
+.kpi-brand{background:var(--brand);color:#fff}
+.kpi-brand .kpi-lbl{color:var(--brand-light)}
+.kpi-volt{background:var(--volt);color:var(--ink)}
+.kpi-volt .kpi-lbl,.kpi-volt .kpi-sub{color:var(--st-delivered-fg)}
+.kpi-volt .kpi-sub{font-weight:700}
 /* تنبيهات الباقة أعلى اللوحة (ردود البوت، الانتهاء) */
 #planAlerts{margin-bottom:16px}
 .plan-alert{padding:14px 18px;border-radius:16px;font-size:16px;font-weight:600;margin-bottom:8px;border:1px solid}

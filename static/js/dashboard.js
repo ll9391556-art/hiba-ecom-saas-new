@@ -156,6 +156,11 @@ var chartProductsInstance = null;
 function chartTextColor(){ return DARK_MODE ? "#8899bb" : "#64748b"; }
 function chartGridColor(){ return DARK_MODE ? "rgba(255,255,255,.07)" : "rgba(0,0,0,.07)"; }
 
+// أرقام اللوحة بأرقام لاتينية وفاصل آلاف: 11 000 (كيما التصميم، فكل اللغات)
+function fmtNum(v){
+  return Math.round(Number(v)||0).toLocaleString("fr-FR").replace(/[  ]/g, " ");
+}
+
 // confirmed فـ stats فيه delivered؛ قيد الانتظار = الباقي (Pending و No Answer)
 function dashCounts(d){
   var total = d.totalOrders||0, delivered = d.delivered||0, refused = d.refused||0;
@@ -184,10 +189,16 @@ async function loadDashboard(){
     renderGreeting();
     var badge = document.getElementById("navPendingBadge");
     if(badge){ badge.textContent = n.pending>99 ? "99+" : n.pending; badge.hidden = !n.pending; }
-    document.getElementById("d_total").textContent  = d.totalOrders||0;
-    document.getElementById("d_conf").textContent   = (d.confirmed||0)+" ("+d.delivered+" "+t("delivered")+")";
-    document.getElementById("d_ref").textContent    = d.refused||0;
-    document.getElementById("d_profit").textContent = (d.totalProfit||0).toLocaleString()+" "+cur;
+    // KPI: الرقم وحدو فسطر، والتفصيل فـ *_sub تحتو
+    document.getElementById("d_total").textContent  = fmtNum(n.total);
+    document.getElementById("d_conf").textContent  = fmtNum(n.confirmedOnly + n.delivered);
+    document.getElementById("d_ref").textContent    = fmtNum(n.refused);
+    document.getElementById("d_profit").innerHTML   = esc(fmtNum(d.totalProfit||0))+" <small>"+cur+"</small>";
+    var totalSub = document.getElementById("d_total_sub");
+    totalSub.textContent = t("kpi_pending").replace("{x}", fmtNum(n.pending));
+    totalSub.hidden = !n.total;
+    document.getElementById("d_conf_sub").textContent = t("kpi_delivered_of").replace("{x}", fmtNum(n.delivered));
+    document.getElementById("d_ref_sub").textContent  = t("kpi_refuse_rate").replace("{x}", d.refuseRate||0);
 
     var topTbl = document.getElementById("topProductsTbl");
     topTbl.innerHTML = (d.topProducts||[]).map(function(p){
@@ -338,6 +349,8 @@ async function loadTrendChart(cur){
     });
 
     var total7 = values.reduce(function(s,v){ return s+v; },0);
+    var weekSub = document.getElementById("d_profit_sub");
+    if(weekSub) weekSub.textContent = t("kpi_week_profit").replace("{x}", fmtNum(total7)+" "+(cur||""));
     var cap = document.getElementById("chartTrendCaption");
     if(cap) cap.innerHTML = esc(t("total_7days")).replace("{x}",
       "<strong style='color:"+(total7>=0?"var(--green)":"var(--red)")+"'>"+total7.toLocaleString()+" "+(cur||"")+"</strong>");

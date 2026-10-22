@@ -157,11 +157,27 @@
       </div>
       <button class="btn-primary" data-on-click="openModal('addOrderModal')"><i class="bi bi-plus-lg"></i> <span data-i18n="new_order">طلبية جديدة</span></button>
     </div>
-    <div class="row g-3 mb-4" id="dashCards">
-      <div class="col-6 col-md-3"><div class="stat-card"><div class="d-flex justify-content-between align-items-start"><div><div class="stat-lbl" data-i18n="total_orders">Total Commandes</div><div class="stat-num" id="d_total">—</div></div><i class="bi bi-bag stat-icon" style="color:var(--accent)"></i></div></div></div>
-      <div class="col-6 col-md-3"><div class="stat-card"><div class="d-flex justify-content-between align-items-start"><div><div class="stat-lbl" data-i18n="confirmed">Confirmées</div><div class="stat-num" id="d_conf">—</div></div><i class="bi bi-check-circle stat-icon" style="color:var(--green)"></i></div></div></div>
-      <div class="col-6 col-md-3"><div class="stat-card"><div class="d-flex justify-content-between align-items-start"><div><div class="stat-lbl" data-i18n="refused">Refusées</div><div class="stat-num" id="d_ref">—</div></div><i class="bi bi-x-circle stat-icon" style="color:var(--red)"></i></div></div></div>
-      <div class="col-6 col-md-3"><div class="stat-card"><div class="d-flex justify-content-between align-items-start"><div><div class="stat-lbl" data-i18n="total_profit">Bénéfice Total</div><div class="stat-num" id="d_profit">—</div></div><i class="bi bi-cash-coin stat-icon" style="color:var(--yellow)"></i></div></div></div>
+    <div class="kpi-grid" id="dashCards">
+      <div class="kpi kpi-brand">
+        <span class="kpi-lbl" data-i18n="total_orders">إجمالي الطلبات</span>
+        <span class="kpi-num" id="d_total">—</span>
+        <span class="kpi-pill" id="d_total_sub" hidden></span>
+      </div>
+      <div class="kpi">
+        <span class="kpi-lbl" data-i18n="confirmed">المؤكدة</span>
+        <span class="kpi-num" id="d_conf">—</span>
+        <span class="kpi-sub" id="d_conf_sub"></span>
+      </div>
+      <div class="kpi">
+        <span class="kpi-lbl" data-i18n="refused">المرفوضة</span>
+        <span class="kpi-num kpi-num-flash" id="d_ref">—</span>
+        <span class="kpi-sub" id="d_ref_sub"></span>
+      </div>
+      <div class="kpi kpi-volt">
+        <span class="kpi-lbl" data-i18n="total_profit">إجمالي الأرباح</span>
+        <span class="kpi-num" id="d_profit">—</span>
+        <span class="kpi-sub" id="d_profit_sub"></span>
+      </div>
     </div>
 
     <div class="row g-3 mb-4">

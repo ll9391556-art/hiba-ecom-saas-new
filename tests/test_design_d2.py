@@ -196,3 +196,37 @@ def test_dashboard_header_greets_and_offers_new_order():
     assert 'getElementById("dashHello")' in js and 't(hour<12 ? "hello_morning" : "hello_evening")' in js
     r = _css_rules()
     assert r[".dash-hello"]["font-size"] == "30px" and r[".dash-sub"]["color"] == "var(--muted)"
+
+
+# ── 5. بطاقات KPI ──
+def test_kpi_cards_markup():
+    sec = _dash_section()
+    grid = sec[sec.index('<div class="kpi-grid" id="dashCards">'):]
+    grid = grid[:grid.index("\n\n")]
+    cards = re.findall(r'<div class="(kpi[^"]*)">', grid)
+    assert cards == ["kpi kpi-brand", "kpi", "kpi", "kpi kpi-volt"]  # الطلبات brand، الأرباح volt
+    for i in ("d_total", "d_conf", "d_ref", "d_profit"):  # نفس الـ ids
+        assert f'class="kpi-num' in grid and f'id="{i}"' in grid and f'id="{i}_sub"' in grid, i
+    assert '<span class="kpi-pill" id="d_total_sub"' in grid
+
+
+def test_kpi_number_stays_on_one_line():
+    r = _css_rules()
+    num = r[".kpi-num"]
+    assert num["white-space"] == "nowrap" and num["line-height"] == "1"
+    assert num["font-size"].startswith("clamp(28px") and num["font-size"].endswith("44px)")
+    sub = r[".kpi-sub"]
+    assert sub["font-size"] == "14px" and sub["display"] == "block"
+    assert r[".kpi"]["border-radius"] == "var(--r-card)" and r[".kpi"]["min-width"] == "0"
+    assert r[".kpi-brand"]["background"] == "var(--brand)" and r[".kpi-volt"]["background"] == "var(--volt)"
+    assert r[".kpi-pill"]["background"] == "var(--volt)"
+    assert r[".kpi-grid"]["grid-template-columns"] == "repeat(auto-fit,minmax(min(100%,220px),1fr))"
+
+
+def test_kpi_values_and_details():
+    js = _dashboard_js()
+    assert 'getElementById("d_conf").textContent  = fmtNum(n.confirmedOnly + n.delivered)' in js
+    assert '" ("+d.delivered' not in js  # الرقم وحدو، والتفصيل تحتو
+    for key in ("kpi_pending", "kpi_delivered_of", "kpi_refuse_rate", "kpi_week_profit"):
+        assert f't("{key}")' in js, key
+    assert "function fmtNum(" in js
