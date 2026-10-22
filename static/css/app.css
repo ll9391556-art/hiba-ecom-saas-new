@@ -58,6 +58,15 @@ html[dir=rtl] #main{margin-left:0;margin-right:248px}
 .table-head{padding:16px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:10px}
 .table-head h5{font-size:15px;font-weight:600;margin:0}
 table{width:100%;border-collapse:collapse;font-size:13px}
+/* الجداول تتمرّر أفقيًا داخل بطاقتها، والصفحة ما تخرجش. على الحاسوب ارتفاع محدود باش شريط التمرير
+   الأفقي يبان بلا ما تنزل لآخر الجدول؛ فالهاتف السحب بالإصبع يكفي */
+.table-scroll{overflow-x:auto;max-width:100%;min-width:0;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+.table-scroll thead th{position:sticky;top:0;z-index:2}
+@media (min-width:769px){.table-scroll{max-height:calc(100vh - 220px);overflow-y:auto}}
+/* عمود الأزرار (آخر عمود) يبقى ظاهر: مثبّت فآخر السطر، يسار فـ RTL ويمين فـ FR/EN */
+.has-actions td:last-child,.has-actions th:last-child{position:sticky;inset-inline-end:0;z-index:1;background:var(--white);box-shadow:8px 0 10px -8px rgba(11,11,31,.18)}
+html[dir=ltr] .has-actions td:last-child,html[dir=ltr] .has-actions th:last-child{box-shadow:-8px 0 10px -8px rgba(11,11,31,.18)}
+.has-actions th:last-child{background:var(--card2);z-index:3}
 th{background:var(--card2);padding:10px 12px;text-align:left;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600;white-space:nowrap}
 html[dir=rtl] th{text-align:right}
 td{padding:10px 12px;border-bottom:1px solid var(--border);color:var(--text);white-space:nowrap}
