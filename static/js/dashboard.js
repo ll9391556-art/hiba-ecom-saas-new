@@ -117,16 +117,56 @@ function renderPlanAlerts(){
   box.style.display = alerts.length ? "block" : "none";
 }
 
+// "اطلب هذه الباقة": الاشتراك يدوي (الأدمين يفعّل)، فالزر يفتح صفحة الدعم والرسالة معمّرة
+var REQUESTABLE_PLANS = ["starter","pro","business","early"];
+function requestPlan(plan){
+  if(REQUESTABLE_PLANS.indexOf(plan)<0) return;
+  window.open("/static/features/support.html?plan="+encodeURIComponent(plan), "_blank");
+}
+
+// تاريخ بأرقام لاتينية: 21/11/2026 (كيما باقي اللوحة)
+function fmtDate(ms){
+  var d = new Date(ms), pad = function(n){ return (n<10?"0":"")+n; };
+  return pad(d.getDate())+"/"+pad(d.getMonth()+1)+"/"+d.getFullYear();
+}
+
 function highlightCurrentPlan(){
   ["free","starter","pro","business","early"].forEach(function(p){
     var el = document.getElementById("plan_"+p);
-    if(el) el.classList.toggle("current", p===currentPlan);
+    if(!el) return;
+    el.classList.toggle("current", p===currentPlan);
+    var pill = el.querySelector(".plan-current-pill");
+    if(pill) pill.hidden = p!==currentPlan;
+    var cta = el.querySelector(".plan-cta");
+    if(cta) cta.hidden = p===currentPlan || (p==="early" && EARLY_SLOTS_LEFT===0);
   });
+  // "باقتك الحالية: Pro — تنتهي في …" (حتى لباقة قديمة بلا بطاقة: lifetime/full)
+  var currentBox = document.getElementById("planCurrentBox");
+  if(currentBox){
+    var names = {free:"Free", starter:"Starter", pro:"Pro", business:"Business", early:t("plan_early")};
+    var plan = String(currentPlan||"");
+    document.getElementById("planCurrentName").textContent = names[plan] || (plan.charAt(0).toUpperCase()+plan.slice(1));
+    var sub = SUBSCRIPTION||{}, exp = document.getElementById("planCurrentExp");
+    var text = "", level = "";
+    if(sub.expiresAt && sub.state==="active") text = t("plan_expires_on").replace("{date}", fmtDate(sub.expiresAt));
+    else if(sub.expiresAt && sub.state==="expiring"){ text = t("plan_expires_soon").replace("{date}", fmtDate(sub.expiresAt)); level = " warn"; }
+    else if(sub.expiresAt && sub.state==="grace"){ text = t("plan_grace_until").replace("{date}", fmtDate(sub.graceEndsAt)); level = " danger"; }
+    else if(plan!=="free") text = t("plan_no_expiry");
+    exp.textContent = text;
+    exp.className = "plan-current-exp"+level;
+    currentBox.hidden = !plan;
+  }
   var early = document.getElementById("earlySlotsBadge");
   if(early){
     var hasSlots = EARLY_SLOTS_LEFT!==null && EARLY_SLOTS_LEFT!==undefined;
     early.style.display = hasSlots ? "inline-block" : "none";
-    if(hasSlots) early.textContent = "🔥 "+EARLY_SLOTS_LEFT+" "+t("early_slots_left");
+    if(hasSlots) early.textContent = EARLY_SLOTS_LEFT>0 ? EARLY_SLOTS_LEFT+" "+t("early_slots_left") : t("early_full");
+  }
+  // "بدل X دج في العام" تحت أوائل التجار: سعر Pro الشهري × 12 من البطاقة (test_pricing يربطو بـ PLANS)، بلا رقم مكتوب باليد
+  var instead = document.getElementById("earlyInsteadOf");
+  var proMonthly = document.querySelector('[data-price="pro-monthly"]');
+  if(instead && proMonthly){
+    instead.textContent = t("instead_of_year").replace("{x}", fmtNum(Number(proMonthly.textContent)*12));
   }
   var box = document.getElementById("usageBox");
   var keys = Object.keys(PLAN_USAGE||{});
@@ -136,14 +176,11 @@ function highlightCurrentPlan(){
   box.innerHTML = keys.map(function(k){
     var u = PLAN_USAGE[k];
     var pct = Math.min(100, Math.round((u.used/u.cap)*100));
-    var color = pct>=100?"var(--red)":pct>=80?"var(--yellow)":"var(--green)";
-    return '<div class="table-wrap" style="padding:16px;margin-bottom:10px">'+
-      '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px">'+
-        '<span>'+(labels[k]||k)+'</span><strong>'+u.used+' / '+u.cap+'</strong>'+
-      '</div>'+
-      '<div style="background:var(--card2);border-radius:6px;height:8px;overflow:hidden">'+
-        '<div style="width:'+pct+'%;height:100%;background:'+color+'"></div>'+
-      '</div></div>';
+    var cls = pct>=100 ? " full" : pct>=80 ? " warn" : "";
+    return '<div class="usage-card">'+
+      '<div class="usage-row"><span>'+esc(labels[k]||k)+'</span><strong dir="ltr">'+fmtNum(u.used)+' / '+fmtNum(u.cap)+'</strong></div>'+
+      '<div class="usage-track"><div class="usage-fill'+cls+'" style="width:'+pct+'%"></div></div>'+
+    '</div>';
   }).join("");
 }
 

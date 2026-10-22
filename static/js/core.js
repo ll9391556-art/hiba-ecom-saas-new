@@ -96,13 +96,13 @@ var I18N = {
     woo_connect_btn:"Connecter la boutique",woo_connected:"Connecté",woo_sync_now:"🔄 Synchroniser maintenant",
     woo_disconnect:"Déconnecter",woo_last_sync:"Dernière synchro",
     bot_coming_soon_title:"Bientôt disponible",bot_coming_soon_desc:"Nous activons l'assistant IA officiellement (en attente de l'approbation Meta pour Instagram). Vous serez informé dès son lancement !",
-    unit_month:"DZD/mois",unit_year:"DZD/an",or_yearly:"ou",plan_early:"Premiers marchands",export_excel:"Export Excel",soon:"Bientôt",sub_expiring:"Votre abonnement expire le {date} — renouvelez pour garder vos fonctionnalités",
+    unit_month:"DA / mois",unit_year:"DA / an",or_yearly:"ou",plan_early:"Premiers marchands",export_excel:"Export Excel",soon:"Bientôt",sub_expiring:"Votre abonnement expire le {date} — renouvelez pour garder vos fonctionnalités",
     sub_grace:"Votre abonnement a expiré le {date} — délai de grâce jusqu'au {grace}, puis retour au plan Free",sub_expired:"Votre abonnement {plan} a expiré : vous êtes passé au plan Free",bot_usage_x_of_y:"Vous avez utilisé {x} sur {y} réponses ce mois-ci",
     bot_cap_reached:"Le bot est en pause : limite mensuelle atteinte, répondez manuellement",orders_this_month:"Commandes ce mois-ci",bot_replies_this_month:"Réponses du bot ce mois-ci",early_slots_left:"places restantes sur 50",
     pf_products:"Produits et stock",pf_cities:"Wilayas et livraison",pf_all_free:"Tout Free",pf_tracking:"Suivi des commandes",
     pf_export:"Export Excel",pf_templates2:"2 modèles de boutique",pf_templates_all:"Tous les modèles",pf_landing:"Landing pages",
-    pf_coupons:"Coupons de réduction",pf_team:"Comptes d'équipe",pf_bot_1500:"Bot AI — 1 500 réponses/mois",
-    pf_bot_5000:"Bot AI — 5 000 réponses/mois",pf_early_pro:"Pro complet pendant 1 an",pf_early_slots:"Réservé aux 50 premiers marchands",
+    pf_coupons:"Coupons de réduction",pf_team:"Comptes d'équipe",pf_bot_1500:"Bot AI — 1500 réponses/mois",
+    pf_bot_5000:"Bot AI — 5000 réponses/mois",pf_early_pro:"Pro complet pendant 1 an",pf_early_slots:"Réservé aux 50 premiers marchands",
     plan_payment:"Paiement par BaridiMob ou CCP — le plan est activé par l'administration après paiement.",
     pf_orders:"Gestion des commandes",pf_dashboard:"Tableau de bord",pf_store:"Boutique en ligne",pf_bot:"Bot AI",
     pf_all_starter:"Tout Starter",pf_woo:"Connexion WooCommerce",pf_all_pro:"Tout Pro",pf_vip:"Support VIP",
@@ -157,7 +157,12 @@ var I18N = {
     recent_orders:"Dernières commandes",all_orders:"Toutes les commandes",order_col:"Commande",no_orders_yet:"Aucune commande pour l'instant",
     bot_card_title:"Bot de discussion",bot_not_in_plan:"Pas inclus dans votre plan",plan_locked:"Pro et plus",ch_messenger:"Facebook Messenger",ch_instagram:"Instagram",ch_whatsapp:"WhatsApp",
     sales_unit:"ventes",no_sales_yet:"Aucune vente pour l'instant",
-    stock_ok:"Stock suffisant pour tous les produits"
+    stock_ok:"Stock suffisant pour tous les produits",
+    most_popular:"Le plus demandé",
+    early_offer:"Offre premiers marchands",early_full:"Toutes les places sont prises",instead_of_year:"au lieu de {x} DA par an",
+    current_plan:"Votre plan actuel",plan_expires_on:"expire le {date}",plan_expires_soon:"expire bientôt : {date}",plan_grace_until:"expiré — délai de grâce jusqu'au {date}",plan_no_expiry:"sans date d'expiration",
+    contact_us:"Nous contacter",
+    request_plan:"Demander ce plan"
   },
   AR:{
     nav_dashboard:"الرئيسية",nav_orders:"الطلبات",nav_products:"المنتجات",
@@ -188,13 +193,13 @@ var I18N = {
     woo_connect_btn:"ربط المتجر",woo_connected:"متصل",woo_sync_now:"🔄 مزامنة الآن",
     woo_disconnect:"فك الربط",woo_last_sync:"آخر مزامنة",
     bot_coming_soon_title:"البوت قريباً",bot_coming_soon_desc:"نعمل دروك على تفعيل المساعد الذكي رسمياً (بانتظار موافقة Meta على إنستغرام). راح نخبرك أول واحد وقت يطلع!",
-    unit_month:"DZD/شهر",unit_year:"DZD/سنة",or_yearly:"أو",plan_early:"أوائل التجار",export_excel:"تصدير Excel",soon:"قريبًا",sub_expiring:"اشتراكك ينتهي في {date} — جدّد باش تبقى عندك كل الميزات",
+    unit_month:"دج / شهر",unit_year:"دج / سنة",or_yearly:"أو",plan_early:"أوائل التجار",export_excel:"تصدير Excel",soon:"قريبًا",sub_expiring:"اشتراكك ينتهي في {date} — جدّد باش تبقى عندك كل الميزات",
     sub_grace:"انتهى اشتراكك في {date} — عندك مهلة حتى {grace}، من بعد ترجع لـ Free",sub_expired:"انتهى اشتراك {plan} ورجعت لباقة Free",bot_usage_x_of_y:"استعملت {x} من {y} رد هذا الشهر",
     bot_cap_reached:"البوت متوقف: وصلت الحد الشهري، جاوب يدوياً",orders_this_month:"الطلبات هذا الشهر",bot_replies_this_month:"ردود البوت هذا الشهر",early_slots_left:"بلاصة باقية من 50",
     pf_products:"المنتجات والمخزون",pf_cities:"الولايات والتوصيل",pf_all_free:"كل ميزات Free",pf_tracking:"تتبع الطلبات",
     pf_export:"تصدير Excel",pf_templates2:"قالبين للمتجر",pf_templates_all:"كل القوالب",pf_landing:"صفحات هبوط",
-    pf_coupons:"كوبونات تخفيض",pf_team:"حسابات الفريق",pf_bot_1500:"بوت AI — 1,500 رد/شهر",
-    pf_bot_5000:"بوت AI — 5,000 رد/شهر",pf_early_pro:"Pro كاملة لمدة عام",pf_early_slots:"لأول 50 تاجر فقط",
+    pf_coupons:"كوبونات تخفيض",pf_team:"حسابات الفريق",pf_bot_1500:"بوت AI — 1500 رد/شهر",
+    pf_bot_5000:"بوت AI — 5000 رد/شهر",pf_early_pro:"Pro كاملة لمدة عام",pf_early_slots:"لأول 50 تاجر فقط",
     plan_payment:"الدفع عبر BaridiMob أو CCP — بعد الدفع تتفعّل الباقة من الإدارة.",
     pf_orders:"إدارة الطلبات",pf_dashboard:"لوحة تحكم",pf_store:"متجر عام",pf_bot:"بوت AI",
     pf_all_starter:"كل ميزات Starter",pf_woo:"ربط WooCommerce",pf_all_pro:"كل ميزات Pro",pf_vip:"دعم VIP",
@@ -249,7 +254,12 @@ var I18N = {
     recent_orders:"آخر الطلبيات",all_orders:"كل الطلبيات",order_col:"الطلبية",no_orders_yet:"ما كاين حتى طلبية بعد",
     bot_card_title:"بوت المحادثة",bot_not_in_plan:"غير متاح في باقتك",plan_locked:"Pro وأعلى",ch_messenger:"فيسبوك ماسنجر",ch_instagram:"إنستغرام",ch_whatsapp:"واتساب",
     sales_unit:"مبيعات",no_sales_yet:"ما كاين حتى مبيعات بعد",
-    stock_ok:"المخزون كافي لكل المنتجات"
+    stock_ok:"المخزون كافي لكل المنتجات",
+    most_popular:"الأكثر طلبًا",
+    early_offer:"عرض أوائل التجار",early_full:"اكتملت البلايص",instead_of_year:"بدل {x} دج في العام",
+    current_plan:"باقتك الحالية",plan_expires_on:"تنتهي في {date}",plan_expires_soon:"تنتهي قريبًا: {date}",plan_grace_until:"انتهت — مهلة حتى {date}",plan_no_expiry:"بلا تاريخ انتهاء",
+    contact_us:"تواصل معنا",
+    request_plan:"اطلب هذه الباقة"
   },
   EN:{
     nav_dashboard:"Dashboard",nav_orders:"Orders",nav_products:"Products",
@@ -280,13 +290,13 @@ var I18N = {
     woo_connect_btn:"Connect Store",woo_connected:"Connected",woo_sync_now:"🔄 Sync Now",
     woo_disconnect:"Disconnect",woo_last_sync:"Last sync",
     bot_coming_soon_title:"Coming Soon",bot_coming_soon_desc:"We're officially activating the AI assistant soon (pending Meta's approval for Instagram). You'll be the first to know when it launches!",
-    unit_month:"DZD/month",unit_year:"DZD/year",or_yearly:"or",plan_early:"Early merchants",export_excel:"Export to Excel",soon:"Soon",sub_expiring:"Your subscription expires on {date} — renew to keep your features",
+    unit_month:"DZD / month",unit_year:"DZD / year",or_yearly:"or",plan_early:"Early merchants",export_excel:"Export to Excel",soon:"Soon",sub_expiring:"Your subscription expires on {date} — renew to keep your features",
     sub_grace:"Your subscription expired on {date} — grace period until {grace}, then back to Free",sub_expired:"Your {plan} subscription expired: you are now on Free",bot_usage_x_of_y:"You used {x} of {y} replies this month",
     bot_cap_reached:"The bot is paused: monthly limit reached, reply manually",orders_this_month:"Orders this month",bot_replies_this_month:"Bot replies this month",early_slots_left:"of 50 spots left",
     pf_products:"Products and stock",pf_cities:"Wilayas and delivery",pf_all_free:"All Free features",pf_tracking:"Order tracking",
     pf_export:"Excel export",pf_templates2:"2 store templates",pf_templates_all:"All templates",pf_landing:"Landing pages",
-    pf_coupons:"Discount coupons",pf_team:"Team accounts",pf_bot_1500:"AI Bot — 1,500 replies/month",
-    pf_bot_5000:"AI Bot — 5,000 replies/month",pf_early_pro:"Full Pro for 1 year",pf_early_slots:"First 50 merchants only",
+    pf_coupons:"Discount coupons",pf_team:"Team accounts",pf_bot_1500:"AI Bot — 1500 replies/month",
+    pf_bot_5000:"AI Bot — 5000 replies/month",pf_early_pro:"Full Pro for 1 year",pf_early_slots:"First 50 merchants only",
     plan_payment:"Pay by BaridiMob or CCP — the admin activates your plan after payment.",
     pf_orders:"Order management",pf_dashboard:"Dashboard",pf_store:"Online store",pf_bot:"AI Bot",
     pf_all_starter:"All Starter features",pf_woo:"WooCommerce connection",pf_all_pro:"All Pro features",pf_vip:"VIP support",
@@ -341,7 +351,12 @@ var I18N = {
     recent_orders:"Latest orders",all_orders:"All orders",order_col:"Order",no_orders_yet:"No orders yet",
     bot_card_title:"Chat bot",bot_not_in_plan:"Not included in your plan",plan_locked:"Pro and up",ch_messenger:"Facebook Messenger",ch_instagram:"Instagram",ch_whatsapp:"WhatsApp",
     sales_unit:"sales",no_sales_yet:"No sales yet",
-    stock_ok:"Every product has enough stock"
+    stock_ok:"Every product has enough stock",
+    most_popular:"Most popular",
+    early_offer:"Early merchants offer",early_full:"All spots are taken",instead_of_year:"instead of {x} DZD a year",
+    current_plan:"Your current plan",plan_expires_on:"expires on {date}",plan_expires_soon:"expires soon: {date}",plan_grace_until:"expired — grace period until {date}",plan_no_expiry:"no expiry date",
+    contact_us:"Contact us",
+    request_plan:"Request this plan"
   }
 };
 
@@ -402,6 +417,7 @@ function applyLang(lang){
   var activeSec = document.querySelector(".section.active");
   if(activeSec && activeSec.id==="sec_dashboard" && currentUser) loadDashboard();
   if(activeSec && activeSec.id==="sec_team" && currentUser) renderTeamTable(TEAM_MEMBERS);
+  if(activeSec && activeSec.id==="sec_plans" && typeof highlightCurrentPlan==="function") highlightCurrentPlan();
 }
 
 function setLang(l){ applyLang(l); }

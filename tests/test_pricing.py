@@ -45,8 +45,9 @@ def test_frontend_plan_features_come_from_the_server():
 
 
 def _card_prices(html):
-    return {m.group(1): int(m.group(2).replace(",", ""))
-            for m in re.finditer(r'data-price="([a-z]+-[a-z]+)">([\d,]+)<', html)}
+    # D3: الأسعار بلا فاصل آلاف ("2900")؛ أي فاصل ما يطابقش \d+ والاختبار يفشل
+    return {m.group(1): int(m.group(2))
+            for m in re.finditer(r'data-price="([a-z]+-[a-z]+)">(\d+)<', html)}
 
 
 def test_plans_page_shows_the_new_prices(app):

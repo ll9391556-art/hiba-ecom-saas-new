@@ -104,6 +104,16 @@ async function loadTickets(){
     }).join("")+'</tbody></table>';
 }
 
+// "اطلب هذه الباقة" من صفحة الاشتراكات: ?plan=pro → الرسالة معمّرة. غير الباقات المعروفة،
+// والقيمة تدخل كنص فـ textarea (بلا innerHTML)
+var PLAN_NAMES = {starter:"Starter", pro:"Pro", business:"Business", early:"أوائل التجار"};
+(function(){
+  var plan = new URLSearchParams(location.search).get("plan");
+  if(!plan || !Object.prototype.hasOwnProperty.call(PLAN_NAMES, plan)) return;
+  document.getElementById("s_type").value = "other";
+  document.getElementById("s_message").value = "نحب نشترك في باقة "+PLAN_NAMES[plan];
+})();
+
 loadTickets();
 </script>
 </body>
