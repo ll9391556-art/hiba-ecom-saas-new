@@ -101,8 +101,8 @@ var I18N = {
     bot_cap_reached:"Le bot est en pause : limite mensuelle atteinte, répondez manuellement",orders_this_month:"Commandes ce mois-ci",bot_replies_this_month:"Réponses du bot ce mois-ci",early_slots_left:"places restantes sur 50",
     pf_products:"Produits et stock",pf_cities:"Wilayas et livraison",pf_all_free:"Tout Free",pf_tracking:"Suivi des commandes",
     pf_export:"Export Excel",pf_templates2:"2 modèles de boutique",pf_templates_all:"Tous les modèles",pf_landing:"Landing pages",
-    pf_coupons:"Coupons de réduction",pf_team:"Comptes d'équipe",pf_bot_1500:"Bot AI — 1500 réponses/mois",
-    pf_bot_5000:"Bot AI — 5000 réponses/mois",pf_early_pro:"Pro complet pendant 1 an",pf_early_slots:"Réservé aux 50 premiers marchands",
+    pf_coupons:"Coupons de réduction",pf_team:"Comptes d'équipe",pf_bot_1500:"Bot intelligent : 1500 réponses par mois",
+    pf_bot_5000:"Bot intelligent : 5000 réponses par mois",pf_early_pro:"Pro complet pendant 1 an",pf_early_slots:"Réservé aux 50 premiers marchands",
     plan_payment:"Paiement par BaridiMob ou CCP — le plan est activé par l'administration après paiement.",
     pf_orders:"Gestion des commandes",pf_dashboard:"Tableau de bord",pf_store:"Boutique en ligne",pf_bot:"Bot AI",
     pf_all_starter:"Tout Starter",pf_woo:"Connexion WooCommerce",pf_all_pro:"Tout Pro",pf_vip:"Support VIP",
@@ -198,8 +198,8 @@ var I18N = {
     bot_cap_reached:"البوت متوقف: وصلت الحد الشهري، جاوب يدوياً",orders_this_month:"الطلبات هذا الشهر",bot_replies_this_month:"ردود البوت هذا الشهر",early_slots_left:"بلاصة باقية من 50",
     pf_products:"المنتجات والمخزون",pf_cities:"الولايات والتوصيل",pf_all_free:"كل ميزات Free",pf_tracking:"تتبع الطلبات",
     pf_export:"تصدير Excel",pf_templates2:"قالبين للمتجر",pf_templates_all:"كل القوالب",pf_landing:"صفحات هبوط",
-    pf_coupons:"كوبونات تخفيض",pf_team:"حسابات الفريق",pf_bot_1500:"بوت AI — 1500 رد/شهر",
-    pf_bot_5000:"بوت AI — 5000 رد/شهر",pf_early_pro:"Pro كاملة لمدة عام",pf_early_slots:"لأول 50 تاجر فقط",
+    pf_coupons:"كوبونات تخفيض",pf_team:"حسابات الفريق",pf_bot_1500:"بوت ذكي: 1500 رد في الشهر",
+    pf_bot_5000:"بوت ذكي: 5000 رد في الشهر",pf_early_pro:"Pro كاملة لمدة عام",pf_early_slots:"لأول 50 تاجر فقط",
     plan_payment:"الدفع عبر BaridiMob أو CCP — بعد الدفع تتفعّل الباقة من الإدارة.",
     pf_orders:"إدارة الطلبات",pf_dashboard:"لوحة تحكم",pf_store:"متجر عام",pf_bot:"بوت AI",
     pf_all_starter:"كل ميزات Starter",pf_woo:"ربط WooCommerce",pf_all_pro:"كل ميزات Pro",pf_vip:"دعم VIP",
@@ -295,8 +295,8 @@ var I18N = {
     bot_cap_reached:"The bot is paused: monthly limit reached, reply manually",orders_this_month:"Orders this month",bot_replies_this_month:"Bot replies this month",early_slots_left:"of 50 spots left",
     pf_products:"Products and stock",pf_cities:"Wilayas and delivery",pf_all_free:"All Free features",pf_tracking:"Order tracking",
     pf_export:"Excel export",pf_templates2:"2 store templates",pf_templates_all:"All templates",pf_landing:"Landing pages",
-    pf_coupons:"Discount coupons",pf_team:"Team accounts",pf_bot_1500:"AI Bot — 1500 replies/month",
-    pf_bot_5000:"AI Bot — 5000 replies/month",pf_early_pro:"Full Pro for 1 year",pf_early_slots:"First 50 merchants only",
+    pf_coupons:"Discount coupons",pf_team:"Team accounts",pf_bot_1500:"Smart bot: 1500 replies a month",
+    pf_bot_5000:"Smart bot: 5000 replies a month",pf_early_pro:"Full Pro for 1 year",pf_early_slots:"First 50 merchants only",
     plan_payment:"Pay by BaridiMob or CCP — the admin activates your plan after payment.",
     pf_orders:"Order management",pf_dashboard:"Dashboard",pf_store:"Online store",pf_bot:"AI Bot",
     pf_all_starter:"All Starter features",pf_woo:"WooCommerce connection",pf_all_pro:"All Pro features",pf_vip:"VIP support",
@@ -370,6 +370,8 @@ function stockLabel(s){
   var k = {"In Stock":"stock_in",InStock:"stock_in","Low Stock":"stock_low",LowStock:"stock_low","Out of Stock":"stock_out",OutOfStock:"stock_out"}[s];
   return k ? t(k) : s;
 }
+// عنوان خانة فالجدول، يبان فوقها غير فبطاقة الهاتف (D3.5، CSS ::before). النص مهرّب
+function dataLabel(key){ return ' data-label="'+esc(t(key))+'"'; }
 function custLabel(s){
   var k = {Good:"cust_good",Bad:"cust_bad",Neutral:"cust_neutral"}[s];
   return k ? t(k) : s;

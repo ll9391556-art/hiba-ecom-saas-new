@@ -11,18 +11,22 @@ async function loadProducts(){
       var cur = curSym();
       tbl.innerHTML = products.map(function(p){
         var stCls = {InStock:"bs","In Stock":"bs","Low Stock":"bn",LowStock:"bn","Out of Stock":"br",OutOfStock:"br"}[p.stat||""]||"bp";
+        // تحت 640px نفس السطر يولّي بطاقة (D3.5)؛ الصورة الصغيرة تبان غير فالبطاقة
+        var thumb = p.image
+          ? '<img class="m-only pc-thumb" src="'+esc(p.image)+'" alt="" loading="lazy" width="56" height="56">'
+          : '<span class="m-only pc-thumb pc-thumb-empty"><i class="bi bi-box-seam"></i></span>';
         return '<tr>'+
-          '<td><strong>'+esc(p.name||"—")+'</strong></td>'+
-          '<td>'+esc(p.category||"—")+'</td>'+
-          '<td>'+esc(p.size||"—")+'</td>'+
-          '<td>'+esc(p.colors||"—")+'</td>'+
-          '<td>'+esc(p.cost||0)+' '+cur+'</td>'+
-          '<td><strong>'+esc(p.sell||0)+' '+cur+'</strong></td>'+
-          '<td>'+esc(p.init||0)+'</td>'+
-          '<td>'+esc(p.sold||0)+'</td>'+
-          '<td>'+esc(p.available||0)+'</td>'+
-          '<td><span class="badge '+stCls+'">'+esc(stockLabel(p.stat||"?"))+'</span></td>'+
-          '<td><button class="btn-danger" data-name="'+esc(p.name)+'" data-on-click="deleteProduct(this.dataset.name)"><i class="bi bi-trash"></i></button></td>'+
+          '<td class="pc-name">'+thumb+'<strong>'+esc(p.name||"—")+'</strong></td>'+
+          '<td class="pc-cat">'+esc(p.category||"—")+'</td>'+
+          '<td class="pc-size">'+esc(p.size||"—")+'</td>'+
+          '<td class="pc-colors">'+esc(p.colors||"—")+'</td>'+
+          '<td class="pc-cost">'+esc(p.cost||0)+' '+cur+'</td>'+
+          '<td class="pc-price"'+dataLabel("price")+'><strong>'+esc(p.sell||0)+' '+cur+'</strong></td>'+
+          '<td class="pc-init">'+esc(p.init||0)+'</td>'+
+          '<td class="pc-sold">'+esc(p.sold||0)+'</td>'+
+          '<td class="pc-avail"'+dataLabel("available")+'>'+esc(p.available||0)+'</td>'+
+          '<td class="pc-stat"'+dataLabel("stock_status")+'><span class="badge '+stCls+'">'+esc(stockLabel(p.stat||"?"))+'</span></td>'+
+          '<td class="pc-actions"><button class="btn-danger" data-name="'+esc(p.name)+'" data-on-click="deleteProduct(this.dataset.name)"><i class="bi bi-trash"></i></button></td>'+
         '</tr>';
       }).join("") || '<tr><td colspan="11"><div class="empty-state"><i class="bi bi-box-seam"></i></div></td></tr>';
     }
