@@ -60,7 +60,7 @@ def api_saas():
         # المخصصة، وكتابة مباشرة كانت تخليهم غالطين.
         segs = [s for s in str(path or "").split("/") if s]
         blocked_segments = {"usage", "integrations", "landingPages", "teamMembers",
-                            "orders", "stats", "customers", "ratings"}
+                            "orders", "stats", "customers", "ratings", "deletedOrders"}
         if len(segs) >= 3 and segs[0] == "data" and segs[1] == str(auth_uid):
             return segs[2] not in blocked_segments
         return len(segs) >= 2 and segs[0] == "ai_logs" and segs[1] == str(auth_uid)

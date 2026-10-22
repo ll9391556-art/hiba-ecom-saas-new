@@ -28,6 +28,7 @@ from core.http import (
 )
 from core.security import (
     require_auth,
+    require_owner,
     require_perm,
 )
 from core.util import (
@@ -39,6 +40,7 @@ from services.orders import (
     _apply_status_dates,
     _calc_order_profit,
     _claimed,
+    _delete_order,
     _mutate_order,
     _phone_digits,
     _save_order,
@@ -164,6 +166,12 @@ def api_get_orders():
             "cursor": started - _ORDERS_CURSOR_MARGIN_MS}
     if since is not None and has_more:
         body["reset"] = True  # تبدّلات أكثر من الحد — الواجهة تعاود التحميل من الأول
+    if since is not None:
+        # طلبات محذوفة من بعد الـ cursor (tombstones) — باش التبويبات الأخرى تنحّيهم. فشل
+        # الاستعلام (index مازال ما تنشرش) ما يطيّحش الـ polling.
+        gone = _fb_query(f"data/{uid}/deletedOrders", "at", start_at=since, limit_last=_ORDERS_PAGE_MAX)
+        if gone:
+            body["deleted"] = sorted(gone)
     return jsonify(body)
 
 
@@ -363,3 +371,29 @@ def api_edit_order():
     log_audit_entry(uid, _actor(), "تعديل طلب",
                     f"الطلب {oid}: " + "، ".join(_order_diff(before, after, _EDIT_FIELDS)))
     return ok_json(after)
+
+
+# ── حذف طلب (المهمة 3): للمالك برك ────────────────────────
+@bp.route("/api/deleteOrder", methods=["POST"])
+@require_auth
+@require_owner
+def api_delete_order():
+    body = request.get_json(silent=True) or {}
+    uid  = request.auth_uid
+    oid  = body.get("orderId")
+    if not _valid_order_id(oid):
+        return err_json("Invalid order id")
+    try:
+        before = _delete_order(uid, oid, _actor())
+    except OrderGone:
+        return err_json("Order not found", 404)
+    except Exception as e:
+        logging.error(f"deleteOrder failed ({type(e).__name__})")
+        before = None
+    if before is None:
+        return err_json("تعذّر حذف الطلب — حاول بعد قليل", 503)
+    log_audit_entry(uid, _actor(), "حذف طلب",
+                    f"الطلب {oid}: {before.get('name', '—')} | {before.get('phone', '—')} | "
+                    f"{before.get('product', '—')}×{before.get('qty', 1)} | {before.get('total', 0)} | "
+                    f"{before.get('status', '—')}")
+    return ok_json(True)

@@ -124,6 +124,32 @@ def _mutate_order(uid, order_id, fn):
     return seen["before"], seen["after"]
 
 
+def _delete_order(uid, order_id, actor):
+    """حذف طلب بلا ما يتحسب مرتين. firebase-admin ما يقبلش None من دالة transaction، فالحذف
+    على مراحل: 1) حجز بـ transaction (deleting=now؛ طلب حذف ثاني فنفس الوقت يلقاه محجوز → OrderGone)،
+    2) حذف العقدة (فشل: نشيلو الحجز ونرجعو None، والمجاميع ما تتلمسش)،
+    3) tombstone فـ deletedOrders (Woo ما يعاودش يجيبو، والـ polling يعلم التبويبات الأخرى)،
+    4) المجاميع بالفرق مرة وحدة.
+    usage/orderCount و usedCount تاع الكوبون ما يرجعوش (الحذف ماشي طريقة لتجاوز السقف)."""
+    path, now, seen = f"data/{uid}/orders/{order_id}", _now_ms(), {}
+
+    def _claim(cur):
+        if not isinstance(cur, dict) or _claimed(cur, now):
+            raise OrderGone()
+        seen["before"] = {k: v for k, v in cur.items() if k != "deleting"}
+        return {**cur, "deleting": now}
+
+    _firebase_ref(path).transaction(_claim)
+    before = seen["before"]
+    if not _fb_delete(path):
+        _fb_patch(path, {"deleting": None})
+        return None
+    if not _fb_put(f"data/{uid}/deletedOrders/{order_id}", {"at": now, "by": str(actor or "")}):
+        logging.error(f"tombstone write failed for {_mask_id(order_id)} — Woo قد يعاود يجيبو")
+    _apply_order_change(uid, before, None)
+    return before
+
+
 def _patch_order(uid, order_id, patch):
     patch = dict(patch, updatedAt=_now_ms())
     if "phone" in patch:

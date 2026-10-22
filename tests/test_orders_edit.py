@@ -232,3 +232,147 @@ def test_edit_is_audited_with_the_diff(client, db, shop):
     (entry,) = _audit(db, uid)
     assert entry["actor"] == "owner" and oid in entry["details"]
     assert "qty: 1 → 2" in entry["details"] and "status: Pending → Confirmed" in entry["details"]
+
+
+# ── 3. الحذف ─────────────────────────────────────────────
+def _delete(client, headers, oid):
+    return client.post("/api/deleteOrder", json={"orderId": oid}, headers=headers)
+
+
+@pytest.mark.parametrize("status", ["Confirmed", "Delivered", "Refused", "Pending"])
+def test_delete_keeps_totals_exact(client, app, db, shop, status):
+    uid = shop["uid"]
+    keep = _order(client, uid, phone="0666222222", qty=1, name="Bilal")
+    _status(client, shop, keep, "Confirmed")
+    oid = _order(client, uid, phone="0555111111", qty=3)
+    if status != "Pending":
+        _status(client, shop, oid, status)
+    r = _delete(client, shop["headers"], oid)
+    assert r.status_code == 200, r.get_json()
+    assert db.get(f"data/{uid}/orders/{oid}") is None
+    _assert_exact(app, db, uid)
+    stats = db.get(f"data/{uid}/stats")
+    assert stats["total"] == 1 and stats["confirmed"] == 1 and stats["refused"] == 0
+    assert db.get(f"data/{uid}/stats/sales/Sac/qty") == 1                 # المخزون رجع
+    assert set(db.get(f"data/{uid}/customers")) == {"0666222222"}
+    tomb = db.get(f"data/{uid}/deletedOrders/{oid}")
+    assert tomb["by"] == "owner" and isinstance(tomb["at"], int)
+
+
+def test_delete_twice_changes_nothing_the_second_time(client, app, db, shop):
+    uid = shop["uid"]
+    oid = _order(client, uid, qty=2)
+    _status(client, shop, oid, "Delivered")
+    assert _delete(client, shop["headers"], oid).status_code == 200
+    stats = db.get(f"data/{uid}/stats")
+    assert _delete(client, shop["headers"], oid).status_code == 404
+    assert db.get(f"data/{uid}/stats") == stats
+    assert len([e for e in _audit(db, uid) if e["action"] == "حذف طلب"]) == 1
+    _assert_exact(app, db, uid)
+
+
+def test_concurrent_delete_loses_the_claim(client, app, db, shop):
+    """طلب حذف آخر حجز الطلبية (deleting حديث) → هذا يرجع 404 والمجاميع ما تتلمسش."""
+    uid = shop["uid"]
+    oid = _order(client, uid)
+    _status(client, shop, oid, "Confirmed")
+    import services.orders as so
+    db.set(f"data/{uid}/orders/{oid}/deleting", so._now_ms())
+    stats = db.get(f"data/{uid}/stats")
+    assert _delete(client, shop["headers"], oid).status_code == 404
+    assert _edit(client, shop["headers"], oid, qty=2).status_code == 404   # ما يتعدّلش وسط الحذف
+    assert db.get(f"data/{uid}/stats") == stats
+
+
+def test_stale_claim_from_a_failed_delete_does_not_block(client, app, db, shop):
+    import services.orders as so
+    uid = shop["uid"]
+    oid = _order(client, uid)
+    db.set(f"data/{uid}/orders/{oid}/deleting", so._now_ms() - so._DELETE_CLAIM_MS - 1)
+    assert _edit(client, shop["headers"], oid, name="B").status_code == 200
+    assert "deleting" not in db.get(f"data/{uid}/orders/{oid}")
+    db.set(f"data/{uid}/orders/{oid}/deleting", so._now_ms() - so._DELETE_CLAIM_MS - 1)
+    assert _delete(client, shop["headers"], oid).status_code == 200
+    _assert_exact(app, db, uid)
+
+
+def test_failed_delete_rolls_back(client, app, db, shop, monkeypatch):
+    uid = shop["uid"]
+    oid = _order(client, uid)
+    _status(client, shop, oid, "Confirmed")
+    before, stats = db.get(f"data/{uid}/orders/{oid}"), db.get(f"data/{uid}/stats")
+    monkeypatch.setattr("services.orders._fb_delete", lambda path: False)
+    assert _delete(client, shop["headers"], oid).status_code == 503
+    assert db.get(f"data/{uid}/orders/{oid}") == before                    # بلا deleting
+    assert db.get(f"data/{uid}/stats") == stats
+    assert db.get(f"data/{uid}/deletedOrders/{oid}") is None
+
+
+def test_delete_is_owner_only(client, app, db, shop, seed_member):
+    """الحذف للمالك برك: عضو عندو orders يعدّل، لكن ما يحذفش (403)."""
+    uid = shop["uid"]
+    oid = _order(client, uid)
+    member = seed_member(shop, "m_orders", perms={"orders": True})
+    assert _delete(client, member["headers"], oid).status_code == 403
+    assert db.get(f"data/{uid}/orders/{oid}") is not None
+    assert _edit(client, member["headers"], oid, name="Edited").status_code == 200
+
+
+def test_delete_is_audited(client, db, shop):
+    uid = shop["uid"]
+    oid = _order(client, uid, qty=2, name="Amina")
+    assert _delete(client, shop["headers"], oid).status_code == 200
+    (entry,) = _audit(db, uid)
+    assert entry["action"] == "حذف طلب" and entry["actor"] == "owner"
+    for part in (oid, "Amina", "0555111111", "Sac×2", "Pending"):
+        assert part in entry["details"], part
+
+
+def test_other_merchant_cannot_delete(client, app, db, shop, seed_owner):
+    uid = shop["uid"]
+    oid = _order(client, uid)
+    before = db.get(f"data/{uid}/orders/{oid}")
+    other = seed_owner(username="owner2", uid="2002")
+    assert _delete(client, other["headers"], oid).status_code == 404
+    assert db.get(f"data/{uid}/orders/{oid}") == before
+    assert db.get("data/2002/deletedOrders") is None
+
+
+@pytest.mark.parametrize("oid", ["ORD-1/x", "ORD.1", "", None])
+def test_delete_bad_order_id(client, shop, oid):
+    assert _delete(client, shop["headers"], oid).status_code == 400
+
+
+def test_deleted_woo_order_is_not_reimported(client, db, shop, monkeypatch):
+    uid = shop["uid"]
+    db.set(f"data/{uid}/integrations/woocommerce", {"connected": True, "storeUrl": "https://shop.test",
+                                                     "consumerKeyEnc": "x", "consumerSecretEnc": "y"})
+    monkeypatch.setattr("routes.integrations._validate_and_pin_store_url", lambda url: ("shop.test", "203.0.113.5"))
+    monkeypatch.setattr("routes.integrations._decrypt_secret", lambda tok: "dummy-secret")
+
+    class Resp:
+        ok, status_code = True, 200
+
+        def json(self):
+            return [{"id": 5, "billing": {"phone": "0555111111"}, "line_items": []}]
+    monkeypatch.setattr("routes.integrations._request_with_pinned_dns", lambda *a, **k: Resp())
+    assert client.post("/api/woo/sync", headers=shop["headers"]).get_json()["data"]["imported"] == 1
+    assert _delete(client, shop["headers"], "ORD-WOO-5").status_code == 200
+    assert client.post("/api/woo/sync", headers=shop["headers"]).get_json()["data"]["imported"] == 0
+    assert db.get(f"data/{uid}/orders/ORD-WOO-5") is None
+
+
+def test_polling_reports_deleted_ids(client, db, shop):
+    uid = shop["uid"]
+    oid = _order(client, uid)
+    cursor = client.get("/api/getOrders", headers=shop["headers"]).get_json()["cursor"]
+    assert _delete(client, shop["headers"], oid).status_code == 200
+    body = client.get(f"/api/getOrders?since={cursor}", headers=shop["headers"]).get_json()
+    assert body["deleted"] == [oid]
+    assert client.get("/api/getOrders", headers=shop["headers"]).get_json().get("deleted") is None
+
+
+def test_api_saas_cannot_write_tombstones(client, shop):
+    r = client.post("/api/saas", headers=shop["headers"], json={
+        "action": "firebaseSet", "path": f"data/{shop['uid']}/deletedOrders/ORD-1", "payload": {"x": 1}})
+    assert r.status_code == 403

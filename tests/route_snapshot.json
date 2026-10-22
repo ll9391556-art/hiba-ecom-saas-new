@@ -76,6 +76,10 @@
   "methods": "POST"
  },
  {
+  "rule": "/api/deleteOrder",
+  "methods": "POST"
+ },
+ {
   "rule": "/api/deleteProduct",
   "methods": "POST"
  },

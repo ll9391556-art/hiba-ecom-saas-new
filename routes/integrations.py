@@ -149,6 +149,8 @@ def api_woo_sync():
     if existing_keys is None:
         return err_json("تعذّر قراءة الطلبات الحالية — حاول بعد قليل", 503)
     existing_keys = set(existing_keys)
+    # طلبات حذفها التاجر (tombstones) ما ترجعش مع المزامنة
+    existing_keys |= set(_fb_keys(f"data/{uid}/deletedOrders") or [])
     imported = 0
     for wo in woo_orders:
         if not _under_cap(uid, "orderCount", "orderCap"):
