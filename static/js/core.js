@@ -114,7 +114,7 @@ var I18N = {
     nav_messages:"Messages",locked_messages:"Messages non disponibles",
     upgrade_messages:"Passez au plan Pro ou Full",no_conversations:"Aucune conversation",
     select_conversation:"Sélectionnez une conversation",type_message:"Écrire un message...",
-    chart_status:"Statut des commandes",chart_trend:"📈 Bénéfice (7 derniers jours)",chart_topproducts:"🏆 Meilleurs produits",
+    chart_status:"Statut des commandes",chart_trend:"📈 Bénéfice (7 derniers jours)",chart_topproducts:"Les plus vendus",
     nav_team:"Équipe",add_member:"Ajouter un membre",member_username:"Nom d'utilisateur",member_name:"Nom",
     member_password:"Mot de passe",permissions:"Permissions",active:"Actif",inactive:"Inactif",
     locked_team:"Fonctionnalité Équipe non disponible",upgrade_team:"Passez au plan Starter ou supérieur",
@@ -155,7 +155,8 @@ var I18N = {
     hello_morning:"Bonjour, {name}",hello_evening:"Bonsoir, {name}",dash_summary:"Voici le résumé de votre boutique",new_order:"Nouvelle commande",
     kpi_pending:"{x} en attente",kpi_delivered_of:"dont {x} livrées",kpi_refuse_rate:"{x}% des commandes",kpi_week_profit:"{x} cette semaine",
     recent_orders:"Dernières commandes",all_orders:"Toutes les commandes",order_col:"Commande",no_orders_yet:"Aucune commande pour l'instant",
-    bot_card_title:"Bot de discussion",bot_not_in_plan:"Pas inclus dans votre plan",plan_locked:"Pro et plus",ch_messenger:"Facebook Messenger",ch_instagram:"Instagram",ch_whatsapp:"WhatsApp"
+    bot_card_title:"Bot de discussion",bot_not_in_plan:"Pas inclus dans votre plan",plan_locked:"Pro et plus",ch_messenger:"Facebook Messenger",ch_instagram:"Instagram",ch_whatsapp:"WhatsApp",
+    sales_unit:"ventes",no_sales_yet:"Aucune vente pour l'instant"
   },
   AR:{
     nav_dashboard:"الرئيسية",nav_orders:"الطلبات",nav_products:"المنتجات",
@@ -204,7 +205,7 @@ var I18N = {
     nav_messages:"المحادثات",locked_messages:"المحادثات غير متاحة",
     upgrade_messages:"قم بالترقية إلى Pro أو Full",no_conversations:"لا توجد محادثات",
     select_conversation:"اختر محادثة لعرضها",type_message:"اكتب رسالة...",
-    chart_status:"حالة الطلبات",chart_trend:"📈 الأرباح خلال 7 أيام",chart_topproducts:"🏆 أفضل المنتجات مبيعاً",
+    chart_status:"حالة الطلبات",chart_trend:"📈 الأرباح خلال 7 أيام",chart_topproducts:"الأكثر مبيعًا",
     nav_team:"الفريق",add_member:"إضافة عضو",member_username:"اسم المستخدم",member_name:"الاسم",
     member_password:"كلمة السر",permissions:"الصلاحيات",active:"نشط",inactive:"معطّل",
     locked_team:"ميزة الفريق غير متاحة",upgrade_team:"قم بالترقية إلى Starter أو أعلى",
@@ -245,7 +246,8 @@ var I18N = {
     hello_morning:"صباح الخير، {name}",hello_evening:"مساء الخير، {name}",dash_summary:"هذا ملخص متجرك",new_order:"طلبية جديدة",
     kpi_pending:"{x} قيد الانتظار",kpi_delivered_of:"منها {x} تم تسليمها",kpi_refuse_rate:"{x}% من الطلبات",kpi_week_profit:"{x} هذا الأسبوع",
     recent_orders:"آخر الطلبيات",all_orders:"كل الطلبيات",order_col:"الطلبية",no_orders_yet:"ما كاين حتى طلبية بعد",
-    bot_card_title:"بوت المحادثة",bot_not_in_plan:"غير متاح في باقتك",plan_locked:"Pro وأعلى",ch_messenger:"فيسبوك ماسنجر",ch_instagram:"إنستغرام",ch_whatsapp:"واتساب"
+    bot_card_title:"بوت المحادثة",bot_not_in_plan:"غير متاح في باقتك",plan_locked:"Pro وأعلى",ch_messenger:"فيسبوك ماسنجر",ch_instagram:"إنستغرام",ch_whatsapp:"واتساب",
+    sales_unit:"مبيعات",no_sales_yet:"ما كاين حتى مبيعات بعد"
   },
   EN:{
     nav_dashboard:"Dashboard",nav_orders:"Orders",nav_products:"Products",
@@ -294,7 +296,7 @@ var I18N = {
     nav_messages:"Messages",locked_messages:"Messages Unavailable",
     upgrade_messages:"Upgrade to Pro or Full",no_conversations:"No conversations",
     select_conversation:"Select a conversation",type_message:"Type a message...",
-    chart_status:"Order status",chart_trend:"📈 Profit (last 7 days)",chart_topproducts:"🏆 Best-selling products",
+    chart_status:"Order status",chart_trend:"📈 Profit (last 7 days)",chart_topproducts:"Best sellers",
     nav_team:"Team",add_member:"Add Member",member_username:"Username",member_name:"Name",
     member_password:"Password",permissions:"Permissions",active:"Active",inactive:"Inactive",
     locked_team:"Team feature unavailable",upgrade_team:"Upgrade to Starter or higher",
@@ -335,7 +337,8 @@ var I18N = {
     hello_morning:"Good morning, {name}",hello_evening:"Good evening, {name}",dash_summary:"Here is your store summary",new_order:"New order",
     kpi_pending:"{x} pending",kpi_delivered_of:"{x} of them delivered",kpi_refuse_rate:"{x}% of orders",kpi_week_profit:"{x} this week",
     recent_orders:"Latest orders",all_orders:"All orders",order_col:"Order",no_orders_yet:"No orders yet",
-    bot_card_title:"Chat bot",bot_not_in_plan:"Not included in your plan",plan_locked:"Pro and up",ch_messenger:"Facebook Messenger",ch_instagram:"Instagram",ch_whatsapp:"WhatsApp"
+    bot_card_title:"Chat bot",bot_not_in_plan:"Not included in your plan",plan_locked:"Pro and up",ch_messenger:"Facebook Messenger",ch_instagram:"Instagram",ch_whatsapp:"WhatsApp",
+    sales_unit:"sales",no_sales_yet:"No sales yet"
   }
 };
 

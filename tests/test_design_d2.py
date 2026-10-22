@@ -327,3 +327,21 @@ def test_bot_card_logic():
     r = _css_rules()
     assert r[".usage-track"]["height"] == "8px" and r[".usage-fill"]["background"] == "var(--brand)"
     assert r[".usage-fill.warn"]["background"] == "var(--yellow)" and r[".usage-fill.full"]["background"] == "var(--flash)"
+
+
+# ── 10. الأكثر مبيعًا: قائمة بأشرطة، والاسم الطويل يتقطّع بـ "…" ──
+def test_top_sellers_list_replaces_chart_and_table():
+    sec = _dash_section()
+    assert 'id="chartProducts"' not in sec and "renderProductsChart" not in _dashboard_js()
+    col = sec[sec.index('class="dash-col"'):]
+    assert col.index('id="botCard"') < col.index('<ul class="top-list" id="topProductsTbl">')
+    js = _dashboard_js()
+    fn = js[js.index('getElementById("topProductsTbl")'):]
+    fn = fn[:fn.index('.join("")')]
+    assert '<span class="top-name" title="\'+esc(p.name)+\'">\'+esc(p.name)+\'</span>' in fn  # الاسم كامل فـ title
+    assert "esc(p.qty)" in fn
+    assert "maxQty" in fn and 'class="usage-fill"' in fn
+    r = _css_rules()
+    name = r[".top-name"]
+    assert name["text-overflow"] == "ellipsis" and name["white-space"] == "nowrap" and name["overflow"] == "hidden"
+    assert name["min-width"] == "0"

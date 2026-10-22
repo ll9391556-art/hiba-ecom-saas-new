@@ -312,6 +312,11 @@ html[dir=ltr] .dash-order-id{text-align:left}
 .usage-fill{height:8px;border-radius:var(--r-pill);background:var(--brand);width:0}
 .usage-fill.warn{background:var(--yellow)}
 .usage-fill.full{background:var(--flash)}
+/* الأكثر مبيعًا: الاسم الطويل يتقطّع بـ "…" */
+.top-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:14px}
+.top-row{display:flex;align-items:baseline;justify-content:space-between;gap:12px;font-size:14px;margin-bottom:6px}
+.top-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.top-row strong{flex-shrink:0;white-space:nowrap}
 /* تنبيهات الباقة أعلى اللوحة (ردود البوت، الانتهاء) */
 #planAlerts{margin-bottom:16px}
 .plan-alert{padding:14px 18px;border-radius:16px;font-size:16px;font-weight:600;margin-bottom:8px;border:1px solid}

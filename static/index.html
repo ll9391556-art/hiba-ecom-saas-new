@@ -220,27 +220,14 @@
             <div class="usage-track"><div class="usage-fill" id="botUsageFill"></div></div>
           </div>
         </section>
-      </div>
-    </div>
-
-    <div class="row g-3 mb-4">
-      <div class="col-md-4">
-        <div class="chart-card">
-          <h5 data-i18n="chart_topproducts">🏆 أفضل المنتجات مبيعاً</h5>
-          <div class="chart-canvas-wrap"><canvas id="chartProducts"></canvas></div>
-          <div class="chart-caption" id="chartProductsCaption">—</div>
-        </div>
+        <section class="dash-card">
+          <div class="dash-card-head"><h2 data-i18n="chart_topproducts">الأكثر مبيعًا</h2></div>
+          <ul class="top-list" id="topProductsTbl"></ul>
+        </section>
       </div>
     </div>
 
     <div class="row g-3">
-      <div class="col-md-6">
-        <div class="table-wrap">
-          <div class="table-head"><h5 data-i18n="top_products">Top Produits</h5></div>
-          <table><thead><tr><th data-i18n="product">Produit</th><th data-i18n="sold">Vendu</th></tr></thead>
-          <tbody id="topProductsTbl"></tbody></table>
-        </div>
-      </div>
       <div class="col-md-6">
         <div class="table-wrap">
           <div class="table-head"><h5 data-i18n="low_stock">Stock Faible</h5></div>

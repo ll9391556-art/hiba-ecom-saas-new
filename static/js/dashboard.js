@@ -151,7 +151,6 @@ function highlightCurrentPlan(){
 // DASHBOARD
 // =========================================================
 var chartTrendInstance    = null;
-var chartProductsInstance = null;
 
 // ألوان المخططات من tokens.css (ما كاين حتى لون مكتوب هنا)
 function cssVar(name){
@@ -204,10 +203,16 @@ async function loadDashboard(){
     document.getElementById("d_conf_sub").textContent = t("kpi_delivered_of").replace("{x}", fmtNum(n.delivered));
     document.getElementById("d_ref_sub").textContent  = t("kpi_refuse_rate").replace("{x}", d.refuseRate||0);
 
+    // الأكثر مبيعًا: قائمة بأشرطة (التصميم). الاسم الطويل يتقطّع بـ "…" (CSS) وكامل فـ title
+    var top = (d.topProducts||[]).slice(0,5);
+    var maxQty = Math.max.apply(null, top.map(function(p){ return Number(p.qty)||0; }).concat([1]));
     var topTbl = document.getElementById("topProductsTbl");
-    topTbl.innerHTML = (d.topProducts||[]).map(function(p){
-      return "<tr><td>"+esc(p.name)+"</td><td><strong>"+esc(p.qty)+"</strong></td></tr>";
-    }).join("") || '<tr><td colspan="2" class="empty-state">—</td></tr>';
+    topTbl.innerHTML = top.map(function(p){
+      var w = Math.round((Number(p.qty)||0)/maxQty*100);
+      return '<li><div class="top-row"><span class="top-name" title="'+esc(p.name)+'">'+esc(p.name)+'</span>'+
+        '<strong>'+esc(p.qty)+' '+esc(t("sales_unit"))+'</strong></div>'+
+        '<div class="usage-track"><div class="usage-fill" style="width:'+w+'%"></div></div></li>';
+    }).join("") || '<li class="dash-empty">'+esc(t("no_sales_yet"))+'</li>';
 
     var lowTbl = document.getElementById("lowStockTbl");
     lowTbl.innerHTML = (d.lowStock||[]).map(function(p){
@@ -218,7 +223,6 @@ async function loadDashboard(){
     renderStatusBar(d);
     loadRecentOrders();
     if(Object.keys(PLAN_FEATURES||{}).length) loadBotCard();  // وإلا loadUserPlan ينادي عليها
-    renderProductsChart(d);
     loadTrendChart(cur);
   }catch(e){ console.error(e); }
 }
@@ -300,44 +304,6 @@ function renderStatusBar(d){
   legend.innerHTML = rows.map(function(r){
     return '<li><span class="status-dot seg-'+r[0]+'"></span><span class="status-name">'+esc(t(r[1]))+'</span><strong>'+fmtNum(r[2])+'</strong></li>';
   }).join("");
-}
-
-function renderProductsChart(d){
-  var canvas = document.getElementById("chartProducts");
-  if(!canvas || typeof Chart==="undefined") return;
-  var top = (d.topProducts||[]).slice(0,5);
-
-  if(chartProductsInstance) chartProductsInstance.destroy();
-  chartProductsInstance = new Chart(canvas, {
-    type: "bar",
-    data: {
-      labels: top.map(function(p){ return p.name.length>14 ? p.name.substring(0,14)+"…" : p.name; }),
-      datasets: [{
-        label: t("sold"),
-        data: top.map(function(p){ return p.qty; }),
-        backgroundColor: cssVar("--brand"),
-        borderRadius: 6,
-        maxBarThickness: 26
-      }]
-    },
-    options: {
-      indexAxis: "y",
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: { legend: { display:false }, tooltip:{ callbacks:{ label:function(ctx){ return " "+ctx.parsed.x+" "+t("sold"); } } } },
-      scales: {
-        x: { beginAtZero:true, ticks:{ color: chartTextColor(), precision:0 }, grid:{ color: chartGridColor() } },
-        y: { ticks:{ color: chartTextColor(), font:{size:11} }, grid:{ display:false } }
-      }
-    }
-  });
-
-  var cap = document.getElementById("chartProductsCaption");
-  if(cap){
-    cap.textContent = top.length
-      ? ("🥇 "+top[0].name+" — "+top[0].qty+" "+(t("sold")||"").toLowerCase())
-      : "—";
-  }
 }
 
 async function loadTrendChart(cur){
