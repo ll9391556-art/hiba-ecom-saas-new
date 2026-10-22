@@ -159,9 +159,9 @@ function cssVar(name){
 function chartTextColor(){ return cssVar("--muted"); }
 function chartGridColor(){ return cssVar("--soft"); }
 
-// أرقام اللوحة بأرقام لاتينية وفاصل آلاف: 11 000 (كيما التصميم، فكل اللغات)
+// أرقام اللوحة بلا فاصل آلاف: 35200 (نفس شكل ردود البوت)، بأرقام لاتينية فكل اللغات
 function fmtNum(v){
-  return Math.round(Number(v)||0).toLocaleString("fr-FR").replace(/[  ]/g, " ");
+  return String(Math.round(Number(v)||0));
 }
 
 // confirmed فـ stats فيه delivered؛ قيد الانتظار = الباقي (Pending و No Answer)
@@ -349,10 +349,10 @@ async function loadTrendChart(cur){
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        plugins: { legend: { display:false }, tooltip: { callbacks: { label:function(ctx){ return " "+ctx.parsed.y.toLocaleString()+" "+(cur||""); } } } },
+        plugins: { legend: { display:false }, tooltip: { callbacks: { label:function(ctx){ return " "+fmtNum(ctx.parsed.y)+" "+(cur||""); } } } },
         scales: {
           x: { ticks:{ color: chartTextColor(), font:{size:11} }, grid:{ display:false } },
-          y: { beginAtZero: true, min: 0, ticks:{ color: chartTextColor() }, grid:{ color: chartGridColor() } }
+          y: { beginAtZero: true, min: 0, ticks:{ color: chartTextColor(), callback: function(v){ return fmtNum(v); } }, grid:{ color: chartGridColor() } }
         }
       }
     });
@@ -362,7 +362,7 @@ async function loadTrendChart(cur){
     if(weekSub) weekSub.textContent = t("kpi_week_profit").replace("{x}", fmtNum(total7)+" "+(cur||""));
     var cap = document.getElementById("chartTrendCaption");
     if(cap) cap.innerHTML = esc(t("total_7days")).replace("{x}",
-      "<strong style='color:"+(total7>=0?"var(--green)":"var(--red)")+"'>"+total7.toLocaleString()+" "+(cur||"")+"</strong>");
+      "<strong style='color:"+(total7>=0?"var(--green)":"var(--red)")+"'>"+fmtNum(total7)+" "+(cur||"")+"</strong>");
   }catch(e){ console.error(e); }
 }
 

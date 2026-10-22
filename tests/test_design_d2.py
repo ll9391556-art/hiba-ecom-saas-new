@@ -424,3 +424,15 @@ def test_profit_curve_never_dips_below_zero():
     fn = _trend_chart_js()
     assert 'cubicInterpolationMode: "monotone"' in fn and "tension:" not in fn
     assert "y: { beginAtZero: true, min: 0," in fn
+
+
+def test_dashboard_numbers_have_no_thousands_separator():
+    """"35200 دج" ماشي "35 200 دج"، نفس شكل ردود البوت: KPI، الجداول، المخطط (المحور والـ tooltip)."""
+    js = _dashboard_js()
+    fn = js[js.index("function fmtNum("):]
+    fn = fn[:fn.index("\n}\n")]
+    assert "return String(Math.round(Number(v)||0));" in fn
+    assert re.findall(r"\.toLocaleString\(", js) == []  # toLocaleDateString للتواريخ مسموحة
+    trend = _trend_chart_js()
+    assert "ticks:{ color: chartTextColor(), callback: function(v){ return fmtNum(v); } }" in trend
+    assert "fmtNum(ctx.parsed.y)" in trend and "fmtNum(total7)" in trend
