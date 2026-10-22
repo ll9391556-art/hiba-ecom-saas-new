@@ -21,7 +21,7 @@ async function loadProducts(){
           '<td>'+esc(p.init||0)+'</td>'+
           '<td>'+esc(p.sold||0)+'</td>'+
           '<td>'+esc(p.available||0)+'</td>'+
-          '<td><span class="badge '+stCls+'">'+esc(p.stat||"?")+'</span></td>'+
+          '<td><span class="badge '+stCls+'">'+esc(stockLabel(p.stat||"?"))+'</span></td>'+
           '<td><button class="btn-danger" data-name="'+esc(p.name)+'" data-on-click="deleteProduct(this.dataset.name)"><i class="bi bi-trash"></i></button></td>'+
         '</tr>';
       }).join("") || '<tr><td colspan="11"><div class="empty-state"><i class="bi bi-box-seam"></i></div></td></tr>';
@@ -37,10 +37,10 @@ async function addProduct(){
     image:currentProductImages[0]||"", images:currentProductImages.slice(),
     description:p_desc.value.trim()
   };
-  if(!data.name){ toast("Entrez un nom de produit","err"); return; }
+  if(!data.name){ toast(t("enter_product_name"),"err"); return; }
   var r = await apiPost("/addProduct", {data:data});
   if(r.status==="ok"){
-    toast("✅ Produit ajouté","ok");
+    toast("✅ "+t("product_added"),"ok");
     currentProductImages = [];
     renderProductImageThumbs();
     closeModal("addProductModal");
@@ -49,9 +49,9 @@ async function addProduct(){
 }
 
 async function deleteProduct(name){
-  if(!confirm("Supprimer "+name+" ?")) return;
+  if(!confirm(t("confirm_delete").replace("{name}", name))) return;
   var r = await apiPost("/deleteProduct", {data:{name:name}});
-  if(r.status==="ok"){ toast("✅ Supprimé","ok"); loadProducts(); }
+  if(r.status==="ok"){ toast("✅ "+t("deleted"),"ok"); loadProducts(); }
   else { toast("❌ "+r.message,"err"); }
 }
 
@@ -80,7 +80,7 @@ function renderCustomers(list){
       '<td style="color:var(--green)">'+esc(c.stats&&c.stats.confirmed||0)+'</td>'+
       '<td style="color:var(--blue)">'+esc(c.stats&&c.stats.delivered||0)+'</td>'+
       '<td style="color:var(--red)">'+esc(c.stats&&c.stats.refused||0)+'</td>'+
-      '<td><span class="badge '+typeCls+'">'+esc(c.type||"?")+'</span></td>'+
+      '<td><span class="badge '+typeCls+'">'+esc(custLabel(c.type||"?"))+'</span></td>'+
     '</tr>';
   }).join("") || '<tr><td colspan="8"><div class="empty-state"><i class="bi bi-people"></i></div></td></tr>';
 }
@@ -141,9 +141,9 @@ async function addCity(){
     deskCust:parseFloat(c_deskcust.value)||0,
     returnFee:parseFloat(c_ret.value)||0,
   };
-  if(!data.name){ toast("Entrez un nom de ville","err"); return; }
+  if(!data.name){ toast(t("enter_city_name"),"err"); return; }
   var r = await apiPost("/addCity", {data:data});
-  if(r.status==="ok"){ toast("✅ Ville ajoutée","ok"); closeModal("addCityModal"); loadCities(); }
+  if(r.status==="ok"){ toast("✅ "+t("city_added"),"ok"); closeModal("addCityModal"); loadCities(); }
   else { toast("❌ "+r.message,"err"); }
 }
 

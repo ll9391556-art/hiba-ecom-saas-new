@@ -9,9 +9,7 @@ function showSection(s){
   var sec = document.getElementById("sec_"+s);
   if(sec) sec.classList.add("active");
   document.querySelectorAll(".nav-item").forEach(function(el){
-    if(el.getAttribute("onclick") && el.getAttribute("onclick").includes("'"+s+"'")){
-      el.classList.add("active");
-    }
+    if(el.getAttribute("data-on-click")==="showSection('"+s+"')") el.classList.add("active");
   });
   var titles = {
     dashboard:t("nav_dashboard"),orders:t("nav_orders"),products:t("nav_products"),
@@ -19,7 +17,9 @@ function showSection(s){
     bot:t("nav_bot"),messages:t("nav_messages"),integrations:t("nav_integrations"),
     team:t("nav_team"),plans:t("nav_plans"),settings:t("nav_settings"),landing:t("nav_landing")
   };
-  document.getElementById("pageTitle").textContent = titles[s]||s;
+  var title = document.getElementById("pageTitle");
+  title.textContent = titles[s]||s;
+  title.setAttribute("data-i18n", "nav_"+s);  // applyLang يعاود يترجمو
 
   if(s==="dashboard") loadDashboard();
   else if(s==="orders") loadOrders();
@@ -76,8 +76,11 @@ async function loadUserPlan(){
       if(navTeamEl) navTeamEl.style.display = (currentRole==="owner" && planHas("team")) ? "flex" : "none";
       renderCurrencyButtons();
       renderPlanAlerts();
-      var pd = document.getElementById("planDisplay");
-      if(pd) pd.innerHTML = 'Plan: <span class="plan-badge plan-'+currentPlan+'">'+currentPlan.toUpperCase()+'</span>';
+      loadBotCard();
+      var pn = document.getElementById("planName");
+      if(pn) pn.textContent = currentPlan.charAt(0).toUpperCase()+currentPlan.slice(1);
+      var mp = document.getElementById("managePlanLink");
+      if(mp) mp.hidden = (USER_SOURCE==="fiverr");
       document.getElementById("s_plan").value = currentPlan;
     }
   }catch(e){}
@@ -147,12 +150,37 @@ function highlightCurrentPlan(){
 // =========================================================
 // DASHBOARD
 // =========================================================
-var chartStatusInstance   = null;
 var chartTrendInstance    = null;
-var chartProductsInstance = null;
 
-function chartTextColor(){ return DARK_MODE ? "#8899bb" : "#64748b"; }
-function chartGridColor(){ return DARK_MODE ? "rgba(255,255,255,.07)" : "rgba(0,0,0,.07)"; }
+// ألوان المخططات من tokens.css (ما كاين حتى لون مكتوب هنا)
+function cssVar(name){
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+function chartTextColor(){ return cssVar("--muted"); }
+function chartGridColor(){ return cssVar("--soft"); }
+
+// أرقام اللوحة بلا فاصل آلاف: 35200 (نفس شكل ردود البوت)، بأرقام لاتينية فكل اللغات
+function fmtNum(v){
+  return String(Math.round(Number(v)||0));
+}
+
+// confirmed فـ stats فيه delivered؛ قيد الانتظار = الباقي (Pending و No Answer)
+function dashCounts(d){
+  var total = d.totalOrders||0, delivered = d.delivered||0, refused = d.refused||0;
+  var confirmedOnly = Math.max(0, (d.confirmed||0) - delivered);
+  return {total:total, delivered:delivered, confirmedOnly:confirmedOnly, refused:refused,
+          pending:Math.max(0, total - confirmedOnly - delivered - refused)};
+}
+
+// "صباح الخير، هبة" قبل 12:00، وإلا "مساء الخير، هبة". الاسم يدخل كنص (textContent)
+function renderGreeting(){
+  var el = document.getElementById("dashHello");
+  if(!el) return;
+  var hour = new Date().getHours();
+  var name = currentUser ? (currentUser.name || uname()) : "";
+  var text = t(hour<12 ? "hello_morning" : "hello_evening");
+  el.textContent = name ? text.replace("{name}", name) : text.split("{name}")[0].replace(/[،,]\s*$/, "");
+}
 
 async function loadDashboard(){
   try{
@@ -160,106 +188,122 @@ async function loadDashboard(){
     if(r.status!=="ok") return;
     var d = r.data;
     var cur = curSym();
-    document.getElementById("d_total").textContent  = d.totalOrders||0;
-    document.getElementById("d_conf").textContent   = (d.confirmed||0)+" ("+d.delivered+" "+t("delivered")+")";
-    document.getElementById("d_ref").textContent    = d.refused||0;
-    document.getElementById("d_profit").textContent = (d.totalProfit||0).toLocaleString()+" "+cur;
+    var n = dashCounts(d);
+    renderGreeting();
+    var badge = document.getElementById("navPendingBadge");
+    if(badge){ badge.textContent = n.pending>99 ? "99+" : n.pending; badge.hidden = !n.pending; }
+    // KPI: الرقم وحدو فسطر، والتفصيل فـ *_sub تحتو
+    document.getElementById("d_total").textContent  = fmtNum(n.total);
+    document.getElementById("d_conf").textContent  = fmtNum(n.confirmedOnly + n.delivered);
+    document.getElementById("d_ref").textContent    = fmtNum(n.refused);
+    document.getElementById("d_profit").innerHTML   = esc(fmtNum(d.totalProfit||0))+" <small>"+cur+"</small>";
+    var totalSub = document.getElementById("d_total_sub");
+    totalSub.textContent = t("kpi_pending").replace("{x}", fmtNum(n.pending));
+    totalSub.hidden = !n.total;
+    document.getElementById("d_conf_sub").textContent = t("kpi_delivered_of").replace("{x}", fmtNum(n.delivered));
+    document.getElementById("d_ref_sub").textContent  = t("kpi_refuse_rate").replace("{x}", d.refuseRate||0);
 
+    // الأكثر مبيعًا: قائمة بأشرطة (التصميم). الاسم الطويل يتقطّع بـ "…" (CSS) وكامل فـ title
+    var top = (d.topProducts||[]).slice(0,5);
+    var maxQty = Math.max.apply(null, top.map(function(p){ return Number(p.qty)||0; }).concat([1]));
     var topTbl = document.getElementById("topProductsTbl");
-    topTbl.innerHTML = (d.topProducts||[]).map(function(p){
-      return "<tr><td>"+esc(p.name)+"</td><td><strong>"+esc(p.qty)+"</strong></td></tr>";
-    }).join("") || '<tr><td colspan="2" class="empty-state">—</td></tr>';
+    topTbl.innerHTML = top.map(function(p){
+      var w = Math.round((Number(p.qty)||0)/maxQty*100);
+      return '<li><div class="top-row"><span class="top-name" title="'+esc(p.name)+'">'+esc(p.name)+'</span>'+
+        '<strong>'+esc(p.qty)+' '+esc(t("sales_unit"))+'</strong></div>'+
+        '<div class="usage-track"><div class="usage-fill" style="width:'+w+'%"></div></div></li>';
+    }).join("") || '<li class="dash-empty">'+esc(t("no_sales_yet"))+'</li>';
 
     var lowTbl = document.getElementById("lowStockTbl");
     lowTbl.innerHTML = (d.lowStock||[]).map(function(p){
       var cl = p.rem<=0?"br":"bn";
-      return "<tr><td>"+esc(p.name)+"</td><td>"+esc(p.rem)+"</td><td><span class='badge "+cl+"'>"+esc(p.stat)+"</span></td></tr>";
-    }).join("") || '<tr><td colspan="3" class="empty-state">✅</td></tr>';
+      return "<tr><td title=\""+esc(p.name)+"\">"+esc(p.name)+"</td><td>"+esc(p.rem)+"</td><td><span class='badge "+cl+"'>"+esc(stockLabel(p.stat))+"</span></td></tr>";
+    }).join("") || '<tr><td colspan="3" class="dash-empty">'+esc(t("stock_ok"))+'</td></tr>';
 
-    renderStatusChart(d, cur);
-    renderProductsChart(d);
+    renderStatusBar(d);
+    loadRecentOrders();
+    if(Object.keys(PLAN_FEATURES||{}).length) loadBotCard();  // وإلا loadUserPlan ينادي عليها
     loadTrendChart(cur);
   }catch(e){ console.error(e); }
 }
 
-function renderStatusChart(d, cur){
-  var canvas = document.getElementById("chartStatus");
-  if(!canvas || typeof Chart==="undefined") return;
-  var deliveredOnly = d.delivered||0;
-  var confirmedOnly = Math.max(0, (d.confirmed||0) - deliveredOnly);
-  var refusedOnly   = d.refused||0;
-  var pendingOnly   = Math.max(0, (d.totalOrders||0) - confirmedOnly - deliveredOnly - refusedOnly);
-  var labels = [t("confirmed"), t("delivered"), t("refused"), "Pending"];
-  var data   = [confirmedOnly, deliveredOnly, refusedOnly, pendingOnly];
-
-  if(chartStatusInstance) chartStatusInstance.destroy();
-  chartStatusInstance = new Chart(canvas, {
-    type: "doughnut",
-    data: {
-      labels: labels,
-      datasets: [{
-        data: data,
-        backgroundColor: ["#3b82f6","#10b981","#ef4444","#f59e0b"],
-        borderColor: "transparent",
-        borderWidth: 2,
-        hoverOffset: 6
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      cutout: "62%",
-      plugins: {
-        legend: { position: "bottom", labels: { color: chartTextColor(), font:{size:11}, padding:12, usePointStyle:true, boxWidth:8 } },
-        tooltip: { callbacks: { label: function(ctx){ return " "+ctx.label+": "+ctx.parsed; } } }
-      }
-    }
-  });
-
-  var cap = document.getElementById("chartStatusCaption");
-  if(cap){
-    cap.innerHTML = "<strong>"+(d.totalOrders||0)+"</strong> "+t("total_orders")+" — "+
-      "<strong style='color:var(--green)'>"+(d.confirmRate||0)+"%</strong> "+t("confirmed")+" · "+
-      "<strong style='color:var(--red)'>"+(d.refuseRate||0)+"%</strong> "+t("refused");
-  }
+// آخر 5 طلبيات (الأحدث أولاً). عضو بلا صلاحية orders: البطاقة تتخبّى
+async function loadRecentOrders(){
+  var card = document.getElementById("recentOrdersCard");
+  var tbl = document.getElementById("recentOrdersTbl");
+  if(!card || !tbl) return;
+  try{
+    var r = await apiGet("/getOrders", {limit:5});
+    card.hidden = r.status!=="ok";
+    if(r.status!=="ok") return;
+    var cur = curSym();
+    tbl.innerHTML = (r.data||[]).map(function(o){
+      var cls = {Pending:"bp",Confirmed:"bc",Delivered:"bi",Refused:"br","No Answer":"bn"}[o.status]||"bp";
+      return '<tr>'+
+        '<td class="dash-order-id" dir="ltr">'+esc(o.id||"—")+'</td>'+
+        '<td>'+esc(o.name||"—")+'</td>'+
+        '<td class="dash-ellipsis">'+esc(o.product||"—")+'</td>'+
+        '<td>'+esc(o.city||"—")+'</td>'+
+        '<td class="dash-amount">'+esc(fmtNum(o.total))+' '+cur+'</td>'+
+        '<td><span class="badge '+cls+'">'+esc(stLabel(o.status))+'</span></td>'+
+      '</tr>';
+    }).join("") || '<tr><td colspan="6" class="dash-empty">'+esc(t("no_orders_yet"))+'</td></tr>';
+  }catch(e){ console.error(e); }
 }
 
-function renderProductsChart(d){
-  var canvas = document.getElementById("chartProducts");
-  if(!canvas || typeof Chart==="undefined") return;
-  var top = (d.topProducts||[]).slice(0,5);
-
-  if(chartProductsInstance) chartProductsInstance.destroy();
-  chartProductsInstance = new Chart(canvas, {
-    type: "bar",
-    data: {
-      labels: top.map(function(p){ return p.name.length>14 ? p.name.substring(0,14)+"…" : p.name; }),
-      datasets: [{
-        label: t("sold"),
-        data: top.map(function(p){ return p.qty; }),
-        backgroundColor: "#2563eb",
-        borderRadius: 6,
-        maxBarThickness: 26
-      }]
-    },
-    options: {
-      indexAxis: "y",
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: { legend: { display:false }, tooltip:{ callbacks:{ label:function(ctx){ return " "+ctx.parsed.x+" "+t("sold"); } } } },
-      scales: {
-        x: { beginAtZero:true, ticks:{ color: chartTextColor(), precision:0 }, grid:{ color: chartGridColor() } },
-        y: { ticks:{ color: chartTextColor(), font:{size:11} }, grid:{ display:false } }
-      }
-    }
-  });
-
-  var cap = document.getElementById("chartProductsCaption");
-  if(cap){
-    cap.textContent = top.length
-      ? ("🥇 "+top[0].name+" — "+top[0].qty+" "+(t("sold")||"").toLowerCase())
-      : "—";
+// بطاقة البوت: حالة القنوات (من إعدادات البوت) + "استعملت X من Y رد هذا الشهر"
+async function loadBotCard(){
+  var list = document.getElementById("channelList");
+  var usage = document.getElementById("botUsage");
+  if(!list || !usage) return;
+  var pill = function(cls, key){ return '<span class="badge '+cls+'">'+esc(t(key))+'</span>'; };
+  var u = (PLAN_USAGE||{}).botMsgs;
+  usage.hidden = !(u && u.cap);
+  if(u && u.cap){
+    var pct = Math.min(100, Math.round(u.used/u.cap*100));
+    document.getElementById("botUsageText").textContent =
+      t("bot_usage_x_of_y").replace("{x}", fmtNum(u.used)).replace("{y}", fmtNum(u.cap));
+    var fill = document.getElementById("botUsageFill");
+    fill.style.width = pct+"%";
+    fill.className = "usage-fill"+(pct>=100 ? " full" : pct>=80 ? " warn" : "");
   }
+  if(!planHas("bot")){
+    list.innerHTML = '<li><span>'+esc(t("bot_not_in_plan"))+'</span>'+pill("bn", "plan_locked")+'</li>';
+    return;
+  }
+  if(!BOT_LAUNCHED){
+    list.innerHTML = '<li><span>'+esc(t("nav_bot"))+'</span>'+pill("bp", "soon")+'</li>';
+    return;
+  }
+  try{
+    var r = await apiGet("/getBotSettings", {});
+    if(r.status!=="ok"){ list.innerHTML = ""; return; }
+    var s = r.data||{};
+    var channels = [
+      ["ch_messenger", s.page_id_FB && s.fb_access_token],
+      ["ch_instagram", s.Page_ID_instgram && s.instgram_access_token],
+      ["ch_whatsapp", s.phone_number_id && s.whtsapp_token]
+    ];
+    list.innerHTML = channels.map(function(c){
+      return '<li><span>'+esc(t(c[0]))+'</span>'+(c[1] ? pill("bs", "connected") : pill("bn", "not_connected"))+'</li>';
+    }).join("");
+  }catch(e){ console.error(e); }
+}
+
+// توزيع الحالات (Dashboard.dc.html): شريط HTML وتحتو القائمة. الألوان من CSS (.seg-*)
+function renderStatusBar(d){
+  var bar = document.getElementById("statusBar"), legend = document.getElementById("statusLegend");
+  if(!bar || !legend) return;
+  var n = dashCounts(d);
+  var rows = [["delivered","st_delivered",n.delivered], ["confirmed","st_confirmed",n.confirmedOnly],
+              ["pending","st_pending",n.pending], ["refused","st_refused",n.refused]];
+  bar.innerHTML = rows.filter(function(r){ return r[2]>0; }).map(function(r){
+    return '<span class="seg-'+r[0]+'" style="flex:'+r[2]+'"></span>';
+  }).join("");
+  bar.setAttribute("aria-label", rows.map(function(r){ return r[2]+" "+t(r[1]); }).join(" · "));
+  legend.innerHTML = rows.map(function(r){
+    return '<li><span class="status-dot seg-'+r[0]+'"></span><span class="status-name">'+esc(t(r[1]))+'</span><strong>'+fmtNum(r[2])+'</strong></li>';
+  }).join("");
 }
 
 async function loadTrendChart(cur){
@@ -297,26 +341,28 @@ async function loadTrendChart(cur){
         datasets: [{
           label: t("total_profit"),
           data: values,
-          borderColor: "#10b981",
-          backgroundColor: "rgba(16,185,129,.15)",
-          fill: true, tension: .35, pointRadius: 3, pointBackgroundColor: "#10b981", borderWidth: 2
+          borderColor: cssVar("--brand"),
+          backgroundColor: cssVar("--brand-light"),
+          fill: true, cubicInterpolationMode: "monotone", pointRadius: 3, pointBackgroundColor: cssVar("--brand"), borderWidth: 2
         }]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        plugins: { legend: { display:false }, tooltip: { callbacks: { label:function(ctx){ return " "+ctx.parsed.y.toLocaleString()+" "+(cur||""); } } } },
+        plugins: { legend: { display:false }, tooltip: { callbacks: { label:function(ctx){ return " "+fmtNum(ctx.parsed.y)+" "+(cur||""); } } } },
         scales: {
           x: { ticks:{ color: chartTextColor(), font:{size:11} }, grid:{ display:false } },
-          y: { ticks:{ color: chartTextColor() }, grid:{ color: chartGridColor() } }
+          y: { beginAtZero: true, min: 0, ticks:{ color: chartTextColor(), callback: function(v){ return fmtNum(v); } }, grid:{ color: chartGridColor() } }
         }
       }
     });
 
     var total7 = values.reduce(function(s,v){ return s+v; },0);
+    var weekSub = document.getElementById("d_profit_sub");
+    if(weekSub) weekSub.textContent = t("kpi_week_profit").replace("{x}", fmtNum(total7)+" "+(cur||""));
     var cap = document.getElementById("chartTrendCaption");
-    if(cap) cap.innerHTML = (currentLang==="AR"?"إجمالي 7 أيام: ":currentLang==="EN"?"7-day total: ":"Total 7 jours: ")+
-      "<strong style='color:"+(total7>=0?"var(--green)":"var(--red)")+"'>"+total7.toLocaleString()+" "+(cur||"")+"</strong>";
+    if(cap) cap.innerHTML = esc(t("total_7days")).replace("{x}",
+      "<strong style='color:"+(total7>=0?"var(--green)":"var(--red)")+"'>"+fmtNum(total7)+" "+(cur||"")+"</strong>");
   }catch(e){ console.error(e); }
 }
 

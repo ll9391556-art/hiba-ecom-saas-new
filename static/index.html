@@ -1,14 +1,15 @@
 <!DOCTYPE html>
-<html lang="fr" dir="ltr">
+<html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>OrderFlow</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet"/>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" integrity="sha384-NrKB+u6Ts6AtkIhwPixiKTzgSKNblyhlk0Sohlgar9UHUBzai/sgnNNWWd291xqt" crossorigin="anonymous"></script>
 <script defer src="/static/pixel-loader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.468.0/dist/umd/lucide.min.js" integrity="sha384-uTYyvsSSUZeaPhb5RbKlQa0zY/WpX/QHfvg2mczXyBQOpkWPEDy9lczyp+w7SKXu" crossorigin="anonymous"></script>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml"/>
 <link rel="icon" href="/static/favicon-32.png" sizes="32x32" type="image/png"/>
 <link rel="apple-touch-icon" href="/static/apple-touch-icon.png"/>
@@ -24,17 +25,17 @@
   <div class="login-box">
     <img src="/static/img/logo.svg" alt="OrderFlow" width="56" height="56" style="width:56px;height:56px;margin-bottom:8px"/>
     <h2>OrderFlow</h2>
-    <p id="loginTagline">Plateforme de gestion des ventes</p>
+    <p id="loginTagline" data-i18n="loginTagline">Plateforme de gestion des ventes</p>
     <div class="form-group" style="text-align:left">
-      <label id="lblUser">Nom d'utilisateur</label>
+      <label id="lblUser" data-i18n="user">Nom d'utilisateur</label>
       <input id="loginUser" class="form-control" type="text" autocomplete="username"/>
     </div>
     <div class="form-group" style="text-align:left">
-      <label id="lblPass">Mot de passe</label>
+      <label id="lblPass" data-i18n="pass">Mot de passe</label>
       <input id="loginPass" class="form-control" type="password" autocomplete="current-password"/>
     </div>
     <button class="btn-primary" style="width:100%" data-on-click="doLogin()" id="loginBtn">
-      <span id="loginBtnTxt">Connexion</span>
+      <span id="loginBtnTxt" data-i18n="login_btn">Connexion</span>
     </button>
     <div id="loginErr" style="display:none" class="err-msg"></div>
     <div style="margin-top:20px;display:flex;gap:8px;justify-content:center">
@@ -47,79 +48,84 @@
 
 <div id="sidebar">
   <div class="sidebar-logo">
-    <h2 style="display:flex;align-items:center;gap:8px">
-      <img src="/static/img/logo.svg" alt="" width="28" height="28" style="width:28px;height:28px"/> OrderFlow
-    </h2>
+    <div class="sidebar-brand">
+      <img src="/static/img/logo.svg" alt="" width="40" height="40"/>
+      <span dir="ltr">OrderFlow</span>
+    </div>
     <small id="sideUser">—</small>
   </div>
   <div class="sidebar-nav">
     <div class="nav-item active" data-on-click="showSection('dashboard')">
-      <i class="bi bi-grid-1x2"></i><span data-i18n="nav_dashboard">Tableau de bord</span>
+      <i data-lucide="layout-dashboard"></i><span data-i18n="nav_dashboard">Tableau de bord</span>
     </div>
     <div class="nav-item" data-on-click="showSection('orders')">
-      <i class="bi bi-bag-check"></i><span data-i18n="nav_orders">Commandes</span>
+      <i data-lucide="shopping-bag"></i><span data-i18n="nav_orders">Commandes</span>
+      <span id="navPendingBadge" class="nav-badge" hidden></span>
     </div>
     <div class="nav-item" data-on-click="showSection('products')">
-      <i class="bi bi-box-seam"></i><span data-i18n="nav_products">Produits</span>
+      <i data-lucide="package"></i><span data-i18n="nav_products">Produits</span>
     </div>
     <div class="nav-item" data-on-click="showSection('customers')">
-      <i class="bi bi-people"></i><span data-i18n="nav_customers">Clients</span>
+      <i data-lucide="users"></i><span data-i18n="nav_customers">Clients</span>
     </div>
     <div class="nav-item" data-on-click="showSection('cities')">
-      <i class="bi bi-geo-alt"></i><span data-i18n="nav_cities">Villes</span>
+      <i data-lucide="map-pin"></i><span data-i18n="nav_cities">Villes</span>
     </div>
     <div class="nav-item" data-on-click="showSection('store')">
-      <i class="bi bi-shop"></i><span data-i18n="nav_store">Boutique</span>
+      <i data-lucide="store"></i><span data-i18n="nav_store">Boutique</span>
     </div>
     <div class="nav-item" data-on-click="showSection('landing')">
-      <i class="bi bi-easel2"></i><span data-i18n="nav_landing">Pages de destination</span>
+      <i data-lucide="panels-top-left"></i><span data-i18n="nav_landing">Pages de destination</span>
     </div>
     <div class="nav-item" data-on-click="showSection('bot')">
-      <i class="bi bi-robot"></i><span data-i18n="nav_bot">Bot AI</span>
+      <i data-lucide="bot"></i><span data-i18n="nav_bot">Bot AI</span>
     </div>
     <div class="nav-item" data-on-click="showSection('messages')">
-      <i class="bi bi-chat-dots"></i><span data-i18n="nav_messages">Messages</span>
+      <i data-lucide="message-circle"></i><span data-i18n="nav_messages">Messages</span>
     </div>
     <div class="nav-item" data-on-click="showSection('integrations')">
-      <i class="bi bi-plug"></i><span data-i18n="nav_integrations">ربط المتجر</span>
+      <i data-lucide="plug"></i><span data-i18n="nav_integrations">ربط المتجر</span>
     </div>
     <div class="nav-item" id="navTeam" data-on-click="showSection('team')" style="display:none">
-      <i class="bi bi-person-badge"></i><span data-i18n="nav_team">الفريق</span>
+      <i data-lucide="id-card"></i><span data-i18n="nav_team">الفريق</span>
     </div>
     <div class="nav-item" id="navPlans" data-on-click="showSection('plans')">
-      <i class="bi bi-star"></i><span data-i18n="nav_plans">Abonnements</span>
+      <i data-lucide="star"></i><span data-i18n="nav_plans">Abonnements</span>
     </div>
     <div class="nav-item" data-on-click="showSection('settings')">
-      <i class="bi bi-gear"></i><span data-i18n="nav_settings">Paramètres</span>
+      <i data-lucide="settings"></i><span data-i18n="nav_settings">Paramètres</span>
     </div>
-       <!-- بعد: زدنا data-i18n لكل span -->
     <div class="nav-item" data-on-click="window.open('/static/features/discounts.html','_blank')">
-     <i class="bi bi-tag"></i><span data-i18n="nav_discounts">أكواد الخصم</span>
+     <i data-lucide="tag"></i><span data-i18n="nav_discounts">أكواد الخصم</span>
     </div>
     <div class="nav-item" data-on-click="window.open('/static/features/tracking.html','_blank')">
-     <i class="bi bi-graph-up-arrow"></i><span data-i18n="nav_tracking">التتبع الإعلاني</span>
+     <i data-lucide="trending-up"></i><span data-i18n="nav_tracking">التتبع الإعلاني</span>
     </div>
     <div class="nav-item disabled" title="قريبًا" aria-disabled="true">
-     <i class="bi bi-truck"></i><span data-i18n="nav_shipping">شركات الشحن</span>
+     <i data-lucide="truck"></i><span data-i18n="nav_shipping">شركات الشحن</span>
      <span class="soon-badge" data-i18n="soon">قريبًا</span>
     </div>
     <div class="nav-item" data-on-click="window.open('/static/features/assistant.html','_blank')">
-     <i class="bi bi-robot"></i><span data-i18n="nav_assistant">المساعد الإداري</span>
+     <i data-lucide="sparkles"></i><span data-i18n="nav_assistant">المساعد الإداري</span>
     </div>
     <div class="nav-item" data-on-click="window.open('/static/features/support.html','_blank')">
-     <i class="bi bi-headset"></i><span data-i18n="nav_support">الدعم الفني</span>
+     <i data-lucide="headset"></i><span data-i18n="nav_support">الدعم الفني</span>
     </div>
   </div>
   <div class="sidebar-footer">
-    <div id="planDisplay">—</div>
+    <div class="side-plan">
+      <span class="side-plan-lbl" data-i18n="your_plan">باقتك</span>
+      <span class="side-plan-name" id="planName">—</span>
+      <button type="button" class="side-plan-link" id="managePlanLink" data-on-click="showSection('plans')"><span data-i18n="manage_plan">إدارة الاشتراك</span></button>
+    </div>
     <div class="theme-toggle" hidden data-on-click="toggleTheme()" style="margin-top:10px;display:flex;align-items:center;justify-content:space-between;background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;cursor:pointer;transition:.2s">
       <span id="themeLabel" style="font-size:12px;color:var(--muted)">☀️ Mode Clair</span>
       <div id="themePill" style="width:34px;height:19px;background:var(--line);border-radius:10px;position:relative;transition:.3s;flex-shrink:0">
         <div id="themeDot" style="position:absolute;top:3px;left:3px;width:13px;height:13px;background:#fff;border-radius:50%;transition:.3s"></div>
       </div>
     </div>
-    <div style="margin-top:8px;font-size:11px;cursor:pointer;color:var(--red)" data-on-click="logout()">
-      <i class="bi bi-box-arrow-left"></i> <span data-i18n="logout">Déconnexion</span>
+    <div class="side-logout" data-on-click="logout()">
+      <i data-lucide="log-out"></i> <span data-i18n="logout">Déconnexion</span>
     </div>
   </div>
 </div>
@@ -129,9 +135,9 @@
   <div class="topbar">
     <div style="display:flex;align-items:center;gap:12px">
       <button class="btn-primary btn-sm" id="menuToggle" data-on-click="toggleSidebar()" style="display:none" title="فتح القائمة">
-        <i class="bi bi-list"></i> القائمة
+        <i data-lucide="menu"></i> <span data-i18n="menu">القائمة</span>
       </button>
-      <div class="topbar-title" id="pageTitle">Tableau de bord</div>
+      <div class="topbar-title" id="pageTitle" data-i18n="nav_dashboard">الرئيسية</div>
     </div>
     <div class="topbar-right">
       <button class="lang-btn" data-on-click="setLang('FR')" id="langFR">FR</button>
@@ -145,53 +151,92 @@
   <div id="planAlerts" style="display:none"></div>
 
   <div id="sec_dashboard" class="section active">
-    <div class="row g-3 mb-4" id="dashCards">
-      <div class="col-6 col-md-3"><div class="stat-card"><div class="d-flex justify-content-between align-items-start"><div><div class="stat-lbl" data-i18n="total_orders">Total Commandes</div><div class="stat-num" id="d_total">—</div></div><i class="bi bi-bag stat-icon" style="color:var(--accent)"></i></div></div></div>
-      <div class="col-6 col-md-3"><div class="stat-card"><div class="d-flex justify-content-between align-items-start"><div><div class="stat-lbl" data-i18n="confirmed">Confirmées</div><div class="stat-num" id="d_conf">—</div></div><i class="bi bi-check-circle stat-icon" style="color:var(--green)"></i></div></div></div>
-      <div class="col-6 col-md-3"><div class="stat-card"><div class="d-flex justify-content-between align-items-start"><div><div class="stat-lbl" data-i18n="refused">Refusées</div><div class="stat-num" id="d_ref">—</div></div><i class="bi bi-x-circle stat-icon" style="color:var(--red)"></i></div></div></div>
-      <div class="col-6 col-md-3"><div class="stat-card"><div class="d-flex justify-content-between align-items-start"><div><div class="stat-lbl" data-i18n="total_profit">Bénéfice Total</div><div class="stat-num" id="d_profit">—</div></div><i class="bi bi-cash-coin stat-icon" style="color:var(--yellow)"></i></div></div></div>
+    <div class="dash-head">
+      <div>
+        <h1 class="dash-hello" id="dashHello"></h1>
+        <p class="dash-sub" data-i18n="dash_summary">هذا ملخص متجرك</p>
+      </div>
+      <button class="btn-primary" data-on-click="openModal('addOrderModal')"><i data-lucide="plus"></i> <span data-i18n="new_order">طلبية جديدة</span></button>
+    </div>
+    <div class="kpi-grid" id="dashCards">
+      <div class="kpi kpi-brand">
+        <span class="kpi-lbl" data-i18n="total_orders">إجمالي الطلبات</span>
+        <span class="kpi-num" id="d_total">—</span>
+        <span class="kpi-pill" id="d_total_sub" hidden></span>
+      </div>
+      <div class="kpi">
+        <span class="kpi-lbl" data-i18n="confirmed">المؤكدة</span>
+        <span class="kpi-num" id="d_conf">—</span>
+        <span class="kpi-sub" id="d_conf_sub"></span>
+      </div>
+      <div class="kpi">
+        <span class="kpi-lbl" data-i18n="refused">المرفوضة</span>
+        <span class="kpi-num kpi-num-flash" id="d_ref">—</span>
+        <span class="kpi-sub" id="d_ref_sub"></span>
+      </div>
+      <div class="kpi kpi-volt">
+        <span class="kpi-lbl" data-i18n="total_profit">إجمالي الأرباح</span>
+        <span class="kpi-num" id="d_profit">—</span>
+        <span class="kpi-sub" id="d_profit_sub"></span>
+      </div>
     </div>
 
-    <div class="row g-3 mb-4">
-      <div class="col-md-4">
-        <div class="chart-card">
-          <h5 data-i18n="chart_status">📊 توزيع حالة الطلبات</h5>
-          <div class="chart-canvas-wrap"><canvas id="chartStatus"></canvas></div>
-          <div class="chart-caption" id="chartStatusCaption">—</div>
+    <div class="dash-row">
+      <section class="dash-card dash-main">
+        <div class="dash-card-head">
+          <h2><i data-lucide="chart-line"></i> <span data-i18n="chart_trend">الأرباح خلال 7 أيام</span></h2>
+          <span class="dash-card-meta" id="chartTrendCaption">—</span>
         </div>
-      </div>
-      <div class="col-md-4">
-        <div class="chart-card">
-          <h5 data-i18n="chart_trend">📈 الأرباح خلال 7 أيام</h5>
-          <div class="chart-canvas-wrap"><canvas id="chartTrend"></canvas></div>
-          <div class="chart-caption" id="chartTrendCaption">—</div>
+        <div class="chart-canvas-wrap"><canvas id="chartTrend"></canvas></div>
+      </section>
+      <section class="dash-card dash-side">
+        <div class="dash-card-head"><h2><i data-lucide="chart-pie"></i> <span data-i18n="chart_status">حالة الطلبات</span></h2></div>
+        <div class="status-bar" id="statusBar" role="img"></div>
+        <ul class="status-legend" id="statusLegend"></ul>
+      </section>
+    </div>
+
+    <div class="dash-row">
+      <section class="dash-card dash-main" id="recentOrdersCard">
+        <div class="dash-card-head">
+          <h2><i data-lucide="clipboard-list"></i> <span data-i18n="recent_orders">آخر الطلبيات</span></h2>
+          <button type="button" class="dash-link" data-on-click="showSection('orders')"><span data-i18n="all_orders">كل الطلبيات</span></button>
         </div>
-      </div>
-      <div class="col-md-4">
-        <div class="chart-card">
-          <h5 data-i18n="chart_topproducts">🏆 أفضل المنتجات مبيعاً</h5>
-          <div class="chart-canvas-wrap"><canvas id="chartProducts"></canvas></div>
-          <div class="chart-caption" id="chartProductsCaption">—</div>
+        <div class="dash-table-wrap">
+          <table class="dash-table">
+            <thead><tr>
+              <th data-i18n="order_col">الطلبية</th><th data-i18n="client">العميل</th><th data-i18n="product">المنتج</th>
+              <th data-i18n="city">المدينة</th><th data-i18n="total">المجموع</th><th data-i18n="status">الحالة</th>
+            </tr></thead>
+            <tbody id="recentOrdersTbl"></tbody>
+          </table>
         </div>
+      </section>
+      <div class="dash-col">
+        <section class="dash-card" id="botCard">
+          <div class="dash-card-head"><h2><i data-lucide="bot"></i> <span data-i18n="bot_card_title">بوت المحادثة</span></h2></div>
+          <ul class="channel-list" id="channelList"></ul>
+          <div class="bot-usage" id="botUsage" hidden>
+            <div class="bot-usage-text" id="botUsageText"></div>
+            <div class="usage-track"><div class="usage-fill" id="botUsageFill"></div></div>
+          </div>
+        </section>
+        <section class="dash-card">
+          <div class="dash-card-head"><h2><i data-lucide="trophy"></i> <span data-i18n="chart_topproducts">الأكثر مبيعًا</span></h2></div>
+          <ul class="top-list" id="topProductsTbl"></ul>
+        </section>
       </div>
     </div>
 
-    <div class="row g-3">
-      <div class="col-md-6">
-        <div class="table-wrap">
-          <div class="table-head"><h5 data-i18n="top_products">Top Produits</h5></div>
-          <table><thead><tr><th data-i18n="product">Produit</th><th data-i18n="sold">Vendu</th></tr></thead>
-          <tbody id="topProductsTbl"></tbody></table>
-        </div>
+    <section class="dash-card" id="lowStockCard">
+      <div class="dash-card-head"><h2><i data-lucide="triangle-alert"></i> <span data-i18n="low_stock">مخزون منخفض</span></h2></div>
+      <div class="dash-table-wrap">
+        <table class="dash-table dash-table-sm">
+          <thead><tr><th data-i18n="product">المنتج</th><th data-i18n="remaining">المتبقي</th><th data-i18n="stock_status">حالة المخزون</th></tr></thead>
+          <tbody id="lowStockTbl"></tbody>
+        </table>
       </div>
-      <div class="col-md-6">
-        <div class="table-wrap">
-          <div class="table-head"><h5 data-i18n="low_stock">Stock Faible</h5></div>
-          <table><thead><tr><th data-i18n="product">Produit</th><th>Reste</th><th>Stat</th></tr></thead>
-          <tbody id="lowStockTbl"></tbody></table>
-        </div>
-      </div>
-    </div>
+    </section>
   </div>
 
   <div id="sec_orders" class="section">
@@ -199,11 +244,11 @@
       <div class="table-head">
         <h5 data-i18n="nav_orders">Commandes</h5>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <input class="search-input" id="orderSearch" placeholder="🔍 Rechercher..." data-on-input="filterOrders()"/>
+          <input class="search-input" id="orderSearch" data-i18n-placeholder="search" placeholder="بحث..." data-on-input="filterOrders()"/>
           <select class="form-select" style="width:140px" id="statusFilter" data-on-change="filterOrders()">
-            <option value="">Tous</option>
-            <option>Pending</option><option>Confirmed</option>
-            <option>Delivered</option><option>Refused</option><option>No Answer</option>
+            <option value="" data-i18n="st_all">Tous</option>
+            <option value="Pending" data-i18n="st_pending">Pending</option><option value="Confirmed" data-i18n="st_confirmed">Confirmed</option>
+            <option value="Delivered" data-i18n="st_delivered">Delivered</option><option value="Refused" data-i18n="st_refused">Refused</option><option value="No Answer" data-i18n="st_no_answer">No Answer</option>
           </select>
           <button class="btn-outline btn-sm" id="exportOrdersBtn" style="display:none" data-on-click="exportOrders()">
             <i class="bi bi-file-earmark-spreadsheet"></i> <span data-i18n="export_excel">Excel</span>
@@ -229,7 +274,7 @@
         </table>
       </div>
       <div id="ordersMoreWrap" style="display:none;text-align:center;padding:12px">
-        <button class="btn-outline btn-sm" data-on-click="loadOlderOrders()">⬇️ تحميل الطلبات الأقدم / Charger plus</button>
+        <button class="btn-outline btn-sm" data-on-click="loadOlderOrders()">⬇️ <span data-i18n="load_older">تحميل الطلبات الأقدم</span></button>
       </div>
     </div>
   </div>
@@ -245,9 +290,9 @@
       <div style="overflow-x:auto">
         <table>
           <thead><tr>
-            <th data-i18n="product">Produit</th><th>Catégorie</th><th>Taille</th>
-            <th>Couleurs</th><th>Coût</th><th>Prix</th>
-            <th>Init</th><th>Vendu</th><th>Dispo</th><th>Stat</th><th></th>
+            <th data-i18n="product">Produit</th><th data-i18n="category">Catégorie</th><th data-i18n="size">Taille</th>
+            <th data-i18n="colors">Couleurs</th><th data-i18n="cost">Coût</th><th data-i18n="price">Prix</th>
+            <th data-i18n="stock_init">Init</th><th data-i18n="sold">Vendu</th><th data-i18n="available">Dispo</th><th data-i18n="stock_status">Stat</th><th></th>
           </tr></thead>
           <tbody id="productsTbl"></tbody>
         </table>
@@ -259,14 +304,14 @@
     <div class="table-wrap">
       <div class="table-head">
         <h5 data-i18n="nav_customers">Clients</h5>
-        <input class="search-input" id="custSearch" placeholder="🔍 Rechercher..." data-on-input="filterCustomers()"/>
+        <input class="search-input" id="custSearch" data-i18n-placeholder="search" placeholder="بحث..." data-on-input="filterCustomers()"/>
       </div>
       <table>
         <thead><tr>
           <th data-i18n="client">Client</th><th data-i18n="phone">Téléphone</th>
-          <th data-i18n="city">Ville</th><th>Total</th>
+          <th data-i18n="city">Ville</th><th data-i18n="total">Total</th>
           <th data-i18n="confirmed">Conf.</th><th data-i18n="delivered">Livré</th>
-          <th data-i18n="refused">Refusé</th><th>Type</th>
+          <th data-i18n="refused">Refusé</th><th data-i18n="customer_type">Type</th>
         </tr></thead>
         <tbody id="customersTbl"></tbody>
       </table>
@@ -301,16 +346,16 @@
     <div id="storeContent">
       <div style="background:var(--card);border:1px solid rgba(37,99,235,.4);border-radius:12px;padding:14px 16px;margin-bottom:18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <i class="bi bi-link-45deg" style="color:var(--accent);font-size:20px;flex-shrink:0"></i>
-        <input id="storeLinkInput" readonly style="flex:1;min-width:200px;background:var(--card2);border:1px solid var(--border);color:var(--accent);border-radius:8px;padding:8px 12px;font-size:13px;font-weight:600;cursor:pointer" data-on-click="this.select();document.execCommand('copy');toast('✅ Lien copié!','ok')"/>
-        <button class="btn-primary btn-sm" data-on-click="document.getElementById('storeLinkInput').select();document.execCommand('copy');toast('✅ Lien copié!','ok')">
-          <i class="bi bi-clipboard"></i> Copier
+        <input id="storeLinkInput" readonly style="flex:1;min-width:200px;background:var(--card2);border:1px solid var(--border);color:var(--accent);border-radius:8px;padding:8px 12px;font-size:13px;font-weight:600;cursor:pointer" data-on-click="this.select();document.execCommand('copy');toast('✅ '+t('link_copied'),'ok')"/>
+        <button class="btn-primary btn-sm" data-on-click="document.getElementById('storeLinkInput').select();document.execCommand('copy');toast('✅ '+t('link_copied'),'ok')">
+          <i class="bi bi-clipboard"></i> <span data-i18n="copy">Copier</span>
         </button>
         <button class="btn-outline btn-sm" data-on-click="window.open(document.getElementById('storeLinkInput').value,'_blank')">
-          <i class="bi bi-box-arrow-up-right"></i> Ouvrir
+          <i class="bi bi-box-arrow-up-right"></i> <span data-i18n="open">Ouvrir</span>
         </button>
       </div>
       <div class="topbar" style="margin-bottom:16px">
-        <h4 id="storeTitle">Ma Boutique</h4>
+        <h4 id="storeTitle" data-i18n="my_store">Ma Boutique</h4>
         <button class="btn-primary btn-sm" data-on-click="openModal('storeSettingsModal')">
           <i class="bi bi-gear"></i> <span data-i18n="settings">Paramètres</span>
         </button>
@@ -330,7 +375,7 @@
     </div>
     <div id="landingContent">
       <div class="topbar" style="margin-bottom:16px">
-        <h4 data-i18n="landing_title">🎯 Pages de destination</h4>
+        <h4><i data-lucide="target"></i> <span data-i18n="landing_title">Pages de destination</span></h4>
         <button class="btn-primary btn-sm" data-on-click="openModal('createLandingModal')">
           <i class="bi bi-plus-lg"></i> <span data-i18n="create_landing">Créer une page</span>
         </button>
@@ -346,7 +391,7 @@
   <div id="sec_bot" class="section">
     <div id="botComingSoon" class="plan-gate" style="display:none">
       <i class="bi bi-rocket-takeoff"></i>
-      <h5 data-i18n="bot_coming_soon_title">🚀 البوت قريباً</h5>
+      <h5><i data-lucide="rocket"></i> <span data-i18n="bot_coming_soon_title">البوت قريباً</span></h5>
       <p data-i18n="bot_coming_soon_desc">نعمل دروك على تفعيل المساعد الذكي رسمياً (بانتظار موافقة Meta على إنستغرام). راح نخبرك أول واحد وقت يطلع!</p>
     </div>
     <div id="botLocked" class="plan-gate" style="display:none">
@@ -359,23 +404,23 @@
     </div>
     <div id="botContent">
       <div class="table-wrap" style="padding:20px;margin-bottom:20px;border-color:rgba(37,99,235,.4)">
-        <h5 style="margin-bottom:14px">🔗 Connecter Facebook & Instagram</h5>
-        <div id="fbConnectStatus" style="font-size:13px;color:var(--muted);margin-bottom:14px">⏳ Vérification...</div>
+        <h5 style="margin-bottom:14px"><i data-lucide="link"></i> <span data-i18n="fb_ig_title">Connecter Facebook &amp; Instagram</span></h5>
+        <div id="fbConnectStatus" style="font-size:13px;color:var(--muted);margin-bottom:14px">⏳ <span data-i18n="checking">جاري التحقق...</span></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <button data-on-click="connectFacebook()" style="background:linear-gradient(135deg,#1877f2,#0d5bbf);color:#fff;border:none;border-radius:8px;padding:9px 18px;font-weight:700;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:7px">
             <svg style="width:16px;height:16px;fill:white" viewBox="0 0 24 24"><path d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.41c0-3.025 1.792-4.697 4.533-4.697 1.312 0 2.686.236 2.686.236v2.971h-1.513c-1.491 0-1.956.93-1.956 1.883v2.27h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z"/></svg>
-            Connecter FB & Instagram
+            <span data-i18n="fb_ig_btn">Connecter FB &amp; Instagram</span>
           </button>
-          <button data-on-click="checkFbStatus()" class="btn-outline btn-sm">🔄 Actualiser</button>
-          <button data-on-click="disconnectFacebook()" style="background:rgba(239,68,68,.1);color:var(--red);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">🔌 Déconnecter</button>
+          <button data-on-click="checkFbStatus()" class="btn-outline btn-sm">🔄 <span data-i18n="refresh">Actualiser</span></button>
+          <button data-on-click="disconnectFacebook()" style="background:rgba(239,68,68,.1);color:var(--red);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">🔌 <span data-i18n="disconnect">قطع الاتصال</span></button>
         </div>
         <div id="fbPagesList" style="display:none;margin-top:14px">
-          <div style="font-size:11px;color:var(--muted);margin-bottom:8px;font-weight:700;text-transform:uppercase;letter-spacing:.5px">Pages connectées</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:8px;font-weight:700;text-transform:uppercase;letter-spacing:.5px" data-i18n="connected_pages">Pages connectées</div>
           <div id="fbPagesContent"></div>
         </div>
         <div style="margin-top:14px;padding:12px;background:var(--card2);border-radius:8px;font-size:12px;color:var(--muted)">
           <strong style="color:var(--text)">Webhook URL:</strong>
-          <code data-on-click="this.parentElement.querySelector('span').select?.();navigator.clipboard?.writeText(this.textContent);toast('✅ Copié!','ok')" style="color:var(--accent);cursor:pointer;margin-left:8px">https://orderconfidence.com/webhook</code>
+          <code data-on-click="this.parentElement.querySelector('span').select?.();navigator.clipboard?.writeText(this.textContent);toast('✅ '+t('copied'),'ok')" style="color:var(--accent);cursor:pointer;margin-left:8px">https://orderconfidence.com/webhook</code>
         </div>
       </div>
 
@@ -383,22 +428,22 @@
         <div class="col-md-6">
           <div class="table-wrap" style="padding:20px">
             <h5 style="margin-bottom:16px" data-i18n="bot_settings">Paramètres Bot</h5>
-            <div class="form-group"><label>Gemini API Key</label>
+            <div class="form-group"><label data-i18n="gemini_key">Gemini API Key</label>
               <input id="b_gemini" class="form-control" type="password" placeholder="AIza..."/></div>
             <div class="form-group"><label data-i18n="instructions">Instructions</label>
-              <textarea id="b_inst" class="form-control" rows="4" placeholder="Comportement du bot..."></textarea></div>
-            <div class="form-group"><label>WhatsApp Token</label>
+              <textarea id="b_inst" class="form-control" rows="4" data-i18n-placeholder="bot_inst_ph" placeholder="Comportement du bot..."></textarea></div>
+            <div class="form-group"><label data-i18n="wa_token">WhatsApp Token</label>
               <input id="b_watoken" class="form-control" type="password"/></div>
-            <div class="form-group"><label>Phone Number ID</label>
+            <div class="form-group"><label data-i18n="wa_phone_id">Phone Number ID</label>
               <input id="b_phone_id" class="form-control"/></div>
-            <div class="form-group"><label>FB Access Token</label>
+            <div class="form-group"><label data-i18n="fb_token">FB Access Token</label>
               <input id="b_fbtoken" class="form-control" type="password"/></div>
-            <div class="form-group"><label>FB Page ID</label>
+            <div class="form-group"><label data-i18n="fb_page_id">FB Page ID</label>
               <input id="b_fbpage" class="form-control"/></div>
-            <div class="form-group"><label>📷 Instagram Access Token</label>
-              <input id="b_igtoken" class="form-control" type="password" placeholder="نفس FB Token عادة"/></div>
-            <div class="form-group"><label>📷 Instagram Page ID</label>
-              <input id="b_igpage" class="form-control" placeholder="معرف حساب انستغرام"/></div>
+            <div class="form-group"><label data-i18n="ig_token">Instagram Access Token</label>
+              <input id="b_igtoken" class="form-control" type="password" data-i18n-placeholder="ig_token_ph" placeholder="نفس FB Token عادة"/></div>
+            <div class="form-group"><label data-i18n="ig_page_id">Instagram Page ID</label>
+              <input id="b_igpage" class="form-control" data-i18n-placeholder="ig_page_ph" placeholder="معرف حساب انستغرام"/></div>
             <button class="btn-primary" data-on-click="saveBotSettings()">
               <span data-i18n="save">Enregistrer</span>
             </button>
@@ -421,7 +466,7 @@
   <div id="sec_messages" class="section">
     <div id="messagesComingSoon" class="plan-gate" style="display:none">
       <i class="bi bi-chat-dots"></i>
-      <h5 data-i18n="bot_coming_soon_title">🚀 قريباً</h5>
+      <h5><i data-lucide="rocket"></i> <span data-i18n="bot_coming_soon_title">قريباً</span></h5>
       <p data-i18n="bot_coming_soon_desc">نعمل دروك على تفعيل المساعد الذكي رسمياً (بانتظار موافقة Meta على إنستغرام). راح نخبرك أول واحد وقت يطلع!</p>
     </div>
     <div id="messagesLocked" class="plan-gate" style="display:none">
@@ -473,7 +518,7 @@
     </div>
     <div id="integrationsContent">
       <div class="table-wrap" style="padding:20px;max-width:600px">
-        <h5 style="margin-bottom:14px">🛒 WooCommerce</h5>
+        <h5 style="margin-bottom:14px"><i data-lucide="shopping-cart"></i> WooCommerce</h5>
         <div id="wooDisconnected">
           <p style="font-size:13px;color:var(--muted);margin-bottom:16px" data-i18n="woo_desc">
             اربط متجر WooCommerce تبعك، وOrderFlow يسحب طلباته تلقائياً.
@@ -627,7 +672,7 @@
           <h5 style="margin-bottom:16px" data-i18n="account">Compte</h5>
           <div class="form-group"><label data-i18n="username">Nom d'utilisateur</label>
             <input id="s_user" class="form-control" readonly/></div>
-          <div class="form-group"><label>User ID</label>
+          <div class="form-group"><label data-i18n="user_id">User ID</label>
             <input id="s_uid" class="form-control" readonly/></div>
           <div class="form-group"><label data-i18n="plan">Plan</label>
             <input id="s_plan" class="form-control" readonly/></div>
@@ -641,7 +686,7 @@
             <i class="bi bi-facebook"></i> <span data-i18n="connect_fb">Connecter Facebook</span>
           </button>
           <button class="btn-danger" style="margin-left:8px" data-on-click="disconnectFacebook()">
-            <span data-i18n="disconnect">Déconnecter</span>
+            <span data-i18n="disconnect">قطع الاتصال</span>
           </button>
         </div>
       </div>
@@ -683,18 +728,18 @@
     <h4 data-i18n="add_product">Ajouter un produit</h4>
     <div class="row g-2">
       <div class="col-12"><div class="form-group"><label data-i18n="product">Nom du produit</label><input id="p_name" class="form-control"/></div></div>
-      <div class="col-6"><div class="form-group"><label>Catégorie</label><input id="p_cat" class="form-control"/></div></div>
-      <div class="col-6"><div class="form-group"><label>Taille</label><input id="p_size" class="form-control"/></div></div>
-      <div class="col-12"><div class="form-group"><label>Couleurs</label><input id="p_colors" class="form-control"/></div></div>
-      <div class="col-4"><div class="form-group"><label>Coût</label><input id="p_cost" class="form-control" type="number" value="0"/></div></div>
-      <div class="col-4"><div class="form-group"><label>Prix vente</label><input id="p_sell" class="form-control" type="number" value="0"/></div></div>
-      <div class="col-4"><div class="form-group"><label>Stock init</label><input id="p_init" class="form-control" type="number" value="0"/></div></div>
-      <div class="col-12"><div class="form-group"><label>الصور (حتى 4) / Images</label>
+      <div class="col-6"><div class="form-group"><label data-i18n="category">Catégorie</label><input id="p_cat" class="form-control"/></div></div>
+      <div class="col-6"><div class="form-group"><label data-i18n="size">Taille</label><input id="p_size" class="form-control"/></div></div>
+      <div class="col-12"><div class="form-group"><label data-i18n="colors">Couleurs</label><input id="p_colors" class="form-control"/></div></div>
+      <div class="col-4"><div class="form-group"><label data-i18n="cost">Coût</label><input id="p_cost" class="form-control" type="number" value="0"/></div></div>
+      <div class="col-4"><div class="form-group"><label data-i18n="sell_price">Prix vente</label><input id="p_sell" class="form-control" type="number" value="0"/></div></div>
+      <div class="col-4"><div class="form-group"><label data-i18n="stock_init">Stock init</label><input id="p_init" class="form-control" type="number" value="0"/></div></div>
+      <div class="col-12"><div class="form-group"><label data-i18n="product_images">الصور (حتى 4)</label>
         <input type="file" accept="image/*" multiple class="form-control" data-on-change="addProductImages(this)"/>
         <div id="p_img_upload_status" style="font-size:12px;margin-top:6px"></div>
         <div id="p_img_thumbs" class="thumb-row"></div>
       </div></div>
-      <div class="col-12"><div class="form-group"><label>Description</label><textarea id="p_desc" class="form-control" rows="2"></textarea></div></div>
+      <div class="col-12"><div class="form-group"><label data-i18n="description">Description</label><textarea id="p_desc" class="form-control" rows="2"></textarea></div></div>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
       <button class="btn-outline" data-on-click="closeModal('addProductModal')"><span data-i18n="cancel">Annuler</span></button>
@@ -728,18 +773,18 @@
   <div class="modal-box">
     <button class="modal-close" data-on-click="closeModal('storeSettingsModal')">✕</button>
     <h4 data-i18n="store_settings">Paramètres boutique</h4>
-    <div class="form-group"><label>Nom boutique</label><input id="ss_name" class="form-control"/></div>
-    <div class="form-group"><label>Slogan</label><input id="ss_tagline" class="form-control"/></div>
-    <div class="form-group"><label>Logo (emoji)</label><input id="ss_logo" class="form-control" value="🛒"/></div>
-    <div class="form-group"><label>صورة اللوغو (اختياري — تُستعمل بدل الإيموجي إذا رُفعت)</label>
+    <div class="form-group"><label data-i18n="store_name">Nom boutique</label><input id="ss_name" class="form-control"/></div>
+    <div class="form-group"><label data-i18n="slogan">Slogan</label><input id="ss_tagline" class="form-control"/></div>
+    <div class="form-group"><label data-i18n="logo_emoji">Logo (emoji)</label><input id="ss_logo" class="form-control" value="🛒"/></div>
+    <div class="form-group"><label data-i18n="logo_image">صورة اللوغو (اختياري — تُستعمل بدل الإيموجي إذا رُفعت)</label>
       <input type="file" accept="image/*" class="form-control" data-on-change="uploadStoreLogoImage(this)"/>
       <div id="ss_logo_preview" style="margin-top:8px"></div>
     </div>
-    <div class="form-group"><label>العملة / Devise</label>
+    <div class="form-group"><label data-i18n="currency">العملة</label>
       <select id="ss_currency" class="form-select">
-        <option value="DZD">دج — Dinar Algérien (DZD)</option>
-        <option value="EUR">€ — Euro (EUR)</option>
-        <option value="USD">$ — Dollar (USD)</option>
+        <option value="DZD" data-i18n="cur_dzd">دج — Dinar Algérien (DZD)</option>
+        <option value="EUR" data-i18n="cur_eur">€ — Euro (EUR)</option>
+        <option value="USD" data-i18n="cur_usd">$ — Dollar (USD)</option>
       </select>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
