@@ -74,6 +74,20 @@ def test_desktop_keeps_the_horizontal_scrollbar_in_view():
     assert head["position"] == "sticky" and head["top"] == "0"
 
 
+def test_actions_column_stays_visible():
+    """عمود الأزرار مثبّت فآخر السطر: يسار فـ RTL، يمين فـ FR/EN (inset-inline-end)."""
+    rules = _rules(APP_CSS)
+    for sel in (".has-actions td:last-child", ".has-actions th:last-child"):
+        r = rules[sel]
+        assert r["position"] == "sticky" and r["inset-inline-end"] == "0", sel
+    assert rules[".has-actions td:last-child"]["background"] == "var(--white)"
+    html = (STATIC / "index.html").read_text(encoding="utf-8")
+    for tbody in ("ordersTbl", "productsTbl", "citiesTbl", "teamTbl"):
+        table = html[:html.index(f'id="{tbody}"')]
+        table = table[table.rindex("<table"):]
+        assert table.startswith('<table class="has-actions">'), tbody
+
+
 def test_feature_page_tables_scroll_too():
     """الكوبونات والتذاكر (features/) يرسمو <table> فـ JS داخل box."""
     for page, box in (("discounts.html", "couponsBox"), ("support.html", "ticketsBox")):
