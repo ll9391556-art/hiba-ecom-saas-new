@@ -136,3 +136,46 @@ def test_no_french_messages_left_in_dashboard_js():
         bad = [s for s in strings if any(w in s for w in _FRENCH)]
         assert bad == [], f"{f}: {bad}"
     assert not [w for w in _FRENCH if w in _index()]
+
+
+# ── 3. الشريط الجانبي ──
+def _css_rules():
+    from tests.test_design_d1 import _rules
+    return _rules(_read(STATIC / "css" / "app.css"))
+
+
+def test_sidebar_is_white_with_brand_light_active_item():
+    r = _css_rules()
+    assert r["#sidebar"]["width"] == "248px" and r["#sidebar"]["background"] == "var(--white)"
+    css = _read(STATIC / "css" / "app.css")  # _rules ما يفرّقش @media (الهاتف: 0)
+    assert "#main{margin-left:248px;" in css and "html[dir=rtl] #main{margin-left:0;margin-right:248px}" in css
+    item = r[".nav-item"]
+    assert item["min-height"] == "46px" and item["border-radius"] == "12px"
+    assert item["font-size"] == "15px" and item["font-weight"] == "600" and item["color"] == "var(--text)"
+    active = r[".nav-item.active"]
+    assert active["background"] == "var(--brand-light)" and active["color"] == "var(--brand-dark)"
+    assert r[".nav-badge"]["background"] == "var(--flash)"
+    assert r[".side-plan"]["background"] == "var(--brand-light)" and r[".side-plan"]["border-radius"] == "16px"
+
+
+def test_sidebar_markup():
+    html = _index()
+    side = html[html.index('<div id="sidebar">'):html.index('<div id="main">')]
+    assert 'src="/static/img/logo.svg" alt="" width="40" height="40"' in side
+    assert 'id="navPendingBadge" class="nav-badge" hidden' in side
+    plan = side[side.index('class="side-plan"'):]
+    assert 'data-i18n="your_plan"' in plan and 'id="planName"' in plan
+    assert 'id="managePlanLink"' in plan and """data-on-click="showSection('plans')\"""" in plan
+
+
+def test_active_nav_item_follows_the_section():
+    """showSection كانت تقرا onclick (ما بقاش من F5) → الإطار ما يتحرّكش من "الرئيسية"."""
+    js = _dashboard_js()
+    assert 'getAttribute("onclick")' not in js
+    assert """el.getAttribute("data-on-click")==="showSection('"+s+"')\"""" in js
+
+
+def test_sidebar_shows_pending_count_and_plan_name():
+    js = _dashboard_js()
+    assert 'getElementById("navPendingBadge")' in js and "badge.hidden = !n.pending" in js
+    assert 'getElementById("planName")' in js and "Plan: " not in js

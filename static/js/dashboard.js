@@ -9,9 +9,7 @@ function showSection(s){
   var sec = document.getElementById("sec_"+s);
   if(sec) sec.classList.add("active");
   document.querySelectorAll(".nav-item").forEach(function(el){
-    if(el.getAttribute("onclick") && el.getAttribute("onclick").includes("'"+s+"'")){
-      el.classList.add("active");
-    }
+    if(el.getAttribute("data-on-click")==="showSection('"+s+"')") el.classList.add("active");
   });
   var titles = {
     dashboard:t("nav_dashboard"),orders:t("nav_orders"),products:t("nav_products"),
@@ -78,8 +76,10 @@ async function loadUserPlan(){
       if(navTeamEl) navTeamEl.style.display = (currentRole==="owner" && planHas("team")) ? "flex" : "none";
       renderCurrencyButtons();
       renderPlanAlerts();
-      var pd = document.getElementById("planDisplay");
-      if(pd) pd.innerHTML = esc(t("plan"))+': <span class="plan-badge plan-'+currentPlan+'">'+currentPlan.toUpperCase()+'</span>';
+      var pn = document.getElementById("planName");
+      if(pn) pn.textContent = currentPlan.charAt(0).toUpperCase()+currentPlan.slice(1);
+      var mp = document.getElementById("managePlanLink");
+      if(mp) mp.hidden = (USER_SOURCE==="fiverr");
       document.getElementById("s_plan").value = currentPlan;
     }
   }catch(e){}
@@ -156,12 +156,23 @@ var chartProductsInstance = null;
 function chartTextColor(){ return DARK_MODE ? "#8899bb" : "#64748b"; }
 function chartGridColor(){ return DARK_MODE ? "rgba(255,255,255,.07)" : "rgba(0,0,0,.07)"; }
 
+// confirmed فـ stats فيه delivered؛ قيد الانتظار = الباقي (Pending و No Answer)
+function dashCounts(d){
+  var total = d.totalOrders||0, delivered = d.delivered||0, refused = d.refused||0;
+  var confirmedOnly = Math.max(0, (d.confirmed||0) - delivered);
+  return {total:total, delivered:delivered, confirmedOnly:confirmedOnly, refused:refused,
+          pending:Math.max(0, total - confirmedOnly - delivered - refused)};
+}
+
 async function loadDashboard(){
   try{
     var r = await apiGet("/getDashboard", {});
     if(r.status!=="ok") return;
     var d = r.data;
     var cur = curSym();
+    var n = dashCounts(d);
+    var badge = document.getElementById("navPendingBadge");
+    if(badge){ badge.textContent = n.pending>99 ? "99+" : n.pending; badge.hidden = !n.pending; }
     document.getElementById("d_total").textContent  = d.totalOrders||0;
     document.getElementById("d_conf").textContent   = (d.confirmed||0)+" ("+d.delivered+" "+t("delivered")+")";
     document.getElementById("d_ref").textContent    = d.refused||0;

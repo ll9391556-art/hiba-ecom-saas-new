@@ -150,7 +150,8 @@ var I18N = {
     fill_all:"Remplissez tous les champs",bad_credentials:"Identifiants incorrects",fill_required:"Remplissez les champs obligatoires",
     status_updated:"Statut mis à jour : {s}",order_added:"Commande ajoutée",enter_product_name:"Entrez un nom de produit",
     product_added:"Produit ajouté",confirm_delete:"Supprimer {name} ?",deleted:"Supprimé",enter_city_name:"Entrez un nom de ville",
-    city_added:"Ville ajoutée",saved:"Enregistré",link_copied:"Lien copié !",copied:"Copié !"
+    city_added:"Ville ajoutée",saved:"Enregistré",link_copied:"Lien copié !",copied:"Copié !",
+    your_plan:"Votre plan",manage_plan:"Gérer l'abonnement"
   },
   AR:{
     nav_dashboard:"الرئيسية",nav_orders:"الطلبات",nav_products:"المنتجات",
@@ -235,7 +236,8 @@ var I18N = {
     fill_all:"املأ كل الحقول",bad_credentials:"اسم المستخدم أو كلمة المرور غير صحيحة",fill_required:"املأ الحقول الإجبارية",
     status_updated:"تم تحديث الحالة: {s}",order_added:"تمت إضافة الطلبية",enter_product_name:"أدخل اسم المنتج",
     product_added:"تمت إضافة المنتج",confirm_delete:"حذف {name}؟",deleted:"تم الحذف",enter_city_name:"أدخل اسم المدينة",
-    city_added:"تمت إضافة المدينة",saved:"تم الحفظ",link_copied:"تم نسخ الرابط!",copied:"تم النسخ!"
+    city_added:"تمت إضافة المدينة",saved:"تم الحفظ",link_copied:"تم نسخ الرابط!",copied:"تم النسخ!",
+    your_plan:"باقتك",manage_plan:"إدارة الاشتراك"
   },
   EN:{
     nav_dashboard:"Dashboard",nav_orders:"Orders",nav_products:"Products",
@@ -320,7 +322,8 @@ var I18N = {
     fill_all:"Fill in all fields",bad_credentials:"Wrong username or password",fill_required:"Fill in the required fields",
     status_updated:"Status updated: {s}",order_added:"Order added",enter_product_name:"Enter a product name",
     product_added:"Product added",confirm_delete:"Delete {name}?",deleted:"Deleted",enter_city_name:"Enter a city name",
-    city_added:"City added",saved:"Saved",link_copied:"Link copied!",copied:"Copied!"
+    city_added:"City added",saved:"Saved",link_copied:"Link copied!",copied:"Copied!",
+    your_plan:"Your plan",manage_plan:"Manage subscription"
   }
 };
 
