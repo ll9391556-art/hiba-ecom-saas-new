@@ -129,3 +129,18 @@ def test_product_card_layout_under_640px():
                      r"#productsTbl \.pc-init,#productsTbl \.pc-sold\{display:none\}", block)
     assert "#productsTbl .pc-actions{position:static" in block
     assert "#productsTbl .pc-thumb{display:flex;" in block
+
+
+# ── 3. نص البوت فصفحة الاشتراكات ──
+def test_plans_bot_line_wording():
+    from tests.test_design_d3 import _i18n
+    want = {
+        "AR": ("بوت ذكي: 1500 رد في الشهر", "بوت ذكي: 5000 رد في الشهر"),
+        "FR": ("Bot intelligent : 1500 réponses par mois", "Bot intelligent : 5000 réponses par mois"),
+        "EN": ("Smart bot: 1500 replies a month", "Smart bot: 5000 replies a month"),
+    }
+    for lang, (b1500, b5000) in want.items():
+        assert _i18n(lang, "pf_bot_1500") == b1500 and _i18n(lang, "pf_bot_5000") == b5000, lang
+    html = _read(STATIC / "index.html")
+    assert 'data-i18n="pf_bot_1500">بوت ذكي: 1500 رد في الشهر<' in html
+    assert 'data-i18n="pf_bot_5000">بوت ذكي: 5000 رد في الشهر<' in html
