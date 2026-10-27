@@ -50,6 +50,7 @@ registerActions({
   "openConversation(this.dataset.sid,this.dataset.platform,this.dataset.name)": function(event){ openConversation(this.dataset.sid,this.dataset.platform,this.dataset.name); },
   "openEditMemberModal(this.closest('td').dataset.user)": function(event){ openEditMemberModal(this.closest('td').dataset.user); },
   "openOrderEdit(this.dataset.id)": function(event){ openOrderEdit(this.dataset.id); },
+  "openProductEdit(this.dataset.name)": function(event){ openProductEdit(this.dataset.name); },
   "openModal('addCityModal')": function(event){ openModal('addCityModal'); },
   "openModal('addOrderModal')": function(event){ openModal('addOrderModal'); },
   "openModal('addProductModal')": function(event){ openModal('addProductModal'); },

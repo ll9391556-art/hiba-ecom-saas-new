@@ -87,3 +87,44 @@ def test_t3_order_strings_in_three_languages():
         for lang in ("AR", "FR", "EN"):
             assert _i18n(lang, key), (lang, key)
     assert "{id}" in _i18n("AR", "confirm_delete_order")
+
+
+# ── المنتجات ─────────────────────────────────────────────
+def test_product_row_has_lucide_edit_and_delete():
+    js = _read("js", "catalog.js")
+    row = _row_template(js, "async function loadProducts(")
+    actions = row[row.index('<td class="pc-actions">'):]
+    assert actions.count('<i data-lucide="pencil"></i>') == 1 and actions.count('<i data-lucide="trash-2"></i>') == 1
+    assert actions.count('data-on-click="openProductEdit(this.dataset.name)"') == 1
+    assert actions.count('data-on-click="deleteProduct(this.dataset.name)"') == 1
+    assert actions.count("data-name=\"'+esc(p.name)+'\"") == 2
+    assert "bi bi-" not in actions
+    assert "drawIcons();" in _fn(js, "async function loadProducts(")
+    assert '"openProductEdit(this.dataset.name)": function(event){ openProductEdit(this.dataset.name); }' \
+        in _read("js", "actions.js")
+
+
+def test_product_modal_saves_an_edit_through_update_product():
+    js = _read("js", "catalog.js")
+    save = _fn(js, "async function addProduct(")
+    assert 'apiPost(EDIT_PRODUCT_NAME ? "/updateProduct" : "/addProduct", {data:data})' in save
+    # الصور تتبعث غير إذا تبدّلو (صورة قديمة بلا http ما تطيّحش التعديل)
+    assert re.search(r"if\(!EDIT_PRODUCT_NAME \|\| JSON\.stringify\(currentProductImages\)!==EDIT_PRODUCT_IMAGES0\)", save)
+    edit = _fn(js, "function openProductEdit(")
+    assert 'openModal("addProductModal")' in edit and "setProductEditMode(" in edit
+    mode = _fn(js, "function setProductEditMode(")
+    assert "p_name.readOnly" in mode and 't("edit_product")' in mode
+    # فتح "إضافة منتج" يخرج من وضع التعديل
+    assert "setProductEditMode(null)" in _fn(_read("js", "ui.js"), "function openModal(")
+
+
+def test_product_image_thumbs_are_escaped():
+    """روابط الصور جاية من السيرفر في وضع التعديل: لازم esc قبل innerHTML."""
+    thumbs = _fn(_read("js", "ui.js"), "function renderProductImageThumbs(")
+    assert "src=\"'+esc(url)+'\"" in thumbs
+
+
+def test_t3_product_strings_in_three_languages():
+    for key in ("edit_product", "product_updated"):
+        for lang in ("AR", "FR", "EN"):
+            assert _i18n(lang, key), (lang, key)
