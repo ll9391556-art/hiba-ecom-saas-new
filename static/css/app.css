@@ -92,7 +92,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}
   #ordersTbl .oc-status .status-sel{flex:1;min-width:0}
   #ordersTbl .oc-delivery .badge{display:none}
   #ordersTbl .oc-delivery .status-sel{width:100%}
-  #ordersTbl .oc-actions{position:static;box-shadow:none;background:none;grid-area:actions;display:flex;justify-content:flex-end;padding-top:10px;border-top:1px solid var(--soft)}
+  #ordersTbl .oc-actions{position:static;box-shadow:none;background:none;grid-area:actions;display:flex;justify-content:flex-end;gap:8px;padding-top:10px;border-top:1px solid var(--soft)}
   /* بطاقة المنتج: صورة، الاسم، السعر، المخزون، الحذف */
   #productsTbl tr{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px 14px;grid-template-areas:"name name" "price avail" "stat actions";border:1px solid var(--line);border-radius:20px;padding:16px;background:var(--white)}
   #productsTbl td{display:block;min-width:0;padding:0;border:0;white-space:normal;font-size:16px;overflow-wrap:anywhere}
@@ -105,7 +105,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}
   #productsTbl .pc-price{grid-area:price}
   #productsTbl .pc-avail{grid-area:avail}
   #productsTbl .pc-stat{grid-area:stat;align-self:end}
-  #productsTbl .pc-actions{position:static;box-shadow:none;background:none;grid-area:actions;display:flex;justify-content:flex-end;align-items:end}
+  #productsTbl .pc-actions{position:static;box-shadow:none;background:none;grid-area:actions;display:flex;justify-content:flex-end;align-items:end;gap:8px}
 }
 /* عمود الأزرار (آخر عمود) يبقى ظاهر: مثبّت فآخر السطر، يسار فـ RTL ويمين فـ FR/EN */
 .has-actions td:last-child,.has-actions th:last-child{position:sticky;inset-inline-end:0;z-index:1;background:var(--white);box-shadow:8px 0 10px -8px rgba(11,11,31,.18)}
@@ -146,6 +146,11 @@ tr:hover td{background:#FAFAFD}
 .btn-primary:focus-visible,.btn-volt:focus-visible,.btn-outline:focus-visible,.btn-danger:focus-visible,.btn-success:focus-visible,.lang-btn:focus-visible{outline:none;box-shadow:var(--focus-ring)}
 .btn-primary:disabled,.btn-volt:disabled,.btn-outline:disabled,.btn-danger:disabled,.btn-success:disabled{opacity:.5;cursor:not-allowed}
 .btn-sm{min-height:var(--h-btn-sm);padding:0 14px;font-size:15px;border-radius:var(--r-btn)}
+/* زر بأيقونة برك (المهمة 3): مربع 44px يتضغط بسهولة على الهاتف، والاسم فـ aria-label */
+.btn-icon{width:44px;min-width:44px;min-height:44px;padding:0;gap:0}
+.btn-icon+.btn-icon{margin-inline-start:6px}
+.oc-actions,.pc-actions{white-space:nowrap}
+.form-hint{display:block;margin-top:4px;font-size:14px;color:var(--muted)}
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(11,11,31,.4);z-index:1000;align-items:center;justify-content:center}
 .modal-overlay.show{display:flex}
 .modal-box{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:28px;width:100%;max-width:480px;position:relative;max-height:90vh;overflow-y:auto}

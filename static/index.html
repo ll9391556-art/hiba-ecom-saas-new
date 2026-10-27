@@ -735,6 +735,33 @@
   </div>
 </div>
 
+<div id="editOrderModal" class="modal-overlay">
+  <div class="modal-box">
+    <button class="modal-close" data-on-click="closeModal('editOrderModal')">✕</button>
+    <h4><span data-i18n="edit_order">تعديل الطلبية</span> <span id="e_title_id" dir="ltr"></span></h4>
+    <div class="row g-2">
+      <div class="col-6"><div class="form-group"><label for="e_name" data-i18n="client">Client</label><input id="e_name" class="form-control" maxlength="100"/></div></div>
+      <div class="col-6"><div class="form-group"><label for="e_phone" data-i18n="phone">Téléphone</label><input id="e_phone" class="form-control" type="tel" dir="ltr"/></div></div>
+      <div class="col-6"><div class="form-group"><label for="e_product" data-i18n="product">Produit</label><select id="e_product" class="form-select"></select></div></div>
+      <div class="col-6"><div class="form-group"><label for="e_qty" data-i18n="qty">Quantité</label><input id="e_qty" class="form-control" type="number" min="1" max="999"/></div></div>
+      <div class="col-6"><div class="form-group"><label for="e_city" data-i18n="city">Ville</label><select id="e_city" class="form-select"></select></div></div>
+      <div class="col-6"><div class="form-group"><label for="e_delivery" data-i18n="delivery_type">نوع التوصيل</label>
+        <select id="e_delivery" class="form-select">
+          <option value="home" data-i18n="home_delivery">🏠 للمنزل</option>
+          <option value="desk" data-i18n="desk_delivery">🏢 مكتب الاستلام</option>
+        </select>
+      </div></div>
+      <div class="col-6"><div class="form-group"><label for="e_status" data-i18n="status">Statut</label><select id="e_status" class="form-select"></select></div></div>
+      <div class="col-6"><div class="form-group"><label for="e_total" data-i18n="total">Total</label><input id="e_total" class="form-control" type="number" min="0" step="0.01" dir="ltr"/>
+        <small class="form-hint" data-i18n="total_auto_hint">خليه كيما هو باش يتحسب وحدو</small></div></div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+      <button class="btn-outline" data-on-click="closeModal('editOrderModal')"><span data-i18n="cancel">Annuler</span></button>
+      <button class="btn-primary" data-on-click="saveOrderEdit()"><span data-i18n="save">Enregistrer</span></button>
+    </div>
+  </div>
+</div>
+
 <div id="addProductModal" class="modal-overlay">
   <div class="modal-box">
     <button class="modal-close" data-on-click="closeModal('addProductModal')">✕</button>
