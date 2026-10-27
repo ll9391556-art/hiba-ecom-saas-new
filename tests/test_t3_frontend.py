@@ -128,3 +128,13 @@ def test_t3_product_strings_in_three_languages():
     for key in ("edit_product", "product_updated"):
         for lang in ("AR", "FR", "EN"):
             assert _i18n(lang, key), (lang, key)
+
+
+# ── المربع الأخضر وراء أيقونات bootstrap ─────────────────
+def test_bootstrap_icons_do_not_take_the_delivered_badge_color():
+    """.bi = شارة "تم التسليم" (خلفية volt)، وهي نفس class تاع bootstrap-icons (<i class="bi bi-…">).
+    القاعدة i.bi ترجّع الأيقونات شفافة، وقاعدة الشارة تبقى كيما هي."""
+    css = _read("css", "app.css")
+    badge = css.index(".bi{background:var(--st-delivered-bg);color:var(--st-delivered-fg)}")
+    fix = css.index("i.bi{background:none;color:inherit}")
+    assert fix > badge  # نفس الخصوصية ماشي كافية: i.bi أقوى، ومن بعد كذلك

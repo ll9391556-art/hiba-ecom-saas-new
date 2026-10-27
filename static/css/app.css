@@ -123,6 +123,8 @@ tr:hover td{background:#FAFAFD}
 .br{background:var(--st-refused-bg);color:var(--st-refused-fg)}
 .bn{background:var(--st-neutral-bg);color:var(--st-neutral-fg)}
 .bi{background:var(--st-delivered-bg);color:var(--st-delivered-fg)}
+/* أيقونات bootstrap (<i class="bi bi-…">) عندها نفس class الشارة: بلا خلفية الشارة (المربع الأخضر) */
+i.bi{background:none;color:inherit}
 .bs{background:var(--st-delivered-bg);color:var(--st-delivered-fg)}
 .form-group{margin-bottom:16px}
 .form-group label{display:block;font-size:14px;font-weight:600;color:var(--muted);margin-bottom:6px}
