@@ -17,6 +17,10 @@ _ALLOWED_ORIGINS = [o.strip() for o in os.environ.get(
 ).split(",") if o.strip()]
 
 MAX_PAYLOAD_SIZE       = 2 * 1024 * 1024
+# حد Flask العام (MAX_CONTENT_LENGTH): يشمل حتى الطلبات بلا Content-Length (chunked).
+# الرفع وحدو يفوت 2MB: صورة منتج حتى 5MB، شعار حتى 1MB (الحدود فـ routes/store.py).
+MAX_CONTENT_LENGTH     = 6 * 1024 * 1024
+UPLOAD_PATHS           = ("/api/uploadImage", "/api/uploadStoreLogo")
 MAX_HISTORY_TURNS      = 10
 LOW_STOCK_THRESHOLD    = 5
 BAD_CUSTOMER_THRESHOLD = 3

@@ -175,6 +175,8 @@ from core.config import (
     _fernet,
     _ALLOWED_ORIGINS,
     MAX_PAYLOAD_SIZE,
+    MAX_CONTENT_LENGTH,
+    UPLOAD_PATHS,
     MAX_HISTORY_TURNS,
     LOW_STOCK_THRESHOLD,
     BAD_CUSTOMER_THRESHOLD,
@@ -206,6 +208,7 @@ from core.config import (
 )
 
 app = Flask(__name__, static_folder="static")
+app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
 
 # ── ثقة بروكسي عكسي (X-Forwarded-For) ──────────────────────
 # قبل: كل مسار كان يقرأ X-Forwarded-For يدوياً مباشرة من الهيدر القادم من العميل
@@ -273,8 +276,16 @@ def security_headers(resp):
     return resp
 @app.before_request
 def limit_size():
+    # الرفع يحكمو MAX_CONTENT_LENGTH (6MB) وحدود المسار؛ باقي الطلبات تبقى 2MB
+    if request.path in UPLOAD_PATHS:
+        return
     if request.content_length and request.content_length > MAX_PAYLOAD_SIZE:
         abort(413)
+
+
+@app.errorhandler(413)
+def request_too_large(e):
+    return err_json("الطلب كبير بزاف", 413)
 
 
 # ── Blueprints: routes/ (مسارات منقولة من app.py فـ Phase 4) — قبل features/
