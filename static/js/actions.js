@@ -30,6 +30,8 @@ registerActions({
   "disconnectFacebook()": function(event){ disconnectFacebook(); },
   "disconnectWoo()": function(event){ disconnectWoo(); },
   "doLogin()": function(event){ doLogin(); },
+  "editOrderAutoTotal()": function(event){ editOrderAutoTotal(); },
+  "editOrderTotalTyped()": function(event){ editOrderTotalTyped(); },
   "document.getElementById('storeLinkInput').select();document.execCommand('copy');toast('✅ '+t('link_copied'),'ok')": function(event){ document.getElementById('storeLinkInput').select();document.execCommand('copy');toast('✅ '+t('link_copied'),'ok'); },
   "event.stopPropagation();sh_addToCart(this.dataset.name)": function(event){ event.stopPropagation();sh_addToCart(this.dataset.name); },
   "filterCustomers()": function(event){ filterCustomers(); },

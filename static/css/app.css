@@ -76,8 +76,8 @@ table{width:100%;border-collapse:collapse;font-size:13px}
   #ordersTbl td[data-label]::before{content:attr(data-label);display:block;font-size:13px;font-weight:500;color:var(--muted);margin-bottom:2px}
   #ordersTbl td[colspan]{grid-column:1/-1}
   #ordersTbl .oc-num,#ordersTbl .oc-source,#ordersTbl .oc-sent,#ordersTbl .oc-delivered{display:none}
-  #ordersTbl .oc-date{grid-area:date;display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:13px!important;color:var(--muted);padding-bottom:10px;border-bottom:1px solid var(--soft)}
-  #ordersTbl .oc-id{display:inline;font-size:16px;font-weight:700;color:var(--ink)}
+  #ordersTbl .oc-date{grid-area:date;display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:0;font-size:13px!important;color:var(--muted);padding-bottom:10px;border-bottom:1px solid var(--soft)}
+  #ordersTbl .oc-id{display:block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:16px;font-weight:700;color:var(--ink)}
   #ordersTbl .oc-name{grid-area:name}
   #ordersTbl .oc-phone{grid-area:phone}
   #ordersTbl .oc-phone a{display:inline-flex;align-items:center;min-height:44px;font-size:17px;font-weight:700}

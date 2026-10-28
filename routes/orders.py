@@ -43,7 +43,6 @@ from services.orders import (
     _delete_order,
     _mutate_order,
     _phone_digits,
-    _save_order,
     _ship_values,
     _valid_order_id,
 )
@@ -175,6 +174,51 @@ def api_get_orders():
     return jsonify(body)
 
 
+_MUTATE_TRIES = 3
+
+
+def _mutate_priced(uid, oid, apply, refs=True):
+    """updateStatus/updateOrderDelivery فـ transaction على الطلبية (المهمة 3.1). الطلبية والمنتج والولاية
+    يتقراو قبل (دالة الـ transaction لازم تكون بلا شبكة)؛ apply(new, p_data, c_data) تبدّل الطلبية.
+    إذا المنتج ولا الولاية تبدّلو فالنص (editOrder فنفس الوقت) نعاودو. يرجّع (before, after)."""
+    path = f"data/{uid}/orders/{oid}"
+    for _ in range(_MUTATE_TRIES):
+        order = _fb_get(path)
+        if not order or not isinstance(order, dict) or _claimed(order):
+            raise OrderGone()
+        product, city = order.get("product"), order.get("city")
+        # مفتاح فارغ = "products/" = كل العقدة — ما نقراوهش
+        p_data = _fb_get(f"data/{uid}/products/{product}") if refs and product else None
+        c_data = _fb_get(f"data/{uid}/cities/{city}") if refs and city else None
+
+        def build(cur):
+            if (cur.get("product"), cur.get("city")) != (product, city):
+                raise OrderConflict()  # p_data/c_data ماعادوش تاع هاد الطلب
+            new = dict(cur)
+            apply(new, p_data, c_data)
+            return new
+
+        try:
+            return _mutate_order(uid, oid, build)
+        except OrderConflict:
+            continue
+    raise OrderConflict()
+
+
+def _mutate_response(uid, oid, apply, refs, label):
+    """None كي نجح، وإلا رد الخطأ (نفس رسائل editOrder)."""
+    try:
+        _mutate_priced(uid, oid, apply, refs)
+    except OrderGone:
+        return err_json("Order not found", 404)
+    except OrderConflict:
+        return err_json("الطلب تبدّل فنفس الوقت — عاود حمّل الطلبات وحاول", 409)
+    except Exception as e:
+        logging.error(f"{label} failed ({type(e).__name__})")
+        return err_json("تعذّر حفظ التعديل — حاول بعد قليل", 503)
+    return None
+
+
 @bp.route("/api/updateStatus", methods=["POST"])
 @require_auth
 @require_perm("orders")
@@ -184,21 +228,22 @@ def api_update_status():
     oid    = str(body.get("orderId") or "").strip()
     status = str(body.get("status")  or "").strip()
     if not oid or not status: return err_json("Missing fields")
-    order = _fb_get(f"data/{uid}/orders/{oid}")
-    if not order: return err_json("Order not found", 404)
-    before = dict(order)
-    order["status"] = status
-    profit = 0
-    now    = time.strftime("%Y-%m-%d %H:%M")
-    delivery_type = order.get("deliveryType") or "home"
-    _apply_status_dates(order, status, now)
-    if status in ("Confirmed", "Refused", "Delivered"):
-        p_data = _fb_get(f"data/{uid}/products/{order.get('product')}")
-        c_data = _fb_get(f"data/{uid}/cities/{order.get('city')}")
+    if not _valid_order_id(oid): return err_json("Invalid order id")
+    if status not in _ORDER_STATUSES: return err_json("الحالة غير صالحة")  # BUG-005
+    now = time.strftime("%Y-%m-%d %H:%M")
+
+    def apply(order, p_data, c_data):
+        order["status"] = status
+        profit = 0
+        delivery_type = order.get("deliveryType") or "home"
+        _apply_status_dates(order, status, now)
         if p_data and c_data:
             profit = _calc_order_profit(p_data, c_data, order.get("qty", 1), delivery_type, status, order.get("profit", 0))
-    order["profit"] = profit
-    _save_order(uid, oid, order, before=before)
+        order["profit"] = profit
+
+    error = _mutate_response(uid, oid, apply, status in ("Confirmed", "Refused", "Delivered"), "updateStatus")
+    if error:
+        return error
     log_audit_entry(uid, request.auth_member_username or "owner",
                      "تغيير حالة طلب", f"الطلب {oid} → {status}")
     return ok_json(True)
@@ -214,18 +259,17 @@ def api_update_order_delivery():
     dtype = str(body.get("deliveryType") or "").strip()
     if not oid or dtype not in ("home", "desk"):
         return err_json("Missing or invalid fields")
-    order = _fb_get(f"data/{uid}/orders/{oid}")
-    if not order: return err_json("Order not found", 404)
-    before = dict(order)
-    order["deliveryType"] = dtype
-    p_data = _fb_get(f"data/{uid}/products/{order.get('product')}")
-    c_data = _fb_get(f"data/{uid}/cities/{order.get('city')}")
-    if p_data and c_data:
-        ship_cust, _ = _ship_values(c_data, dtype)
-        order["total"]  = (float(p_data.get("sell", 0)) * int(order.get("qty", 1))) + ship_cust
-        order["profit"] = _calc_order_profit(p_data, c_data, order.get("qty", 1), dtype, order.get("status",""), order.get("profit", 0))
-    _save_order(uid, oid, order, before=before)
-    return ok_json(True)
+    if not _valid_order_id(oid): return err_json("Invalid order id")
+
+    def apply(order, p_data, c_data):
+        order["deliveryType"] = dtype
+        if p_data and c_data:
+            ship_cust, _ = _ship_values(c_data, dtype)
+            order["total"]  = (float(p_data.get("sell", 0)) * int(order.get("qty", 1))) + ship_cust
+            order["profit"] = _calc_order_profit(p_data, c_data, order.get("qty", 1), dtype, order.get("status",""), order.get("profit", 0))
+
+    error = _mutate_response(uid, oid, apply, True, "updateOrderDelivery")
+    return error if error else ok_json(True)
 
 
 # ── تعديل طلب (المهمة 3) ──────────────────────────────────

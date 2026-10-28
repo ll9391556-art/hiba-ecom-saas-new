@@ -75,6 +75,30 @@ def test_edit_order_modal_and_save():
         assert f'"{key}": function(event){{ {key}; }}' in actions, key
 
 
+def test_edit_order_total_follows_pricing_fields_live():
+    """المهمة 3.1: كي تتبدّل الكمية/المنتج/الولاية/التوصيل (والحالة، السيرفر يعاود يحسب كذلك)، المجموع
+    يتبدّل قدام التاجر بنفس معادلة _price_order — إلا إذا كتب مجموع بيدو."""
+    modal = _modal(_read("index.html"), "editOrderModal")
+    for fid, ev in (("e_qty", "input"), ("e_product", "change"), ("e_city", "change"),
+                    ("e_delivery", "change"), ("e_status", "change")):
+        tag = re.search(rf'<(?:input|select) id="{fid}"[^>]*>', modal).group(0)
+        assert f'data-on-{ev}="editOrderAutoTotal()"' in tag, fid
+    total = re.search(r'<input id="e_total"[^>]*>', modal).group(0)
+    assert 'data-on-input="editOrderTotalTyped()"' in total
+    js = _read("js", "orders.js")
+    auto = _fn(js, "function editOrderAutoTotal(")
+    assert "if(!o || EDIT_TOTAL_MANUAL) return;" in auto
+    for part in ("p.sell", "c.deskCust", "c.custShip", "o.discountApplied", "Math.max(0,"):
+        assert part in auto, part
+    assert "EDIT_ORDER_TOTAL0 = " in auto       # المجموع التلقائي ما يتبعثش: السيرفر يحسبو وحدو
+    assert "EDIT_TOTAL_MANUAL = true" in _fn(js, "function editOrderTotalTyped(")
+    opener = _fn(js, "async function openOrderEdit(")
+    assert "EDIT_TOTAL_MANUAL = false" in opener and "EDIT_PRICES" in opener
+    actions = _read("js", "actions.js")
+    for key in ("editOrderAutoTotal()", "editOrderTotalTyped()"):
+        assert f'"{key}": function(event){{ {key}; }}' in actions, key
+
+
 def test_edit_selects_keep_a_missing_product_or_city():
     """طلبية قديمة بمنتج ولا ولاية ماعادوش: يبقاو في القائمة باش ما يتبدّلوش بلا ما يحس التاجر."""
     fill = _fn(_read("js", "orders.js"), "function _fillSelect(")
@@ -128,6 +152,16 @@ def test_t3_product_strings_in_three_languages():
     for key in ("edit_product", "product_updated"):
         for lang in ("AR", "FR", "EN"):
             assert _i18n(lang, key), (lang, key)
+
+
+def test_mobile_card_order_id_stays_on_one_line():
+    """المهمة 3.1: رقم الطلبية الطويل (ORD-1793148469329) ما يتكسرش على سطرين: سطر واحد، والتاريخ تحتو."""
+    css = _read("css", "app.css")
+    date = re.search(r"#ordersTbl \.oc-date\{([^}]*)\}", css).group(1)
+    assert "flex-direction:column" in date and "align-items:flex-start" in date
+    oid = re.search(r"#ordersTbl \.oc-id\{([^}]*)\}", css).group(1)
+    for rule in ("white-space:nowrap", "overflow:hidden", "text-overflow:ellipsis", "max-width:100%"):
+        assert rule in oid, rule
 
 
 # ── المربع الأخضر وراء أيقونات bootstrap ─────────────────
