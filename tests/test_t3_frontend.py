@@ -154,6 +154,16 @@ def test_t3_product_strings_in_three_languages():
             assert _i18n(lang, key), (lang, key)
 
 
+def test_mobile_card_order_id_stays_on_one_line():
+    """المهمة 3.1: رقم الطلبية الطويل (ORD-1793148469329) ما يتكسرش على سطرين: سطر واحد، والتاريخ تحتو."""
+    css = _read("css", "app.css")
+    date = re.search(r"#ordersTbl \.oc-date\{([^}]*)\}", css).group(1)
+    assert "flex-direction:column" in date and "align-items:flex-start" in date
+    oid = re.search(r"#ordersTbl \.oc-id\{([^}]*)\}", css).group(1)
+    for rule in ("white-space:nowrap", "overflow:hidden", "text-overflow:ellipsis", "max-width:100%"):
+        assert rule in oid, rule
+
+
 # ── المربع الأخضر وراء أيقونات bootstrap ─────────────────
 def test_bootstrap_icons_do_not_take_the_delivered_badge_color():
     """.bi = شارة "تم التسليم" (خلفية volt)، وهي نفس class تاع bootstrap-icons (<i class="bi bi-…">).
