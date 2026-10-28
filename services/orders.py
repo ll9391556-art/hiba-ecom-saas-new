@@ -70,6 +70,86 @@ def _save_order(uid, order_id, order, before=None):
 _AGG_ORDER_FIELDS = ("status", "profit", "qty", "product", "phone", "name", "city", "createdAt")
 
 
+class OrderGone(Exception):
+    """الطلب ماكانش (ولا راه يتحذف) — 404."""
+
+
+class OrderConflict(Exception):
+    """الطلب تبدّل بين القراءة والكتابة بطريقة تخلّي الحساب غالط — 409."""
+
+
+_ORDER_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,80}")
+
+
+def _valid_order_id(order_id):
+    """بلا هذا، "ORD-1/x" يكتب عقدة متداخلة داخل data/{uid}/orders."""
+    return isinstance(order_id, str) and bool(_ORDER_ID_RE.fullmatch(order_id))
+
+
+_DELETE_CLAIM_MS = 120_000  # حجز حذف أقدم من هذا = حذف فشل فالنص، الطلب يرجع عادي
+
+
+def _claimed(order, now=None):
+    at = order.get("deleting") if isinstance(order, dict) else None
+    return isinstance(at, (int, float)) and ((now or _now_ms()) - at) < _DELETE_CLAIM_MS
+
+
+def _apply_status_dates(order, status, now):
+    if status == "Confirmed" and not order.get("date_sent"):
+        order["date_sent"] = now
+    if status == "Delivered" and not order.get("date_delivered"):
+        order["date_delivered"] = now
+
+
+def _mutate_order(uid, order_id, fn):
+    """تعديل طلب فـ transaction على عقدتو. fn(cur) ترجع الطلب الجديد، ولا None (والو ما تبدّل)،
+    ولا ترمي OrderConflict. before يتقرا داخل الـ transaction: Firebase يعاود ينادي fn كي يكون
+    تعارض، و before يتسجّل من جديد فكل محاولة، فالمجاميع تتحدّث بالفرق الحقيقي مرة وحدة.
+    يرجّع (before, after)، و after=None إذا والو ما تبدّل. أخطاء الشبكة تطلع للمنادي."""
+    seen = {}
+
+    def _txn(cur):
+        if not isinstance(cur, dict) or _claimed(cur):
+            raise OrderGone()
+        new = fn(dict(cur))
+        if new is not None:
+            new.pop("deleting", None)  # بقايا حذف فشل
+        seen["before"] = cur
+        seen["after"] = None if new is None else _with_index_fields(order_id, new)
+        return cur if new is None else seen["after"]
+
+    _firebase_ref(f"data/{uid}/orders/{order_id}").transaction(_txn)
+    if seen["after"] is not None:
+        _apply_order_change(uid, seen["before"], seen["after"])
+    return seen["before"], seen["after"]
+
+
+def _delete_order(uid, order_id, actor):
+    """حذف طلب بلا ما يتحسب مرتين. firebase-admin ما يقبلش None من دالة transaction، فالحذف
+    على مراحل: 1) حجز بـ transaction (deleting=now؛ طلب حذف ثاني فنفس الوقت يلقاه محجوز → OrderGone)،
+    2) حذف العقدة (فشل: نشيلو الحجز ونرجعو None، والمجاميع ما تتلمسش)،
+    3) tombstone فـ deletedOrders (Woo ما يعاودش يجيبو، والـ polling يعلم التبويبات الأخرى)،
+    4) المجاميع بالفرق مرة وحدة.
+    usage/orderCount و usedCount تاع الكوبون ما يرجعوش (الحذف ماشي طريقة لتجاوز السقف)."""
+    path, now, seen = f"data/{uid}/orders/{order_id}", _now_ms(), {}
+
+    def _claim(cur):
+        if not isinstance(cur, dict) or _claimed(cur, now):
+            raise OrderGone()
+        seen["before"] = {k: v for k, v in cur.items() if k != "deleting"}
+        return {**cur, "deleting": now}
+
+    _firebase_ref(path).transaction(_claim)
+    before = seen["before"]
+    if not _fb_delete(path):
+        _fb_patch(path, {"deleting": None})
+        return None
+    if not _fb_put(f"data/{uid}/deletedOrders/{order_id}", {"at": now, "by": str(actor or "")}):
+        logging.error(f"tombstone write failed for {_mask_id(order_id)} — Woo قد يعاود يجيبو")
+    _apply_order_change(uid, before, None)
+    return before
+
+
 def _patch_order(uid, order_id, patch):
     patch = dict(patch, updatedAt=_now_ms())
     if "phone" in patch:

@@ -22,6 +22,13 @@ function _mergeOrders(list, fromPage){
   return changed;
 }
 
+function _dropOrders(ids){
+  var changed = false;
+  (ids||[]).forEach(function(id){ if(ORDERS_BY_ID[id]){ delete ORDERS_BY_ID[id]; changed = true; } });
+  if(changed) _mergeOrders([], true);
+  return changed;
+}
+
 function _applyOrdersPage(r){
   var created = (r.data||[]).map(function(o){ return o.createdAt||0; });
   if(created.length) ORDERS_OLDEST = Math.min.apply(null, created.concat(ORDERS_OLDEST===null?[]:[ORDERS_OLDEST]));
@@ -65,7 +72,8 @@ async function pollOrders(){
     if(r.status!=="ok") return;
     if(r.reset){ loadOrders(); return; }
     ORDERS_CURSOR = r.cursor;
-    if(r.data && r.data.length && _mergeOrders(r.data, false)) filterOrders();
+    var dropped = r.deleted && r.deleted.length ? _dropOrders(r.deleted) : false;  // تحذفو من تبويب آخر
+    if((r.data && r.data.length && _mergeOrders(r.data, false)) || dropped) filterOrders();
   }catch(e){}
 }
 
@@ -107,9 +115,15 @@ function renderOrders(orders){
         '<span class="badge '+stCls+' me-1">'+esc(stLabel(o.status))+'</span>'+
         '<select class="status-sel" data-on-change="updateStatus(this.dataset.id,this.value)" data-id="'+safeId+'">'+opts+'</select>'+
       '</td>'+
-      '<td class="oc-actions"><button class="btn-outline btn-sm" data-id="'+safeId+'" data-on-click="printOrderSlip(this.dataset.id)" title="طباعة بون دو كوموند"><i class="bi bi-printer"></i></button></td>'+
+      '<td class="oc-actions">'+
+        '<button class="btn-outline btn-sm btn-icon" data-id="'+safeId+'" data-on-click="printOrderSlip(this.dataset.id)" title="'+esc(t("print_slip"))+'" aria-label="'+esc(t("print_slip"))+'"><i data-lucide="printer"></i></button>'+
+        '<button class="btn-outline btn-sm btn-icon" data-id="'+safeId+'" data-on-click="openOrderEdit(this.dataset.id)" title="'+esc(t("edit"))+'" aria-label="'+esc(t("edit"))+'"><i data-lucide="pencil"></i></button>'+
+        // الحذف للمالك برك (السيرفر يرفض العضو بـ 403)
+        (currentRole==="owner" ? '<button class="btn-danger btn-sm btn-icon" data-id="'+safeId+'" data-on-click="deleteOrder(this.dataset.id)" title="'+esc(t("delete"))+'" aria-label="'+esc(t("delete"))+'"><i data-lucide="trash-2"></i></button>' : '')+
+      '</td>'+
     '</tr>';
   }).join("");
+  drawIcons();
 }
 
 function filterOrders(){
@@ -150,6 +164,81 @@ async function updateOrderDelivery(orderId, newType){
       toast("✅ تم تحديث نوع التوصيل","ok");
       loadOrders(); // إعادة تحميل لضمان دقة الإجمالي والربح المُعاد حسابهما من السيرفر
     } else { toast("❌ "+r.message, "err"); }
+  }catch(e){ toast(t("network_error"),"err"); }
+}
+
+// ── تعديل وحذف طلبية (المهمة 3) ──
+var EDIT_ORDER_ID     = null;
+var EDIT_ORDER_TOTAL0 = "";   // المجموع كيما تفتح المودال: إذا ما تبدّلش، السيرفر يحسبو وحدو
+
+// القائمة + القيمة الحالية حتى لو ماعادتش (طلبية قديمة بمنتج ولا ولاية محذوفين)
+function _fillSelect(sel, names, current){
+  var list = names.slice();
+  if(current && list.indexOf(current)<0) list.unshift(current);
+  sel.innerHTML = list.map(function(n){
+    return '<option value="'+esc(n)+'"'+(n===current?" selected":"")+'>'+esc(n)+'</option>';
+  }).join("");
+}
+
+async function openOrderEdit(orderId){
+  var o = ORDERS_BY_ID[orderId];
+  if(!o){ toast(t("error"),"err"); return; }
+  EDIT_ORDER_ID = orderId;
+  document.getElementById("e_title_id").textContent = orderId;
+  document.getElementById("e_name").value     = o.name||"";
+  document.getElementById("e_phone").value    = o.phone||"";
+  document.getElementById("e_qty").value      = o.qty||1;
+  document.getElementById("e_delivery").value = o.deliveryType==="desk" ? "desk" : "home";
+  document.getElementById("e_status").innerHTML = ["Pending","Confirmed","Delivered","Refused","No Answer"].map(function(s){
+    return '<option value="'+s+'"'+(o.status===s?" selected":"")+'>'+esc(stLabel(s))+'</option>';
+  }).join("");
+  EDIT_ORDER_TOTAL0 = String(o.total===undefined||o.total===null ? "" : o.total);
+  document.getElementById("e_total").value = EDIT_ORDER_TOTAL0;
+  _fillSelect(document.getElementById("e_product"), [], o.product||"");
+  _fillSelect(document.getElementById("e_city"), [], o.city||"");
+  openModal("editOrderModal");
+  try{
+    var pr = await apiGet("/getProducts", {}), cr = await apiGet("/getCities", {});
+    if(EDIT_ORDER_ID!==orderId) return;
+    if(pr.status==="ok") _fillSelect(document.getElementById("e_product"), (pr.data||[]).map(function(p){ return p.name; }), o.product||"");
+    if(cr.status==="ok") _fillSelect(document.getElementById("e_city"), (cr.data||[]).map(function(c){ return c.name; }), o.city||"");
+  }catch(e){}
+}
+
+async function saveOrderEdit(){
+  if(!EDIT_ORDER_ID) return;
+  var data = {
+    name:         document.getElementById("e_name").value.trim(),
+    phone:        document.getElementById("e_phone").value.trim(),
+    product:      document.getElementById("e_product").value,
+    qty:          parseInt(document.getElementById("e_qty").value)||0,
+    city:         document.getElementById("e_city").value,
+    deliveryType: document.getElementById("e_delivery").value,
+    status:       document.getElementById("e_status").value,
+  };
+  var totalEl = document.getElementById("e_total");
+  if(totalEl.value!==EDIT_ORDER_TOTAL0) data.total = parseFloat(totalEl.value);
+  if(!data.name||!data.phone||!data.product||!data.city||data.qty<1){ toast(t("fill_required"),"err"); return; }
+  try{
+    var r = await apiPost("/editOrder", {orderId:EDIT_ORDER_ID, data:data});
+    if(r.status==="ok"){
+      if(r.data && r.data.id) _mergeOrders([r.data], true);
+      closeModal("editOrderModal");
+      filterOrders();
+      toast("✅ "+t("order_updated"),"ok");
+    } else { toast("❌ "+r.message,"err"); }
+  }catch(e){ toast(t("network_error"),"err"); }
+}
+
+async function deleteOrder(orderId){
+  if(!confirm(t("confirm_delete_order").replace("{id}", orderId))) return;
+  try{
+    var r = await apiPost("/deleteOrder", {orderId:orderId});
+    if(r.status==="ok"){
+      _dropOrders([orderId]);
+      filterOrders();
+      toast("✅ "+t("order_deleted"),"ok");
+    } else { toast("❌ "+r.message,"err"); }
   }catch(e){ toast(t("network_error"),"err"); }
 }
 

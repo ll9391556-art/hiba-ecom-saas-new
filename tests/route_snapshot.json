@@ -76,7 +76,15 @@
   "methods": "POST"
  },
  {
+  "rule": "/api/deleteOrder",
+  "methods": "POST"
+ },
+ {
   "rule": "/api/deleteProduct",
+  "methods": "POST"
+ },
+ {
+  "rule": "/api/editOrder",
   "methods": "POST"
  },
  {
@@ -253,6 +261,10 @@
  },
  {
   "rule": "/api/updateOrderDelivery",
+  "methods": "POST"
+ },
+ {
+  "rule": "/api/updateProduct",
   "methods": "POST"
  },
  {

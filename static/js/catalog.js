@@ -26,11 +26,46 @@ async function loadProducts(){
           '<td class="pc-sold">'+esc(p.sold||0)+'</td>'+
           '<td class="pc-avail"'+dataLabel("available")+'>'+esc(p.available||0)+'</td>'+
           '<td class="pc-stat"'+dataLabel("stock_status")+'><span class="badge '+stCls+'">'+esc(stockLabel(p.stat||"?"))+'</span></td>'+
-          '<td class="pc-actions"><button class="btn-danger" data-name="'+esc(p.name)+'" data-on-click="deleteProduct(this.dataset.name)"><i class="bi bi-trash"></i></button></td>'+
+          '<td class="pc-actions">'+
+            '<button class="btn-outline btn-sm btn-icon" data-name="'+esc(p.name)+'" data-on-click="openProductEdit(this.dataset.name)" title="'+esc(t("edit"))+'" aria-label="'+esc(t("edit"))+'"><i data-lucide="pencil"></i></button>'+
+            '<button class="btn-danger btn-sm btn-icon" data-name="'+esc(p.name)+'" data-on-click="deleteProduct(this.dataset.name)" title="'+esc(t("delete"))+'" aria-label="'+esc(t("delete"))+'"><i data-lucide="trash-2"></i></button>'+
+          '</td>'+
         '</tr>';
       }).join("") || '<tr><td colspan="11"><div class="empty-state"><i class="bi bi-box-seam"></i></div></td></tr>';
+      PRODUCTS_BY_NAME = {};
+      products.forEach(function(p){ if(p && p.name) PRODUCTS_BY_NAME[p.name] = p; });
+      drawIcons();
     }
   }catch(e){ console.error(e); }
+}
+
+// ── تعديل منتج (المهمة 3): نفس مودال الإضافة، الاسم ما يتبدّلش (هو المفتاح) ──
+var PRODUCTS_BY_NAME     = {};
+var EDIT_PRODUCT_NAME    = null;
+var EDIT_PRODUCT_IMAGES0 = "[]";
+
+function setProductEditMode(p){
+  var wasEditing = !!EDIT_PRODUCT_NAME;
+  EDIT_PRODUCT_NAME = p ? p.name : null;
+  p_name.readOnly = !!p;
+  document.querySelector("#addProductModal h4").textContent = p ? t("edit_product") : t("add_product");
+  document.querySelector("#addProductModal .btn-primary span").textContent = p ? t("save") : t("add");
+  if(!p && wasEditing){  // رجوع لـ "إضافة": بلا قيم المنتج اللي كان يتعدّل
+    [p_name,p_cat,p_size,p_colors,p_desc].forEach(function(el){ el.value = ""; });
+    [p_cost,p_sell,p_init].forEach(function(el){ el.value = "0"; });
+  }
+}
+
+function openProductEdit(name){
+  var p = PRODUCTS_BY_NAME[name];
+  if(!p){ toast(t("error"),"err"); return; }
+  openModal("addProductModal");
+  setProductEditMode(p);
+  p_name.value = p.name; p_cat.value = p.category||""; p_size.value = p.size||""; p_colors.value = p.colors||"";
+  p_cost.value = p.cost||0; p_sell.value = p.sell||0; p_init.value = p.init||0; p_desc.value = p.description||"";
+  currentProductImages = (Array.isArray(p.images) && p.images.length) ? p.images.slice() : (p.image ? [p.image] : []);
+  EDIT_PRODUCT_IMAGES0 = JSON.stringify(currentProductImages);
+  renderProductImageThumbs();
 }
 
 async function addProduct(){
@@ -38,16 +73,19 @@ async function addProduct(){
     name:p_name.value.trim(), category:p_cat.value.trim(), size:p_size.value.trim(),
     colors:p_colors.value.trim(), cost:parseFloat(p_cost.value)||0,
     sell:parseFloat(p_sell.value)||0, init:parseInt(p_init.value)||0,
-    image:currentProductImages[0]||"", images:currentProductImages.slice(),
     description:p_desc.value.trim()
   };
+  if(!EDIT_PRODUCT_NAME || JSON.stringify(currentProductImages)!==EDIT_PRODUCT_IMAGES0){
+    data.image = currentProductImages[0]||""; data.images = currentProductImages.slice();
+  }
   if(!data.name){ toast(t("enter_product_name"),"err"); return; }
-  var r = await apiPost("/addProduct", {data:data});
+  var r = await apiPost(EDIT_PRODUCT_NAME ? "/updateProduct" : "/addProduct", {data:data});
   if(r.status==="ok"){
-    toast("✅ "+t("product_added"),"ok");
+    toast("✅ "+t(EDIT_PRODUCT_NAME ? "product_updated" : "product_added"),"ok");
     currentProductImages = [];
     renderProductImageThumbs();
     closeModal("addProductModal");
+    setProductEditMode(null);
     loadProducts();
   } else { toast("❌ "+r.message,"err"); }
 }

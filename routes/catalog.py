@@ -24,6 +24,7 @@ from core.db import (
     _fb_delete,
     _fb_get,
     _fb_list,
+    _fb_patch,
     _fb_put,
 )
 from core.http import (
@@ -39,6 +40,7 @@ from core.util import (
 )
 from services.orders import (
     _get_stats,
+    _invalidate_store_cache,
     _sold_by_name,
     _stock_fields,
 )
@@ -94,6 +96,94 @@ def api_add_product():
         merged["stat"] = ("Out of Stock" if av <= 0 else "Low Stock" if av <= LOW_STOCK_THRESHOLD else "In Stock")
     _fb_put(f"data/{uid}/products/{name}", merged)
     return ok_json(True)
+
+
+# ── تعديل منتج موجود (المهمة 3) ────────────────────────────
+# بلا تبديل الاسم: هو المفتاح فـ products وفي الطلبيات وفي stats.sales. sold/available/stat
+# يتحسبو وقت القراءة (init − stats.sales)، فما يتقبلوش هنا. الطلبيات القديمة تبقى بسعرها.
+_PRODUCT_TEXT_FIELDS = {"category": 200, "size": 200, "colors": 500, "description": 5000}
+_PRODUCT_MAX_PRICE   = 10_000_000
+
+
+def _is_url(v):
+    return isinstance(v, str) and len(v) <= 2000 and (v == "" or re.match(r"https?://", v) is not None)
+
+
+def _parse_product_edit(d):
+    out = {}
+    for key, max_len in _PRODUCT_TEXT_FIELDS.items():
+        if key in d:
+            v = d[key]
+            if not isinstance(v, str) or len(v) > max_len:
+                return None, f"{key} غير صالح"
+            out[key] = v.strip()
+    for key in ("cost", "sell"):
+        if key in d:
+            v = d[key]
+            if isinstance(v, bool) or not isinstance(v, (int, float, str)):
+                return None, f"{key} غير صالح"
+            try:
+                v = float(v)
+            except ValueError:
+                return None, f"{key} غير صالح"
+            if not 0 <= v <= _PRODUCT_MAX_PRICE:
+                return None, f"{key} غير صالح"
+            out[key] = v
+    if "init" in d:
+        v = d["init"]
+        if isinstance(v, bool) or not (isinstance(v, int) or (isinstance(v, str) and v.strip().isdigit())) \
+                or not 0 <= int(v) <= 1_000_000:
+            return None, "المخزون غير صالح"
+        out["init"] = int(v)
+    if "visible" in d:
+        if d["visible"] not in ("yes", "no"):
+            return None, "visible غير صالح"
+        out["visible"] = d["visible"]
+    if "image" in d:
+        if not _is_url(d["image"]):
+            return None, "رابط الصورة غير صالح"
+        out["image"] = d["image"]
+    if "images" in d:
+        imgs = d["images"]
+        if not isinstance(imgs, list) or len(imgs) > 10 or not all(_is_url(u) and u for u in imgs):
+            return None, "الصور غير صالحة"
+        out["images"] = imgs
+    return out, None
+
+
+@bp.route("/api/updateProduct", methods=["POST"])
+@require_auth
+@require_perm("products")
+def api_update_product():
+    body = request.get_json(silent=True) or {}
+    uid  = request.auth_uid
+    d    = body.get("data") if isinstance(body.get("data"), dict) else {}
+    name = str(d.get("name") or "").strip()
+    if not name or any(c in name for c in ".$#[]/"):
+        return err_json("Missing fields")
+    fields, error = _parse_product_edit(d)
+    if error:
+        return err_json(error)
+    existing = _fb_get(f"data/{uid}/products/{name}")
+    if not isinstance(existing, dict):
+        return err_json("Product not found", 404)
+    changes = {k: v for k, v in fields.items() if existing.get(k) != v}
+    if not changes:
+        return ok_json(True)
+    if not _fb_patch(f"data/{uid}/products/{name}", changes):
+        return err_json("تعذّر حفظ المنتج — حاول بعد قليل", 503)
+    _invalidate_store_cache(uid)
+    diff = "، ".join(f"{k}: {_num(existing.get(k, '—'))} → {_num(v)}" for k, v in changes.items()
+                    if k not in ("description", "images"))
+    hidden = [k for k in changes if k in ("description", "images")]
+    log_audit_entry(uid, request.auth_member_username or "owner", "تعديل منتج",
+                    f"{name}: " + "، ".join(filter(None, [diff, *hidden])))
+    return ok_json(True)
+
+
+def _num(v):
+    """1000.0 → 1000 فالـ audit."""
+    return int(v) if isinstance(v, float) and v.is_integer() else v
 
 
 @bp.route("/api/deleteProduct", methods=["POST"])

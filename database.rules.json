@@ -4,7 +4,8 @@
     ".write": false,
     "data": {
       "$uid": {
-        "orders": { ".indexOn": ["createdAt", "updatedAt", "phoneDigits"] }
+        "orders": { ".indexOn": ["createdAt", "updatedAt", "phoneDigits"] },
+        "deletedOrders": { ".indexOn": ["at"] }
       }
     },
     "conversations_meta": {

@@ -4,7 +4,7 @@
 function openModal(id){
   document.getElementById(id).classList.add("show");
   if(id==="addOrderModal"){ prefillOrderSelects(); document.getElementById("o_delivery").value=""; }
-  if(id==="addProductModal"){ currentProductImages = []; renderProductImageThumbs(); }
+  if(id==="addProductModal"){ currentProductImages = []; renderProductImageThumbs(); setProductEditMode(null); }
   if(id==="createLandingModal"){
     currentLandingImages = [];
     currentLandingQuestions = [];
@@ -62,7 +62,7 @@ var currentProductImages = [];
 function renderProductImageThumbs(){
   var wrap = document.getElementById("p_img_thumbs");
   wrap.innerHTML = currentProductImages.map(function(url, i){
-    return '<div class="thumb-item"><img src="'+url+'"/><button class="rm" data-i="'+i+'" data-on-click="removeProductImage(Number(this.dataset.i))">✕</button></div>';
+    return '<div class="thumb-item"><img src="'+esc(url)+'"/><button class="rm" data-i="'+i+'" data-on-click="removeProductImage(Number(this.dataset.i))">✕</button></div>';
   }).join("");
 }
 
