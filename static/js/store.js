@@ -26,6 +26,8 @@ async function loadStore(){
     var grid = document.getElementById("storeGrid");
     if(pr.status==="ok"){
       var cur = curSym();
+      STORE_PRODUCT_IMAGES = {};
+      (pr.data||[]).forEach(function(p){ STORE_PRODUCT_IMAGES[p.name] = p.images||[]; });
       grid.innerHTML = (pr.data||[]).filter(function(p){ return p.visible!=="no"; }).map(function(p){
         var stCls = {"In Stock":"bs","Low Stock":"bn","Out of Stock":"br"}[p.stat]||"bp";
         return '<div class="store-card">'+
@@ -50,6 +52,7 @@ async function loadStore(){
 }
 
 var currentStoreLogoImage = "";
+var STORE_PRODUCT_IMAGES  = {};  // اسم المنتج → images (لزر "📸 Changer")
 
 function renderStoreLogoPreview(){
   var box = document.getElementById("ss_logo_preview");

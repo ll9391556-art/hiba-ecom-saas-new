@@ -7,3 +7,4 @@ gunicorn==22.0.0
 bcrypt
 PyJWT
 cryptography
+pillow==12.3.0

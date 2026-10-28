@@ -12,7 +12,7 @@ Tests (no Firebase, Gemini or network needed — see "Tests" below). Python 3.14
 
 ```powershell
 py -3.14 -m venv .venv
-.venv\Scripts\python.exe -m pip install "flask==3.0.3" "flask-cors==4.0.1" "requests==2.32.3" bcrypt PyJWT cryptography -r requirements-dev.txt
+.venv\Scripts\python.exe -m pip install "flask==3.0.3" "flask-cors==4.0.1" "requests==2.32.3" bcrypt PyJWT cryptography "pillow==12.3.0" -r requirements-dev.txt
 .venv\Scripts\python.exe -m pytest -q                                              # all tests
 .venv\Scripts\python.exe -m pytest tests/test_smoke.py::test_health_returns_200 -q # single test
 .venv\Scripts\python.exe -m py_compile app.py core/*.py services/*.py features/*.py tests/*.py  # syntax check

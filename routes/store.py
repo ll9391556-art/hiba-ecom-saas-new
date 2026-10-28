@@ -2,6 +2,7 @@
 """إعدادات المتجر، تسيير صفحات الهبوط، ورفع الصور. منقول من app.py بلا تغيير (Phase 4 / A7)."""
 import hashlib
 import hmac
+import io
 import json
 import logging
 import re
@@ -258,6 +259,64 @@ def _detect_image_kind(head):
     return None
 
 
+_IMAGE_MIME       = {"jpeg": "image/jpeg", "png": "image/png", "gif": "image/gif", "webp": "image/webp"}
+_IMAGE_EXT        = {"jpeg": "jpg", "png": "png", "gif": "gif", "webp": "webp"}
+_PIL_FORMAT       = {"jpeg": "JPEG", "png": "PNG", "gif": "GIF", "webp": "WEBP"}
+UPLOAD_MAX_BYTES  = 5 * 1024 * 1024
+PRODUCT_MAX_SIDE  = 1200          # D4a: صور المتجر بمقاس يناسب الهاتف
+_MAX_IMAGE_PIXELS = 40_000_000    # ضد decompression bomb (صورة صغيرة فالحجم وضخمة بالبكسلات)
+
+
+def _read_upload(max_bytes):
+    """(bytes, None) ولا (None, رسالة خطأ). يقرا حتى max_bytes + 1 برك."""
+    file = request.files.get("file")
+    if not file or not file.filename:
+        return None, "No file provided"
+    data = file.stream.read(max_bytes + 1)
+    if len(data) > max_bytes:
+        return None, f"الحجم الأقصى {max_bytes // (1024 * 1024)}MB"
+    return data, None
+
+
+def _open_image(data, kind):
+    """يفك الصورة فعلاً بـ Pillow (magic bytes صحيحة وباقي الملف مزوّر → None).
+    Pillow يتستورد هنا باش الـ workers ما يحمّلوهش حتى يتحتاج."""
+    from PIL import Image, ImageOps
+    Image.MAX_IMAGE_PIXELS = _MAX_IMAGE_PIXELS
+    try:
+        img = Image.open(io.BytesIO(data))
+        if img.format != _PIL_FORMAT[kind]:
+            return None
+        if kind == "jpeg":
+            img.draft("RGB", (PRODUCT_MAX_SIDE, PRODUCT_MAX_SIDE))  # فك JPEG مصغّر: ذاكرة أقل
+        img.load()
+        return ImageOps.exif_transpose(img)  # صور الهاتف: الاتجاه قبل ما يتنحّى EXIF
+    except Exception:
+        return None
+
+
+def _encode_image(img, kind):
+    """إعادة ترميز بنفس الصيغة وبلا metadata (EXIF، GPS...)."""
+    out = io.BytesIO()
+    if kind == "jpeg":
+        if img.mode not in ("RGB", "L"):
+            img = img.convert("RGB")
+        img.save(out, format="JPEG", quality=85, optimize=True, progressive=True)
+    elif kind == "webp":
+        img.save(out, format="WEBP", quality=85)
+    else:
+        img.save(out, format="PNG", optimize=True)
+    return out.getvalue()
+
+
+def _store_upload(blob_path, data, mime):
+    bucket = fb_storage.bucket(FB_STORAGE_BUCKET)
+    blob   = bucket.blob(blob_path)
+    blob.upload_from_file(io.BytesIO(data), content_type=mime)
+    blob.make_public()
+    return blob.public_url
+
+
 @bp.route("/api/uploadImage", methods=["POST"])
 @require_auth
 def api_upload_image():
@@ -265,28 +324,25 @@ def api_upload_image():
     و content_type القادم من المتصفح (كلاهما قابل للتزوير الكامل من العميل)، ما يسمح
     برفع HTML/SVG يحوي جافاسكريبت باسم ملف يبدو كصورة. الآن نفحص أول بايتات الملف
     فعلياً (magic bytes عبر _detect_image_kind) ونفرض content-type ثابت مطابق للمحتوى الحقيقي،
-    ونولّد اسم الملف بالكامل بدل الوثوق باسم العميل."""
-    if "file" not in request.files:
-        return err_json("No file provided")
-    file = request.files["file"]
-    if not file or not file.filename:
-        return err_json("Empty file")
-
-    head = file.stream.read(512)
-    file.stream.seek(0)
-    kind = _detect_image_kind(head)
-    allowed_mime = {"jpeg": "image/jpeg", "png": "image/png", "gif": "image/gif", "webp": "image/webp"}
-    if kind not in allowed_mime:
+    ونولّد اسم الملف بالكامل بدل الوثوق باسم العميل.
+    D4a: حتى 5MB، والصورة تتفك فعلاً (ملف مزوّر → 400) وتتصغّر لـ 1200px وتتعاود تترمّز بلا
+    metadata. GIF يتخزّن كما هو (باش ما تضيعش الحركة) بعد ما يتأكد أنه يتفك."""
+    data, error = _read_upload(UPLOAD_MAX_BYTES)
+    if error:
+        return err_json(error)
+    kind = _detect_image_kind(data[:512])
+    if kind not in _IMAGE_MIME:
         return err_json("نوع الملف غير مدعوم — يجب أن يكون صورة حقيقية (jpg/png/gif/webp)")
+    img = _open_image(data, kind)
+    if img is None:
+        return err_json("الملف ماهوش صورة صالحة")
+    if kind != "gif":
+        img.thumbnail((PRODUCT_MAX_SIDE, PRODUCT_MAX_SIDE))
+        data = _encode_image(img, kind)
 
     try:
-        bucket    = fb_storage.bucket(FB_STORAGE_BUCKET)
-        safe_ext  = {"jpeg": "jpg", "png": "png", "gif": "gif", "webp": "webp"}[kind]
-        blob_path = f"{request.auth_uid}/{int(time.time()*1000)}_{secrets.token_hex(6)}.{safe_ext}"
-        blob      = bucket.blob(blob_path)
-        blob.upload_from_file(file.stream, content_type=allowed_mime[kind])
-        blob.make_public()
-        return ok_json({"url": blob.public_url})
+        blob_path = f"{request.auth_uid}/{int(time.time()*1000)}_{secrets.token_hex(6)}.{_IMAGE_EXT[kind]}"
+        return ok_json({"url": _store_upload(blob_path, data, _IMAGE_MIME[kind])})
     except Exception as e:
         logging.error(f"uploadImage error: {e}")
         return err_json("فشل رفع الصورة", 500)

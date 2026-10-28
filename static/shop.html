@@ -9,6 +9,8 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" integrity="sha384-NrKB+u6Ts6AtkIhwPixiKTzgSKNblyhlk0Sohlgar9UHUBzai/sgnNNWWd291xqt" crossorigin="anonymous"></script>
 <script defer src="/static/pixel-loader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11.1.14/swiper-bundle.min.css" integrity="sha384-IFb872aCXZQb6BKRUHmGn0YHKnFl4ylZjkgVRRyMTEQ5bjo/H6xFUiLJm6opOO66" crossorigin="anonymous"/>
+<script src="https://cdn.jsdelivr.net/npm/swiper@11.1.14/swiper-bundle.min.js" integrity="sha384-JiF4eFN9V3I2Fry7TzFM3XKdq0P3abiVxpOeHjGz4cwvas+uNg6pFWVmuD6MKXqG" crossorigin="anonymous"></script>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml"/>
 <link rel="icon" href="/static/favicon-32.png" sizes="32x32" type="image/png"/>
 <link rel="apple-touch-icon" href="/static/apple-touch-icon.png"/>
@@ -133,12 +135,10 @@
   <div class="pdp-box">
     <button class="pdp-close" data-on-click="closePdp()">✕</button>
     <div class="pdp-img-wrap" id="pdp-img-wrap">
-      <button class="pdp-nav prev" data-on-click="pdp_nav(-1)">‹</button>
-      <img id="pdp-img" src="" style="display:none"/>
-      <span id="pdp-img-fallback">📦</span>
-      <button class="pdp-nav next" data-on-click="pdp_nav(1)">›</button>
+      <button class="pdp-nav prev" data-on-click="pdp_nav(-1)" aria-label="الصورة السابقة">‹</button>
+      <div id="pdp-media" class="pdp-media"></div>
+      <button class="pdp-nav next" data-on-click="pdp_nav(1)" aria-label="الصورة التالية">›</button>
     </div>
-    <div class="pdp-dots" id="pdp-dots"></div>
     <div class="pdp-body">
       <div class="shop-card-cat" id="pdp-cat"></div>
       <h3 id="pdp-name" style="margin:6px 0"></h3>

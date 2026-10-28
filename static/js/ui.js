@@ -72,7 +72,7 @@ function removeProductImage(i){
 }
 
 async function addProductImages(input){
-  var files = Array.prototype.slice.call(input.files||[]).slice(0, 4 - currentProductImages.length);
+  var files = Array.prototype.slice.call(input.files||[]).slice(0, 5 - currentProductImages.length);
   if(!files.length) return;
   var statusEl = document.getElementById("p_img_upload_status");
   statusEl.textContent = "⏳ جاري الرفع..."; statusEl.style.color = "var(--yellow)";
@@ -97,7 +97,9 @@ async function uploadStoreProductImage(input, productName) {
   label.childNodes[0].textContent = "⏳ ...";
   try {
     var url = await _uploadImageFile(file);
-    var r = await apiPost("/addProduct",{data:{name:productName,image:url}});
+    // تبدّل الصورة الأولى فـ image و images مع بعض (السلايدر يقرا images)، والباقي يبقى
+    var rest = (STORE_PRODUCT_IMAGES[productName]||[]).slice(1);
+    var r = await apiPost("/addProduct",{data:{name:productName,image:url,images:[url].concat(rest).slice(0,5)}});
     if(r.status==="ok"){
       toast("✅ صورة "+productName+" محدّثة","ok");
       loadStore();
