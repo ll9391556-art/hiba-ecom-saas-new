@@ -284,6 +284,10 @@
   "methods": "POST"
  },
  {
+  "rule": "/api/uploadStoreLogo",
+  "methods": "POST"
+ },
+ {
   "rule": "/api/woo/connect",
   "methods": "POST"
  },

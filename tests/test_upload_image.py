@@ -6,11 +6,31 @@ import pytest
 
 from tests import fakes
 
-PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 24
-JPEG_JFIF = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00" + b"\x00" * 20
-JPEG_EXIF = b"\xff\xd8\xff\xe1\x00\x10Exif\x00" + b"\x00" * 20
-GIF = b"GIF89a" + b"\x00" * 26
-WEBP = b"RIFF\x24\x00\x00\x00WEBPVP8 " + b"\x00" * 16
+from PIL import Image
+
+
+# D4a: الرفع يفك الصورة فعلاً، فالـ fixtures صور حقيقية صغيرة (قبل: bytes وهمية بالـ header برك)
+def _real(fmt, **kw):
+    buf = io.BytesIO()
+    Image.new("RGB", (8, 8), (10, 120, 200)).save(buf, format=fmt, **kw)
+    return buf.getvalue()
+
+
+def _exif_first_jpeg():
+    """JPEG يبدا بـ APP1/Exif (كيما الكاميرات) بلا مقطع JFIF."""
+    exif = Image.Exif()
+    exif[0x010F] = "Cam"
+    data = _real("JPEG", exif=exif)
+    assert data[2:4] == b"\xff\xe0"
+    app0_len = int.from_bytes(data[4:6], "big")
+    return data[:2] + data[4 + app0_len:]
+
+
+PNG = _real("PNG")
+JPEG_JFIF = _real("JPEG")
+JPEG_EXIF = _exif_first_jpeg()
+GIF = _real("GIF")
+WEBP = _real("WEBP")
 
 
 def _upload(client, headers, data, name):

@@ -774,7 +774,7 @@
       <div class="col-4"><div class="form-group"><label data-i18n="cost">Coût</label><input id="p_cost" class="form-control" type="number" value="0"/></div></div>
       <div class="col-4"><div class="form-group"><label data-i18n="sell_price">Prix vente</label><input id="p_sell" class="form-control" type="number" value="0"/></div></div>
       <div class="col-4"><div class="form-group"><label data-i18n="stock_init">Stock init</label><input id="p_init" class="form-control" type="number" value="0"/></div></div>
-      <div class="col-12"><div class="form-group"><label data-i18n="product_images">الصور (حتى 4)</label>
+      <div class="col-12"><div class="form-group"><label data-i18n="product_images">الصور (حتى 5)</label>
         <input type="file" accept="image/*" multiple class="form-control" data-on-change="addProductImages(this)"/>
         <div id="p_img_upload_status" style="font-size:12px;margin-top:6px"></div>
         <div id="p_img_thumbs" class="thumb-row"></div>
@@ -815,9 +815,8 @@
     <h4 data-i18n="store_settings">Paramètres boutique</h4>
     <div class="form-group"><label data-i18n="store_name">Nom boutique</label><input id="ss_name" class="form-control"/></div>
     <div class="form-group"><label data-i18n="slogan">Slogan</label><input id="ss_tagline" class="form-control"/></div>
-    <div class="form-group"><label data-i18n="logo_emoji">Logo (emoji)</label><input id="ss_logo" class="form-control" value="🛒"/></div>
-    <div class="form-group"><label data-i18n="logo_image">صورة اللوغو (اختياري — تُستعمل بدل الإيموجي إذا رُفعت)</label>
-      <input type="file" accept="image/*" class="form-control" data-on-change="uploadStoreLogoImage(this)"/>
+    <div class="form-group"><label data-i18n="logo_image">شعار المتجر (PNG/JPG/WEBP، حتى 1MB)</label>
+      <input type="file" accept="image/png,image/jpeg,image/webp" class="form-control" data-on-change="uploadStoreLogoImage(this)"/>
       <div id="ss_logo_preview" style="margin-top:8px"></div>
     </div>
     <div class="form-group"><label data-i18n="currency">العملة</label>
@@ -826,6 +825,23 @@
         <option value="EUR" data-i18n="cur_eur">€ — Euro (EUR)</option>
         <option value="USD" data-i18n="cur_usd">$ — Dollar (USD)</option>
       </select>
+    </div>
+    <div class="form-group"><label data-i18n="store_lang">لغة المتجر</label>
+      <select id="ss_lang" class="form-select">
+        <option value="AR" data-i18n="lang_ar">العربية</option>
+        <option value="FR" data-i18n="lang_fr">Français</option>
+        <option value="EN" data-i18n="lang_en">English</option>
+      </select>
+    </div>
+    <div class="form-group"><label data-i18n="store_color">لون المتجر</label>
+      <div class="swatch-row" role="radiogroup">
+        <label class="swatch swatch-violet"><input type="radio" name="ss_color" value="violet"/><span data-i18n="color_violet">بنفسجي</span></label>
+        <label class="swatch swatch-blue"><input type="radio" name="ss_color" value="blue"/><span data-i18n="color_blue">أزرق</span></label>
+        <label class="swatch swatch-emerald"><input type="radio" name="ss_color" value="emerald"/><span data-i18n="color_emerald">زمردي</span></label>
+        <label class="swatch swatch-orange"><input type="radio" name="ss_color" value="orange"/><span data-i18n="color_orange">برتقالي</span></label>
+        <label class="swatch swatch-pink"><input type="radio" name="ss_color" value="pink"/><span data-i18n="color_pink">وردي</span></label>
+        <label class="swatch swatch-mauve"><input type="radio" name="ss_color" value="mauve"/><span data-i18n="color_mauve">موف</span></label>
+      </div>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
       <button class="btn-outline" data-on-click="closeModal('storeSettingsModal')"><span data-i18n="cancel">Annuler</span></button>

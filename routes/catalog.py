@@ -74,6 +74,10 @@ def api_add_product():
     uid  = request.auth_uid
     d    = body.get("data") or {}
     if not d or not d.get("name"): return err_json("Missing fields")
+    if "image" in d and not _is_url(d["image"]):
+        return err_json("رابط الصورة غير صالح")
+    if "images" in d and not _valid_images(d["images"]):
+        return err_json(f"الصور غير صالحة (حتى {PRODUCT_MAX_IMAGES})")
     name     = d["name"]
     existing = _fb_get(f"data/{uid}/products/{name}") or {}
     merged   = {**existing, "name": name,
@@ -105,8 +109,15 @@ _PRODUCT_TEXT_FIELDS = {"category": 200, "size": 200, "colors": 500, "descriptio
 _PRODUCT_MAX_PRICE   = 10_000_000
 
 
+PRODUCT_MAX_IMAGES   = 5  # D4a: سلايدر المتجر. القوائم المخزّنة من قبل ما تتمسّش
+
+
 def _is_url(v):
     return isinstance(v, str) and len(v) <= 2000 and (v == "" or re.match(r"https?://", v) is not None)
+
+
+def _valid_images(imgs):
+    return isinstance(imgs, list) and len(imgs) <= PRODUCT_MAX_IMAGES and all(_is_url(u) and u for u in imgs)
 
 
 def _parse_product_edit(d):
@@ -144,10 +155,9 @@ def _parse_product_edit(d):
             return None, "رابط الصورة غير صالح"
         out["image"] = d["image"]
     if "images" in d:
-        imgs = d["images"]
-        if not isinstance(imgs, list) or len(imgs) > 10 or not all(_is_url(u) and u for u in imgs):
+        if not _valid_images(d["images"]):
             return None, "الصور غير صالحة"
-        out["images"] = imgs
+        out["images"] = d["images"]
     return out, None
 
 

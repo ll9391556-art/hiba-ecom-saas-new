@@ -27,4 +27,19 @@
   --accent:#3B2BFF;--accent2:#2A1DD1;--accent-soft:rgba(59,43,255,.10);
   --green:#3A4A00;--red:#D9230F;--yellow:#FFB020;--amber:#7A4B00;
   --blue:#3B2BFF;--purple:#2A1DD1;
+
+  /* لون المتجر العام (D4a) — القيمة الافتراضية (بنفسجي). ما يتستعملش غير تحت .shop-page */
+  --store:#3B2BFF;--store-light:#E6E3FF;--sw:#3B2BFF;
 }
+
+/* لون المتجر العام (D4a): shop.html برك (body.shop-page). shop.js يبدّل --store/--store-light
+   حسب storeSettings.color (نفس الجدول STORE_COLORS فـ core/config.py). اللوحة ما تتمسّش،
+   والأحمر تاع العروض (--flash/--red) ثابت. */
+.shop-page{
+  --brand:var(--store);--brand-dark:var(--store);--brand-light:var(--store-light);
+  --accent:var(--store);--accent2:var(--store);--accent-soft:var(--store-light);--blue:var(--store);
+}
+
+/* مربعات اختيار لون المتجر فالإعدادات */
+.swatch-violet{--sw:#3B2BFF}.swatch-blue{--sw:#1D4ED8}.swatch-emerald{--sw:#0F766E}
+.swatch-orange{--sw:#C2410C}.swatch-pink{--sw:#BE123C}.swatch-mauve{--sw:#7C3AED}

@@ -17,6 +17,10 @@ _ALLOWED_ORIGINS = [o.strip() for o in os.environ.get(
 ).split(",") if o.strip()]
 
 MAX_PAYLOAD_SIZE       = 2 * 1024 * 1024
+# حد Flask العام (MAX_CONTENT_LENGTH): يشمل حتى الطلبات بلا Content-Length (chunked).
+# الرفع وحدو يفوت 2MB: صورة منتج حتى 5MB، شعار حتى 1MB (الحدود فـ routes/store.py).
+MAX_CONTENT_LENGTH     = 6 * 1024 * 1024
+UPLOAD_PATHS           = ("/api/uploadImage", "/api/uploadStoreLogo")
 MAX_HISTORY_TURNS      = 10
 LOW_STOCK_THRESHOLD    = 5
 BAD_CUSTOMER_THRESHOLD = 3
@@ -134,6 +138,18 @@ def normalize_plan(plan, default="starter"):
 
 
 CURRENCY_SYMBOLS_PY = {"DZD": "دج", "EUR": "€", "USD": "$"}
+
+# لون المتجر العام (D4a): storeSettings.color = المفتاح، (أساسي، فاتح). المتجر وصفحة التتبع برك؛
+# اللوحة تبقى بألوان OrderFlow. نفس الجدول فـ static/js/shop.js (SHOP_COLORS). بلا color = violet.
+STORE_COLORS = {
+    "violet":  ("#3B2BFF", "#E6E3FF"),
+    "blue":    ("#1D4ED8", "#DBEAFE"),
+    "emerald": ("#0F766E", "#CCFBF1"),
+    "orange":  ("#C2410C", "#FFEDD5"),
+    "pink":    ("#BE123C", "#FFE4E6"),
+    "mauve":   ("#7C3AED", "#EDE9FE"),
+}
+DEFAULT_STORE_COLOR = "violet"
 
 BOT_LAUNCHED = os.environ.get("BOT_LAUNCHED", "true").strip().lower() == "true"
 

@@ -17,8 +17,10 @@ async function loadStore(){
       document.getElementById("storeTitle").innerHTML = (s.logoImage ? '<img src="'+esc(s.logoImage)+'" style="width:22px;height:22px;object-fit:contain;vertical-align:middle;border-radius:4px"/> ' : esc(s.logo||"🛒")+" ")+esc(s.name||"Ma Boutique");
       document.getElementById("ss_name").value    = s.name||"";
       document.getElementById("ss_tagline").value = s.tagline||"";
-      document.getElementById("ss_logo").value    = s.logo||"🛒";
       document.getElementById("ss_currency").value = s.currency||"DZD";
+      document.getElementById("ss_lang").value = s.lang||"AR";  // لغة المتجر العام، العربية افتراضياً
+      var color = s.color||"violet";  // المتاجر القديمة بلا color = بنفسجي
+      Array.prototype.forEach.call(document.querySelectorAll('input[name="ss_color"]'), function(r){ r.checked = r.value===color; });
       currentStoreLogoImage = s.logoImage||"";
       renderStoreLogoPreview();
     }
@@ -26,6 +28,8 @@ async function loadStore(){
     var grid = document.getElementById("storeGrid");
     if(pr.status==="ok"){
       var cur = curSym();
+      STORE_PRODUCT_IMAGES = {};
+      (pr.data||[]).forEach(function(p){ STORE_PRODUCT_IMAGES[p.name] = p.images||[]; });
       grid.innerHTML = (pr.data||[]).filter(function(p){ return p.visible!=="no"; }).map(function(p){
         var stCls = {"In Stock":"bs","Low Stock":"bn","Out of Stock":"br"}[p.stat]||"bp";
         return '<div class="store-card">'+
@@ -50,6 +54,7 @@ async function loadStore(){
 }
 
 var currentStoreLogoImage = "";
+var STORE_PRODUCT_IMAGES  = {};  // اسم المنتج → images (لزر "📸 Changer")
 
 function renderStoreLogoPreview(){
   var box = document.getElementById("ss_logo_preview");
@@ -67,10 +72,13 @@ function removeStoreLogoImage(){
 async function uploadStoreLogoImage(input){
   var file = input.files[0];
   if(!file) return;
+  // نفس شروط السيرفر (اللي يعاود يتحقق): PNG/JPG/WEBP، حتى 1MB
+  if(["image/png","image/jpeg","image/webp"].indexOf(file.type)===-1){ toast("❌ PNG / JPG / WEBP","err"); input.value=""; return; }
+  if(file.size > 1024*1024){ toast("❌ 1MB max","err"); input.value=""; return; }
   var box = document.getElementById("ss_logo_preview");
   box.innerHTML = '<span class="spinner"></span>';
   try{
-    currentStoreLogoImage = await _uploadImageFile(file);
+    currentStoreLogoImage = await _uploadImageFile(file, "/uploadStoreLogo");
     renderStoreLogoPreview();
   }catch(e){
     toast("❌ فشل رفع صورة اللوغو","err");
@@ -79,10 +87,12 @@ async function uploadStoreLogoImage(input){
 }
 
 async function saveStoreSettings(){
+  var picked = document.querySelector('input[name="ss_color"]:checked');
   var r = await apiPost("/updateStoreSettings", {data:{
+    color:    picked ? picked.value : undefined,
     name:     document.getElementById("ss_name").value.trim(),
     tagline:  document.getElementById("ss_tagline").value.trim(),
-    logo:     document.getElementById("ss_logo").value.trim(),
+    lang:     document.getElementById("ss_lang").value,
     logoImage:currentStoreLogoImage,
     currency: document.getElementById("ss_currency").value,
   }});

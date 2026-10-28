@@ -36,9 +36,11 @@ def test_invalid_values_rejected_and_not_stored(client, db, owner, bad):
     assert stored == {"name": "Boutique", "logo": "🛒", "currency": "DZD"}
 
 
-def test_normal_text_and_emoji_accepted_unchanged(client, db, owner):
+def test_normal_text_and_emoji_accepted_unchanged(client, db, owner, app):
+    # D4a: شعار جديد لازم يكون من /api/uploadStoreLogo فمجلد التاجر (رابط برّاني جديد يترفض)
+    logo = f"https://storage.fake/{app.FB_STORAGE_BUCKET}/{owner['uid']}/logo_1700000000000_0123456789ab.png"
     data = {"name": "متجر أمينة ✨ Boutique d'Amina", "tagline": "أحسن الأسعار 🇩🇿",
-            "logo": "👩‍👩‍👧‍👦", "logoImage": "https://firebasestorage.googleapis.com/v0/b/x/o/logo.png?alt=media",
+            "logo": "👩‍👩‍👧‍👦", "logoImage": logo,
             "currency": "EUR"}
     assert _save(client, owner["headers"], **data).status_code == 200
     stored = db.get(f"data/{owner['uid']}/storeSettings")
@@ -71,9 +73,11 @@ def test_landing_title_escapes_store_name(client, db, owner):
 def test_storefront_escapes_logo_city_and_currency():
     shop = INDEX[INDEX.index("async function loadShopData"):]
     shop = shop[:shop.index("sh_renderCategories();")]
-    assert "esc(s.logoImage)" in shop and "esc(s.logo||" in shop
+    # D4a: الشعار يترسم فـ sh_renderLogo (الصورة ولا أول حرف من الاسم، بلا الإيموجي)
+    logo = INDEX[INDEX.index("function sh_renderLogo"):][:400]
+    assert "esc(logoImage)" in logo and "esc(sh_initial(name))" in logo
     assert not re.search(r"'\+c\.name\+'", shop)
-    assert "'+s.logoImage+'" not in shop
+    assert "'+s.logoImage+'" not in shop and "'+logoImage+'" not in logo
     assert re.search(r"function curSym\(\)\{[^}]*esc\(merchantCurrency\)", INDEX)
     assert re.search(r"function sh_cur\(\)\{[^}]*esc\(SHOP_CURRENCY\)", INDEX)
     preview = INDEX[INDEX.index("function renderStoreLogoPreview"):][:400]
