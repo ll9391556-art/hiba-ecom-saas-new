@@ -254,6 +254,8 @@ function sh_sortList(list){
 // صورة وحدة = <img> عادي. reduced-motion = بلا تبديل تلقائي (السحب والنقاط يبقاو).
 // Swiper ما تحمّلش (CDN) → الصورة الأولى تبان برك.
 var SH_REDUCED   = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+var SH_EVERY     = 3000;  // صورة جديدة كل 3 ثوان: انتظار Swiper (delay) + مدة الـ fade
+var SH_FADE      = 600;
 var SH_SLIDERS   = [];
 var SH_SLIDER_IO = ("IntersectionObserver" in window) ? new IntersectionObserver(function(entries){
   // البطاقات اللي برّا الشاشة ما تتبدّلش
@@ -291,8 +293,8 @@ function sh_makeSlider(el, stopOnTouch){
   pag.addEventListener("click", function(e){ e.stopPropagation(); });  // النقطة تبدّل الصورة، ما تفتحش المنتج
   return new Swiper(el, {
     effect:"fade", fadeEffect:{crossFade:true}, rewind:true,
-    speed: SH_REDUCED ? 0 : 600,
-    autoplay: SH_REDUCED ? false : {delay:3000, disableOnInteraction:!!stopOnTouch},
+    speed: SH_REDUCED ? 0 : SH_FADE,
+    autoplay: SH_REDUCED ? false : {delay:SH_EVERY-SH_FADE, disableOnInteraction:!!stopOnTouch},
     pagination:{el:pag, clickable:true}
   });
 }
@@ -304,7 +306,7 @@ function sh_initSliders(root){
     SH_SLIDERS.push(sw);
     if(SH_REDUCED || !SH_SLIDER_IO) return;
     sw.autoplay.stop();
-    el._shDelay = (i * 800) % 3000;  // نفس الدورة، بداية مختلفة لكل منتج
+    el._shDelay = (i * 800) % SH_EVERY;  // نفس الدورة، بداية مختلفة لكل منتج
     SH_SLIDER_IO.observe(el);
   });
 }

@@ -36,14 +36,16 @@ def test_grid_uses_slider_only_for_several_images():
 def test_slider_options():
     init = _fn(SHOP, "sh_makeSlider")
     assert 'effect:"fade"' in init.replace(" ", "")
-    assert "3000" in init
+    # دورة كاملة = 3 ثوان: Swiper يحسب delay من بعد ما يكمّل الـ fade
+    assert re.search(r"var SH_EVERY\s*=\s*3000;", SHOP)
+    assert "delay:SH_EVERY-SH_FADE" in init.replace(" ", "")
     assert "prefers-reduced-motion" in SHOP
     assert "SH_REDUCED" in init  # بلا autoplay مع reduced-motion
     assert "IntersectionObserver" in SHOP
 
 
 def test_slider_timing_differs_per_product():
-    assert re.search(r"\*\s*800\)\s*%\s*3000", _fn(SHOP, "sh_initSliders"))
+    assert re.search(r"\*\s*800\)\s*%\s*SH_EVERY", _fn(SHOP, "sh_initSliders"))
 
 
 def test_old_sliders_are_destroyed_before_rerender():
