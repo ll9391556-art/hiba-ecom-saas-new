@@ -44,10 +44,10 @@ function stopOrdersPolling(){
 // رفع الصور — دالة مشتركة واحدة (تحل محل التكرار السابق بين
 // رفع صورة منتج وصورة متجر)، تمر عبر السيرفر (Admin SDK)
 // =========================================================
-async function _uploadImageFile(file){
+async function _uploadImageFile(file, path){
   var fd = new FormData();
   fd.append("file", file);
-  var res = await fetch(API_URL+"/uploadImage", {
+  var res = await fetch(API_URL+(path||"/uploadImage"), {
     method:"POST",
     headers: authToken ? {"Authorization":"Bearer "+authToken} : {},
     body: fd

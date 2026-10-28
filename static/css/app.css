@@ -232,7 +232,10 @@ html[dir=rtl] .modal-close{right:auto;left:16px}
 .shop-header{position:sticky;top:0;z-index:200;background:rgba(255,255,255,.96);border-bottom:1px solid var(--border);backdrop-filter:blur(14px);padding:12px 16px}
 .shop-header-inner{display:flex;align-items:center;justify-content:space-between;gap:12px;max-width:1200px;margin:0 auto;flex-wrap:wrap}
 .shop-brand{display:flex;align-items:center;gap:10px}
-.shop-brand-icon{width:40px;height:40px;border-radius:10px;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.shop-brand-icon{width:40px;height:40px;border-radius:12px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;flex-shrink:0;overflow:hidden}
+.shop-brand-icon.has-img{background:var(--white);border:1px solid var(--line)}
+.shop-brand-icon img{width:100%;height:100%;object-fit:contain}
+.track-brand{display:flex;align-items:center;gap:10px;margin-bottom:12px}
 .shop-brand-name{font-size:16px;font-weight:800}
 .shop-brand-tag{font-size:11px;color:var(--muted)}
 .shop-body{max-width:1200px;margin:0 auto;padding:20px 16px}

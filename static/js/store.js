@@ -17,7 +17,6 @@ async function loadStore(){
       document.getElementById("storeTitle").innerHTML = (s.logoImage ? '<img src="'+esc(s.logoImage)+'" style="width:22px;height:22px;object-fit:contain;vertical-align:middle;border-radius:4px"/> ' : esc(s.logo||"🛒")+" ")+esc(s.name||"Ma Boutique");
       document.getElementById("ss_name").value    = s.name||"";
       document.getElementById("ss_tagline").value = s.tagline||"";
-      document.getElementById("ss_logo").value    = s.logo||"🛒";
       document.getElementById("ss_currency").value = s.currency||"DZD";
       currentStoreLogoImage = s.logoImage||"";
       renderStoreLogoPreview();
@@ -70,10 +69,13 @@ function removeStoreLogoImage(){
 async function uploadStoreLogoImage(input){
   var file = input.files[0];
   if(!file) return;
+  // نفس شروط السيرفر (اللي يعاود يتحقق): PNG/JPG/WEBP، حتى 1MB
+  if(["image/png","image/jpeg","image/webp"].indexOf(file.type)===-1){ toast("❌ PNG / JPG / WEBP","err"); input.value=""; return; }
+  if(file.size > 1024*1024){ toast("❌ 1MB max","err"); input.value=""; return; }
   var box = document.getElementById("ss_logo_preview");
   box.innerHTML = '<span class="spinner"></span>';
   try{
-    currentStoreLogoImage = await _uploadImageFile(file);
+    currentStoreLogoImage = await _uploadImageFile(file, "/uploadStoreLogo");
     renderStoreLogoPreview();
   }catch(e){
     toast("❌ فشل رفع صورة اللوغو","err");
@@ -85,7 +87,6 @@ async function saveStoreSettings(){
   var r = await apiPost("/updateStoreSettings", {data:{
     name:     document.getElementById("ss_name").value.trim(),
     tagline:  document.getElementById("ss_tagline").value.trim(),
-    logo:     document.getElementById("ss_logo").value.trim(),
     logoImage:currentStoreLogoImage,
     currency: document.getElementById("ss_currency").value,
   }});

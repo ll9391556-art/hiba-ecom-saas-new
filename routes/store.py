@@ -53,17 +53,28 @@ _STORE_TEXT_LIMITS = {"name": 120, "tagline": 300, "logo": 32, "lang": 8}
 _STORE_CURRENCIES  = ("DZD", "EUR", "USD")
 
 
-def _clean_store_setting(field, value, current):
+def _logo_blob_prefix(uid):
+    return f"{uid}/logo_"
+
+
+def _is_own_logo_url(url, uid):
+    """الرابط هو بالضبط public_url تاع {uid}/logo_<ms>_<hex12>.png (بلا ../ ولا مسار آخر)."""
+    prefix = fb_storage.bucket(FB_STORAGE_BUCKET).blob(_logo_blob_prefix(uid)).public_url
+    return url.startswith(prefix) and re.fullmatch(r"[0-9]+_[0-9a-f]{12}\.png", url[len(prefix):]) is not None
+
+
+def _clean_store_setting(field, value, current, uid=None):
     """تحقق خفيف لإعدادات المتجر: نوع + طول فقط، بلا فلترة حروف (عربي/فرنسي/إيموجي يمرّو كما هم —
     الحماية من XSS بالتهريب وقت العرض). قيمة مطابقة للمخزّنة حالياً تتقبل دائماً باش المتاجر
     القديمة تقدر تعاود تحفظ."""
     if current is not None and value == current:
         return True, value
     if field == "logoImage":
+        # D4a: شعار جديد = غير اللي ترفع بـ /api/uploadStoreLogo فمجلد التاجر نفسو (ولا "" للحذف).
+        # الروابط القديمة (برّانية) تبقى مقبولة كي ما تتبدّلش (الشرط فوق).
         if value == "":
             return True, ""
-        clean = _sanitize_image_url(value) if isinstance(value, str) else ""
-        return (bool(clean), clean)
+        return (isinstance(value, str) and _is_own_logo_url(value, uid), value)
     if field == "currency":
         return (value in _STORE_CURRENCIES, value)
     if not isinstance(value, str) or len(value) > _STORE_TEXT_LIMITS[field]:
@@ -83,7 +94,7 @@ def api_update_store_settings():
     patch = {}
     for field, default in (("name","My Store"), ("tagline",""), ("logo","🛒"), ("logoImage",""), ("lang","AR"), ("currency","DZD")):
         if field in d:
-            ok, value = _clean_store_setting(field, d[field], (existing or {}).get(field))
+            ok, value = _clean_store_setting(field, d[field], (existing or {}).get(field), uid)
             if not ok:
                 return err_json(f"قيمة غير صالحة للحقل: {field}")
             patch[field] = value
@@ -346,3 +357,39 @@ def api_upload_image():
     except Exception as e:
         logging.error(f"uploadImage error: {e}")
         return err_json("فشل رفع الصورة", 500)
+
+
+LOGO_MAX_BYTES = 1 * 1024 * 1024
+LOGO_SIZE      = 256
+_LOGO_KINDS    = ("png", "jpeg", "webp")  # بلا SVG (سكريبت) وبلا GIF
+
+
+@bp.route("/api/uploadStoreLogo", methods=["POST"])
+@require_auth
+@require_perm("store")
+def api_upload_store_logo():
+    """شعار المتجر (D4a): PNG/JPG/WEBP حتى 1MB، يتفك فعلاً، ويتخزّن PNG مربع 256×256
+    (الشعار كامل داخل المربع والباقي شفاف) فـ {uid}/logo_... . ما يحفظش الإعدادات:
+    الرابط يتبعث مع "حفظ" لـ updateStoreSettings اللي يقبل غير شعارات مجلد التاجر."""
+    data, error = _read_upload(LOGO_MAX_BYTES)
+    if error:
+        return err_json(error)
+    kind = _detect_image_kind(data[:512])
+    if kind not in _LOGO_KINDS:
+        return err_json("الشعار لازم يكون PNG ولا JPG ولا WEBP")
+    img = _open_image(data, kind)
+    if img is None:
+        return err_json("الملف ماهوش صورة صالحة")
+
+    from PIL import Image
+    img = img.convert("RGBA")
+    img.thumbnail((LOGO_SIZE, LOGO_SIZE))
+    square = Image.new("RGBA", (LOGO_SIZE, LOGO_SIZE), (0, 0, 0, 0))
+    square.paste(img, ((LOGO_SIZE - img.width) // 2, (LOGO_SIZE - img.height) // 2), img)
+
+    try:
+        blob_path = f"{_logo_blob_prefix(request.auth_uid)}{int(time.time()*1000)}_{secrets.token_hex(6)}.png"
+        return ok_json({"url": _store_upload(blob_path, _encode_image(square, "png"), "image/png")})
+    except Exception as e:
+        logging.error(f"uploadStoreLogo error: {e}")
+        return err_json("فشل رفع الشعار", 500)

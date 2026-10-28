@@ -26,7 +26,7 @@
   <header class="shop-header">
     <div class="shop-header-inner">
       <div class="shop-brand">
-        <div class="shop-brand-icon" id="sh-logo">🛒</div>
+        <div class="shop-brand-icon" id="sh-logo"></div>
         <div>
           <div class="shop-brand-name" id="sh-name">Boutique</div>
           <div class="shop-brand-tag" id="sh-tag">Catalogue en ligne</div>
@@ -45,6 +45,10 @@
 
   <div class="shop-body">
     <div id="track-panel" class="track-panel">
+      <div class="track-brand">
+        <span class="shop-brand-icon" id="track-logo"></span>
+        <div><strong id="track-name"></strong><div class="shop-brand-tag">تتبّع طلبيتك</div></div>
+      </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         <input id="track-phone" class="form-control" style="flex:1;min-width:160px" placeholder="رقم الهاتف / Téléphone" type="tel"/>
         <button class="btn-primary btn-sm" data-on-click="sh_trackOrder()">بحث</button>

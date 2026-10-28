@@ -61,3 +61,36 @@ def test_dashboard_allows_five_product_images():
 def test_store_page_photo_change_keeps_images_in_sync():
     fn = _fn(DASH, "uploadStoreProductImage")
     assert "images" in fn
+
+
+# ── البند 2: شعار المتجر ──────────────────────────────────────
+def test_shop_logo_falls_back_to_first_letter():
+    logo = _fn(SHOP, "sh_renderLogo")
+    assert "esc(logoImage)" in logo and "esc(sh_initial(" in logo
+    assert "Array.from(" in _fn(SHOP, "sh_initial")
+    assert "s.logo||" not in SHOP and "s.logo ||" not in SHOP  # الإيموجي ما يبانش فالمتجر
+
+
+def test_logo_shows_in_header_and_tracking():
+    assert 'id="sh-logo"' in SHOP_HTML
+    panel = SHOP_HTML[SHOP_HTML.index('id="track-panel"'):]
+    assert 'id="track-logo"' in panel[:600] and 'id="track-name"' in panel[:600]
+    load = _fn(SHOP, "loadShopData")
+    assert 'sh_renderLogo(document.getElementById("sh-logo")' in load
+    assert 'sh_renderLogo(document.getElementById("track-logo")' in load
+
+
+def test_store_favicon_uses_logo_or_letter():
+    fav = _fn(SHOP, "sh_setFavicon")
+    assert '"data:image/svg+xml,"+encodeURIComponent(' in fav.replace(" ", "")
+    assert "esc(" in fav
+    assert "sh_setFavicon(" in _fn(SHOP, "loadShopData")
+
+
+def test_dashboard_logo_upload():
+    modal = DASH[DASH.index('id="storeSettingsModal"'):][:3000]
+    assert 'accept="image/png,image/jpeg,image/webp"' in modal
+    assert 'id="ss_logo"' not in DASH  # خانة الإيموجي تنحّات، القيمة تبقى فالبيانات
+    up = _fn(DASH, "uploadStoreLogoImage")
+    assert '"/uploadStoreLogo"' in up and "1024*1024" in up.replace(" ", "")
+    assert "logo:" not in _fn(DASH, "saveStoreSettings").replace("logoImage:", "")

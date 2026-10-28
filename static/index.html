@@ -815,9 +815,8 @@
     <h4 data-i18n="store_settings">Paramètres boutique</h4>
     <div class="form-group"><label data-i18n="store_name">Nom boutique</label><input id="ss_name" class="form-control"/></div>
     <div class="form-group"><label data-i18n="slogan">Slogan</label><input id="ss_tagline" class="form-control"/></div>
-    <div class="form-group"><label data-i18n="logo_emoji">Logo (emoji)</label><input id="ss_logo" class="form-control" value="🛒"/></div>
-    <div class="form-group"><label data-i18n="logo_image">صورة اللوغو (اختياري — تُستعمل بدل الإيموجي إذا رُفعت)</label>
-      <input type="file" accept="image/*" class="form-control" data-on-change="uploadStoreLogoImage(this)"/>
+    <div class="form-group"><label data-i18n="logo_image">شعار المتجر (PNG/JPG/WEBP، حتى 1MB)</label>
+      <input type="file" accept="image/png,image/jpeg,image/webp" class="form-control" data-on-change="uploadStoreLogoImage(this)"/>
       <div id="ss_logo_preview" style="margin-top:8px"></div>
     </div>
     <div class="form-group"><label data-i18n="currency">العملة</label>

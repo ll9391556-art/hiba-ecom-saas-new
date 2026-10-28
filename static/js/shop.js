@@ -50,10 +50,12 @@ async function loadShopData(){
     if(sr.status==="ok" && sr.data){
       var s = sr.data;
       SHOP_CURRENCY = s.currency || "DZD";
-      document.getElementById("sh-logo").innerHTML = s.logoImage
-        ? '<img src="'+esc(s.logoImage)+'" style="width:100%;height:100%;object-fit:cover;border-radius:10px"/>'
-        : esc(s.logo||"🛒");
-      document.getElementById("sh-name").textContent = s.name||"Boutique";
+      var storeName = s.name||"Boutique";
+      sh_renderLogo(document.getElementById("sh-logo"), s.logoImage, storeName);
+      sh_renderLogo(document.getElementById("track-logo"), s.logoImage, storeName);
+      sh_setFavicon(s.logoImage, storeName);
+      document.getElementById("sh-name").textContent = storeName;
+      document.getElementById("track-name").textContent = storeName;
       document.getElementById("sh-tag").textContent  = s.tagline||"Catalogue en ligne";
       var pageTitle = (s.name||"Boutique")+" — "+(s.tagline||"OrderFlow");
       document.title = pageTitle;
@@ -75,6 +77,39 @@ async function loadShopData(){
     document.getElementById("sh-empty").style.display   = "block";
     console.error(e);
   }
+}
+
+// ── شعار المتجر (D4a): الصورة، ولا أول حرف من الاسم فمربع بلون المتجر.
+// الإيموجي القديم (storeSettings.logo) يبقى فالبيانات وما يبانش هنا.
+var SHOP_COLOR_MAIN = "#3B2BFF";
+
+function sh_initial(name){
+  return Array.from(String(name||"").trim())[0] || "?";  // Array.from: حرف عربي ولا إيموجي كامل
+}
+
+function sh_renderLogo(el, logoImage, name){
+  el.classList.toggle("has-img", !!logoImage);
+  el.innerHTML = logoImage
+    ? '<img src="'+esc(logoImage)+'" alt="'+esc(name)+'"/>'
+    : esc(sh_initial(name));
+}
+
+function sh_setFavicon(logoImage, name){
+  var href = logoImage;
+  if(!href){
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">'+
+      '<rect width="64" height="64" rx="16" fill="'+SHOP_COLOR_MAIN+'"/>'+
+      '<text x="32" y="43" text-anchor="middle" font-family="Readex Pro,Arial,sans-serif" font-size="32" font-weight="700" fill="#fff">'+
+      esc(sh_initial(name))+'</text></svg>';
+    href = "data:image/svg+xml,"+encodeURIComponent(svg);
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('link[rel~="icon"],link[rel="apple-touch-icon"]'), function(l){
+    l.parentNode.removeChild(l);
+  });
+  var link = document.createElement("link");
+  link.rel = "icon";
+  link.href = href;
+  document.head.appendChild(link);
 }
 
 function sh_setMeta(name, content, isProp){
