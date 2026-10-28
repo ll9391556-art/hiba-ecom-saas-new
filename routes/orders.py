@@ -43,7 +43,6 @@ from services.orders import (
     _delete_order,
     _mutate_order,
     _phone_digits,
-    _save_order,
     _ship_values,
     _valid_order_id,
 )
@@ -259,18 +258,17 @@ def api_update_order_delivery():
     dtype = str(body.get("deliveryType") or "").strip()
     if not oid or dtype not in ("home", "desk"):
         return err_json("Missing or invalid fields")
-    order = _fb_get(f"data/{uid}/orders/{oid}")
-    if not order: return err_json("Order not found", 404)
-    before = dict(order)
-    order["deliveryType"] = dtype
-    p_data = _fb_get(f"data/{uid}/products/{order.get('product')}")
-    c_data = _fb_get(f"data/{uid}/cities/{order.get('city')}")
-    if p_data and c_data:
-        ship_cust, _ = _ship_values(c_data, dtype)
-        order["total"]  = (float(p_data.get("sell", 0)) * int(order.get("qty", 1))) + ship_cust
-        order["profit"] = _calc_order_profit(p_data, c_data, order.get("qty", 1), dtype, order.get("status",""), order.get("profit", 0))
-    _save_order(uid, oid, order, before=before)
-    return ok_json(True)
+    if not _valid_order_id(oid): return err_json("Invalid order id")
+
+    def apply(order, p_data, c_data):
+        order["deliveryType"] = dtype
+        if p_data and c_data:
+            ship_cust, _ = _ship_values(c_data, dtype)
+            order["total"]  = (float(p_data.get("sell", 0)) * int(order.get("qty", 1))) + ship_cust
+            order["profit"] = _calc_order_profit(p_data, c_data, order.get("qty", 1), dtype, order.get("status",""), order.get("profit", 0))
+
+    error = _mutate_response(uid, oid, apply, True, "updateOrderDelivery")
+    return error if error else ok_json(True)
 
 
 # ── تعديل طلب (المهمة 3) ──────────────────────────────────

@@ -253,3 +253,126 @@ def test_status_isolation_and_permissions(client, app, db, shop, seed_owner, see
     assert _set_status(client, yes["headers"], oid, "Confirmed").status_code == 200
     assert _audit(db, uid)[0]["actor"] == "m_yes"
     _assert_exact(app, db, uid)
+
+
+# ── updateOrderDelivery ──────────────────────────────────
+def _set_delivery(client, headers, oid, dtype):
+    return client.post("/api/updateOrderDelivery", json={"orderId": oid, "deliveryType": dtype}, headers=headers)
+
+
+def _delivery(client, owner, oid, dtype):
+    r = _set_delivery(client, owner["headers"], oid, dtype)
+    assert r.status_code == 200, r.get_json()
+    assert r.get_json() == {"status": "ok", "data": True}
+
+
+def test_delivery_total_and_profit_are_unchanged(client, app, db, shop):
+    uid = shop["uid"]
+    oid = _order(client, uid, qty=2)
+    path = f"data/{uid}/orders/{oid}"
+    _delivery(client, shop, oid, "desk")                      # Pending: total يتبدّل، profit = existing
+    o = db.get(path)
+    assert o["deliveryType"] == "desk" and o["total"] == 1000 * 2 + 300
+    assert o["profit"] == 0
+    _status(client, shop, oid, "Confirmed")
+    _delivery(client, shop, oid, "home")
+    o = db.get(path)
+    assert o["total"] == 1000 * 2 + 400
+    assert o["profit"] == pytest.approx((1000 - 600) * 2 + (400 - 300.5))
+    _status(client, shop, oid, "Refused")
+    _delivery(client, shop, oid, "desk")
+    assert db.get(f"{path}/profit") == -150.75
+    assert not db.get(f"{path}/date_delivered")
+    _assert_exact(app, db, uid)
+    assert [e["action"] for e in _audit(db, uid)] == ["تغيير حالة طلب"] * 2   # التوصيل بلا audit كيما قبل
+
+
+def test_delivery_with_missing_city_keeps_total_and_profit(client, app, db, shop):
+    uid = shop["uid"]
+    oid = _order(client, uid)
+    _status(client, shop, oid, "Confirmed")
+    before = db.get(f"data/{uid}/orders/{oid}")
+    db.set(f"data/{uid}/cities/Alger", None)
+    _delivery(client, shop, oid, "desk")
+    o = db.get(f"data/{uid}/orders/{oid}")
+    assert o["deliveryType"] == "desk" and o["total"] == before["total"] and o["profit"] == before["profit"]
+    _assert_exact(app, db, uid)
+
+
+def test_two_delivery_requests_with_the_same_before_count_once(client, app, db, shop, monkeypatch):
+    """الطلب الأول أكّد الطلبية (Confirmed)، الثاني قرا Pending وبدّل التوصيل. الربح يتحسب مرة،
+    والحالة الحقيقية (Confirmed) ما تضيعش."""
+    uid = shop["uid"]
+    oid = _order(client, uid, qty=2)
+    stale = db.get(f"data/{uid}/orders/{oid}")
+    _status(client, shop, oid, "Confirmed")
+    _stale_reads(monkeypatch, oid, stale)
+    _delivery(client, shop, oid, "desk")
+    o = db.get(f"data/{uid}/orders/{oid}")
+    assert o["status"] == "Confirmed" and o["date_sent"]
+    assert o["profit"] == pytest.approx((1000 - 600) * 2 + (300 - 200))
+    stats = db.get(f"data/{uid}/stats")
+    assert stats["confirmed"] == 1 and stats["profitCents"] == round(o["profit"] * 100)
+    _assert_exact(app, db, uid)
+
+
+def test_delivery_retries_when_city_changed_meanwhile(client, app, db, shop, monkeypatch):
+    uid = shop["uid"]
+    oid = _order(client, uid)
+    stale = db.get(f"data/{uid}/orders/{oid}")
+    r = client.post("/api/editOrder", json={"orderId": oid, "data": {"city": "Oran"}}, headers=shop["headers"])
+    assert r.status_code == 200
+    _stale_reads(monkeypatch, oid, stale, times=1)
+    _delivery(client, shop, oid, "desk")
+    o = db.get(f"data/{uid}/orders/{oid}")
+    assert o["city"] == "Oran" and o["total"] == 1000 + 450
+    _assert_exact(app, db, uid)
+
+
+def test_delivery_firebase_failure_is_503_and_totals_untouched(client, app, db, shop, monkeypatch):
+    uid = shop["uid"]
+    oid = _order(client, uid)
+    before, stats = db.get(f"data/{uid}/orders/{oid}"), db.get(f"data/{uid}/stats")
+    _fail_order_txn(monkeypatch, oid)
+    assert _set_delivery(client, shop["headers"], oid, "desk").status_code == 503
+    assert db.get(f"data/{uid}/orders/{oid}") == before and db.get(f"data/{uid}/stats") == stats
+
+
+def test_delivery_on_deleted_or_claimed_order_is_404(client, app, db, shop):
+    import services.orders as so
+    uid = shop["uid"]
+    oid = _order(client, uid)
+    db.set(f"data/{uid}/orders/{oid}/deleting", so._now_ms())
+    before, stats = db.get(f"data/{uid}/orders/{oid}"), db.get(f"data/{uid}/stats")
+    assert _set_delivery(client, shop["headers"], oid, "desk").status_code == 404
+    assert db.get(f"data/{uid}/orders/{oid}") == before and db.get(f"data/{uid}/stats") == stats
+    db.set(f"data/{uid}/orders/{oid}/deleting", None)
+    assert client.post("/api/deleteOrder", json={"orderId": oid}, headers=shop["headers"]).status_code == 200
+    for o in (oid, "ORD-404"):
+        r = _set_delivery(client, shop["headers"], o, "desk")
+        assert r.status_code == 404 and r.get_json()["message"] == "Order not found"
+    assert db.get(f"data/{uid}/orders/{oid}") is None
+
+
+@pytest.mark.parametrize("oid", ["ORD-1/x", "ORD.1", "a" * 81, "ORD-1#"])
+def test_delivery_bad_order_id_is_400(client, db, shop, oid):
+    r = _set_delivery(client, shop["headers"], oid, "desk")
+    assert r.status_code == 400 and r.get_json()["message"] == "Invalid order id"
+    assert db.get(f"data/{shop['uid']}/orders") is None
+
+
+def test_delivery_invalid_fields_is_400(client, shop):
+    for body in ({"orderId": "ORD-1", "deliveryType": "air"}, {"deliveryType": "desk"}, {}):
+        r = client.post("/api/updateOrderDelivery", json=body, headers=shop["headers"])
+        assert r.status_code == 400 and r.get_json()["message"] == "Missing or invalid fields"
+
+
+def test_delivery_isolation_and_permissions(client, db, shop, seed_owner, seed_member):
+    uid = shop["uid"]
+    oid = _order(client, uid)
+    before = db.get(f"data/{uid}/orders/{oid}")
+    other = seed_owner(username="owner2", uid="2002")
+    assert _set_delivery(client, other["headers"], oid, "desk").status_code == 404
+    no = seed_member(shop, "m_no", perms={"products": True})
+    assert _set_delivery(client, no["headers"], oid, "desk").status_code == 403
+    assert db.get(f"data/{uid}/orders/{oid}") == before and db.get("data/2002/orders") is None
