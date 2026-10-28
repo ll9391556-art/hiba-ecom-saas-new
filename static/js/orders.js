@@ -170,6 +170,9 @@ async function updateOrderDelivery(orderId, newType){
 // ── تعديل وحذف طلبية (المهمة 3) ──
 var EDIT_ORDER_ID     = null;
 var EDIT_ORDER_TOTAL0 = "";   // المجموع كيما تفتح المودال: إذا ما تبدّلش، السيرفر يحسبو وحدو
+var EDIT_ORDER_TOTAL_OPEN = ""; // المجموع المخزّن، يرجع كي التاجر يرجّع الخانات كيما كانو
+var EDIT_TOTAL_MANUAL = false;  // التاجر كتب المجموع بيدو: ما نبدّلوهش
+var EDIT_PRICES = {products:{}, cities:{}};  // بالاسم، من getProducts/getCities
 
 // القائمة + القيمة الحالية حتى لو ماعادتش (طلبية قديمة بمنتج ولا ولاية محذوفين)
 function _fillSelect(sel, names, current){
@@ -193,6 +196,9 @@ async function openOrderEdit(orderId){
     return '<option value="'+s+'"'+(o.status===s?" selected":"")+'>'+esc(stLabel(s))+'</option>';
   }).join("");
   EDIT_ORDER_TOTAL0 = String(o.total===undefined||o.total===null ? "" : o.total);
+  EDIT_ORDER_TOTAL_OPEN = EDIT_ORDER_TOTAL0;
+  EDIT_TOTAL_MANUAL = false;
+  EDIT_PRICES = {products:{}, cities:{}};
   document.getElementById("e_total").value = EDIT_ORDER_TOTAL0;
   _fillSelect(document.getElementById("e_product"), [], o.product||"");
   _fillSelect(document.getElementById("e_city"), [], o.city||"");
@@ -200,10 +206,39 @@ async function openOrderEdit(orderId){
   try{
     var pr = await apiGet("/getProducts", {}), cr = await apiGet("/getCities", {});
     if(EDIT_ORDER_ID!==orderId) return;
-    if(pr.status==="ok") _fillSelect(document.getElementById("e_product"), (pr.data||[]).map(function(p){ return p.name; }), o.product||"");
-    if(cr.status==="ok") _fillSelect(document.getElementById("e_city"), (cr.data||[]).map(function(c){ return c.name; }), o.city||"");
+    if(pr.status==="ok"){
+      (pr.data||[]).forEach(function(p){ if(p && p.name) EDIT_PRICES.products[p.name] = p; });
+      _fillSelect(document.getElementById("e_product"), (pr.data||[]).map(function(p){ return p.name; }), o.product||"");
+    }
+    if(cr.status==="ok"){
+      (cr.data||[]).forEach(function(c){ if(c && c.name) EDIT_PRICES.cities[c.name] = c; });
+      _fillSelect(document.getElementById("e_city"), (cr.data||[]).map(function(c){ return c.name; }), o.city||"");
+    }
   }catch(e){}
 }
+
+// نفس معادلة السيرفر (_price_order): sell×qty + شحن الزبون − discountApplied. السيرفر يعاود يحسب غير
+// كي تتبدّل خانة من هادو؛ رجعو كيما كانو → المجموع المخزّن. منتج ولا ولاية ماعادوش: ما نبدّلوش.
+function editOrderAutoTotal(){
+  var o = ORDERS_BY_ID[EDIT_ORDER_ID];
+  if(!o || EDIT_TOTAL_MANUAL) return;
+  var totalEl = document.getElementById("e_total");
+  var product = document.getElementById("e_product").value, city = document.getElementById("e_city").value;
+  var dtype   = document.getElementById("e_delivery").value, status = document.getElementById("e_status").value;
+  var qty     = parseInt(document.getElementById("e_qty").value)||0;
+  if(product===(o.product||"") && city===(o.city||"") && qty===(parseInt(o.qty)||1) && status===o.status &&
+     dtype===(o.deliveryType==="desk" ? "desk" : "home")){
+    totalEl.value = EDIT_ORDER_TOTAL0 = EDIT_ORDER_TOTAL_OPEN;
+    return;
+  }
+  var p = EDIT_PRICES.products[product], c = EDIT_PRICES.cities[city];
+  if(!p || !c || qty<1) return;
+  var ship = dtype==="desk" ? c.deskCust : c.custShip;
+  var auto = Math.max(0, Math.round(((parseFloat(p.sell)||0)*qty + (parseFloat(ship)||0) - (parseFloat(o.discountApplied)||0))*100)/100);
+  totalEl.value = EDIT_ORDER_TOTAL0 = String(auto);
+}
+
+function editOrderTotalTyped(){ EDIT_TOTAL_MANUAL = true; }
 
 async function saveOrderEdit(){
   if(!EDIT_ORDER_ID) return;
