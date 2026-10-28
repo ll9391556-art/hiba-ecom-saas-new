@@ -18,6 +18,7 @@ async function loadStore(){
       document.getElementById("ss_name").value    = s.name||"";
       document.getElementById("ss_tagline").value = s.tagline||"";
       document.getElementById("ss_currency").value = s.currency||"DZD";
+      document.getElementById("ss_lang").value = s.lang||"AR";  // لغة المتجر العام، العربية افتراضياً
       var color = s.color||"violet";  // المتاجر القديمة بلا color = بنفسجي
       Array.prototype.forEach.call(document.querySelectorAll('input[name="ss_color"]'), function(r){ r.checked = r.value===color; });
       currentStoreLogoImage = s.logoImage||"";
@@ -91,6 +92,7 @@ async function saveStoreSettings(){
     color:    picked ? picked.value : undefined,
     name:     document.getElementById("ss_name").value.trim(),
     tagline:  document.getElementById("ss_tagline").value.trim(),
+    lang:     document.getElementById("ss_lang").value,
     logoImage:currentStoreLogoImage,
     currency: document.getElementById("ss_currency").value,
   }});

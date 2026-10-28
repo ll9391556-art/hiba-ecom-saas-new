@@ -28,15 +28,15 @@
       <div class="shop-brand">
         <div class="shop-brand-icon" id="sh-logo"></div>
         <div>
-          <div class="shop-brand-name" id="sh-name">Boutique</div>
-          <div class="shop-brand-tag" id="sh-tag">Catalogue en ligne</div>
+          <div class="shop-brand-name" id="sh-name"></div>
+          <div class="shop-brand-tag" id="sh-tag"></div>
         </div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <span class="shop-track-link" data-on-click="toggleTrackPanel()">📦 Suivre ma commande</span>
-        <input id="sh-search" style="background:var(--card2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:7px 12px;font-size:13px;width:200px" placeholder="🔍 Rechercher..."/>
+        <span class="shop-track-link" data-on-click="toggleTrackPanel()" data-i18n="sh_track_link">📦 تتبّع طلبيتي</span>
+        <input id="sh-search" style="background:var(--card2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:7px 12px;font-size:13px;width:200px" placeholder="🔍 ابحث عن منتج..." data-i18n-placeholder="sh_search_ph"/>
         <button data-on-click="openCart()" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-weight:700;font-size:13px;cursor:pointer;position:relative">
-          🛍️ <span id="sh-cart-label">Panier</span>
+          🛍️ <span id="sh-cart-label" data-i18n="sh_cart">السلة</span>
           <span id="sh-cart-count" style="display:none;position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;font-size:10px;font-weight:900;width:18px;height:18px;border-radius:50%;display:none;align-items:center;justify-content:center">0</span>
         </button>
       </div>
@@ -47,11 +47,11 @@
     <div id="track-panel" class="track-panel">
       <div class="track-brand">
         <span class="shop-brand-icon" id="track-logo"></span>
-        <div><strong id="track-name"></strong><div class="shop-brand-tag">تتبّع طلبيتك</div></div>
+        <div><strong id="track-name"></strong><div class="shop-brand-tag" data-i18n="sh_track_title">تتبّع طلبيتك</div></div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <input id="track-phone" class="form-control" style="flex:1;min-width:160px" placeholder="رقم الهاتف / Téléphone" type="tel"/>
-        <button class="btn-primary btn-sm" data-on-click="sh_trackOrder()">بحث</button>
+        <input id="track-phone" class="form-control" style="flex:1;min-width:160px" placeholder="رقم الهاتف" data-i18n-placeholder="sh_phone_ph" type="tel"/>
+        <button class="btn-primary btn-sm" data-on-click="sh_trackOrder()" data-i18n="sh_search_btn">بحث</button>
       </div>
       <div id="track-results"></div>
     </div>
@@ -60,11 +60,11 @@
       <div class="shop-toolbar" id="sh-toolbar" style="display:none">
         <div id="sh-categories" style="display:flex;gap:8px;flex-wrap:wrap;flex:1"></div>
         <select id="sh-sort" class="shop-sort" data-on-change="sh_renderGrid(document.getElementById('sh-search').value)">
-          <option value="default">الترتيب الافتراضي</option>
-          <option value="price_asc">السعر: الأقل أولاً</option>
-          <option value="price_desc">السعر: الأعلى أولاً</option>
-          <option value="newest">الأحدث</option>
-          <option value="bestselling">الأكثر طلباً</option>
+          <option value="default" data-i18n="sh_sort_default">الترتيب الافتراضي</option>
+          <option value="price_asc" data-i18n="sh_sort_price_asc">السعر: الأقل أولاً</option>
+          <option value="price_desc" data-i18n="sh_sort_price_desc">السعر: الأعلى أولاً</option>
+          <option value="newest" data-i18n="sh_sort_newest">الأحدث</option>
+          <option value="bestselling" data-i18n="sh_sort_best">الأكثر طلباً</option>
         </select>
       </div>
       <div id="sh-grid" class="shop-grid"></div>
@@ -73,65 +73,59 @@
       </div>
       <div id="sh-empty" style="display:none;text-align:center;padding:60px;color:var(--muted)">
         <div style="font-size:48px;margin-bottom:12px">📦</div>
-        <div style="font-weight:700">Aucun produit disponible</div>
+        <div style="font-weight:700" data-i18n="sh_no_products">لا توجد منتجات حالياً</div>
       </div>
     </div>
 
     <div id="sh-step-checkout" style="display:none;max-width:500px;margin:0 auto">
-      <div style="cursor:pointer;color:var(--accent);font-size:13px;font-weight:700;margin-bottom:16px" data-on-click="sh_goStep('grid')">← Retour</div>
+      <div style="cursor:pointer;color:var(--accent);font-size:13px;font-weight:700;margin-bottom:16px" data-on-click="sh_goStep('grid')" data-i18n="sh_back">→ رجوع</div>
       <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px">
-        <h4 style="margin-bottom:20px">📋 Finaliser la commande</h4>
+        <h4 style="margin-bottom:20px" data-i18n="sh_checkout_title">📋 إتمام الطلب</h4>
         <div id="sh-checkout-items" style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)"></div>
-        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span style="color:var(--muted)">Sous-total</span><span id="sh-subtotal">—</span></div>
-        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:12px"><span style="color:var(--muted)">Livraison</span><span id="sh-ship-cost">—</span></div>
-        <div style="display:flex;justify-content:space-between;font-weight:800;font-size:16px;margin-bottom:20px"><span>Total</span><span id="sh-total" style="color:var(--green)">—</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span style="color:var(--muted)" data-i18n="sh_subtotal">المجموع الفرعي</span><span id="sh-subtotal">—</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:12px"><span style="color:var(--muted)" data-i18n="sh_shipping">التوصيل</span><span id="sh-ship-cost">—</span></div>
+        <div style="display:flex;justify-content:space-between;font-weight:800;font-size:16px;margin-bottom:20px"><span data-i18n="sh_total">المجموع</span><span id="sh-total" style="color:var(--green)">—</span></div>
         <div style="display:flex;flex-direction:column;gap:10px">
-          <input id="sh-cname" class="form-control" placeholder="Nom complet *"/>
-          <input id="sh-cphone" class="form-control" placeholder="Téléphone *" type="tel"/>
-          <input id="sh-cphone2" class="form-control" placeholder="Téléphone 2"/>
-          <select id="sh-ccity" class="form-select"><option value="">— Choisir la ville —</option></select>
+          <input id="sh-cname" class="form-control" placeholder="الاسم الكامل *" data-i18n-placeholder="sh_name_ph"/>
+          <input id="sh-cphone" class="form-control" placeholder="رقم الهاتف *" data-i18n-placeholder="sh_phone_req_ph" type="tel"/>
+          <input id="sh-cphone2" class="form-control" placeholder="رقم هاتف ثاني" data-i18n-placeholder="sh_phone2_ph"/>
+          <select id="sh-ccity" class="form-select"><option value="" data-i18n="sh_choose_city">— اختر الولاية —</option></select>
           <select id="sh-delivery" class="form-select">
-            <option value="" disabled selected>— اختر نوع التوصيل * —</option>
-            <option value="home">🏠 توصيل للمنزل</option>
-            <option value="desk">🏢 توصيل لمكتب الاستلام</option>
+            <option value="" disabled selected data-i18n="sh_choose_delivery">— اختر نوع التوصيل * —</option>
+            <option value="home" data-i18n="sh_home">🏠 توصيل للمنزل</option>
+            <option value="desk" data-i18n="sh_desk">🏢 توصيل لمكتب الاستلام</option>
           </select>
-          <input id="sh-caddr" class="form-control" placeholder="Adresse de livraison"/>
+          <input id="sh-caddr" class="form-control" placeholder="عنوان التوصيل" data-i18n-placeholder="sh_addr_ph"/>
         </div>
-        <button data-on-click="sh_submitOrder()" style="width:100%;margin-top:16px;background:var(--green);color:#fff;border:none;border-radius:8px;padding:12px;font-weight:700;font-size:14px;cursor:pointer">
-          ✅ Confirmer la commande
-        </button>
+        <button data-on-click="sh_submitOrder()" style="width:100%;margin-top:16px;background:var(--green);color:#fff;border:none;border-radius:8px;padding:12px;font-weight:700;font-size:14px;cursor:pointer" data-i18n="sh_confirm">✅ تأكيد الطلب</button>
       </div>
     </div>
 
     <div id="sh-step-success" style="display:none;text-align:center;padding:60px 20px">
       <div style="font-size:64px;margin-bottom:16px">🎉</div>
-      <h3 style="margin-bottom:8px">Commande enregistrée!</h3>
-      <p style="color:var(--muted);margin-bottom:8px">Nous vous contacterons bientôt pour confirmer.</p>
-      <p style="font-size:13px;color:var(--muted)">Réf: <strong id="sh-order-ref" style="color:var(--text)">—</strong></p>
-      <button data-on-click="sh_goStep('grid')" style="margin-top:20px;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px 24px;font-weight:700;cursor:pointer">
-        🛍️ Continuer les achats
-      </button>
+      <h3 style="margin-bottom:8px" data-i18n="sh_success_title">تم تسجيل طلبك!</h3>
+      <p style="color:var(--muted);margin-bottom:8px" data-i18n="sh_success_msg">سنتصل بك قريباً للتأكيد.</p>
+      <p style="font-size:13px;color:var(--muted)"><span data-i18n="sh_ref">رقم الطلب:</span> <strong id="sh-order-ref" style="color:var(--text)">—</strong></p>
+      <button data-on-click="sh_goStep('grid')" style="margin-top:20px;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px 24px;font-weight:700;cursor:pointer" data-i18n="sh_continue">🛍️ مواصلة التسوق</button>
     </div>
   </div>
-  <div class="shop-footer">Propulsé par <strong>OrderFlow</strong></div>
+  <div class="shop-footer"><span data-i18n="sh_powered">مدعوم بـ</span> <strong>OrderFlow</strong></div>
 </div>
 
 <div class="cart-overlay" id="cartOverlay" data-on-click="closeCart()"></div>
 <div class="cart-drawer" id="cartDrawer">
   <div class="cart-head">
-    <h5 style="margin:0">🛍️ Panier</h5>
+    <h5 style="margin:0" data-i18n="sh_cart_title">🛍️ السلة</h5>
     <button data-on-click="closeCart()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer">✕</button>
   </div>
   <div class="cart-items" id="cartItems">
-    <div style="text-align:center;padding:40px;color:var(--muted)">Panier vide</div>
+    <div style="text-align:center;padding:40px;color:var(--muted)" data-i18n="sh_cart_empty">السلة فارغة</div>
   </div>
   <div class="cart-footer">
     <div style="display:flex;justify-content:space-between;font-weight:800;font-size:15px;margin-bottom:12px">
-      <span>Total</span><span id="cartTotal" style="color:var(--green)">0</span>
+      <span data-i18n="sh_total">المجموع</span><span id="cartTotal" style="color:var(--green)">0</span>
     </div>
-    <button data-on-click="goCheckout()" style="width:100%;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:12px;font-weight:700;font-size:14px;cursor:pointer">
-      🚀 Commander
-    </button>
+    <button data-on-click="goCheckout()" style="width:100%;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:12px;font-weight:700;font-size:14px;cursor:pointer" data-i18n="sh_order_btn">🚀 اطلب الآن</button>
   </div>
 </div>
 
@@ -139,9 +133,9 @@
   <div class="pdp-box">
     <button class="pdp-close" data-on-click="closePdp()">✕</button>
     <div class="pdp-img-wrap" id="pdp-img-wrap">
-      <button class="pdp-nav prev" data-on-click="pdp_nav(-1)" aria-label="الصورة السابقة">‹</button>
+      <button class="pdp-nav prev" data-on-click="pdp_nav(-1)" aria-label="الصورة السابقة" data-i18n-aria-label="sh_prev_img">‹</button>
       <div id="pdp-media" class="pdp-media"></div>
-      <button class="pdp-nav next" data-on-click="pdp_nav(1)" aria-label="الصورة التالية">›</button>
+      <button class="pdp-nav next" data-on-click="pdp_nav(1)" aria-label="الصورة التالية" data-i18n-aria-label="sh_next_img">›</button>
     </div>
     <div class="pdp-body">
       <div class="shop-card-cat" id="pdp-cat"></div>
@@ -151,9 +145,9 @@
       <p id="pdp-desc" style="color:var(--muted);font-size:13px;margin-bottom:14px"></p>
       <span class="badge" id="pdp-stat"></span>
       <div id="pdp-urgency" style="font-size:12px;color:var(--red);font-weight:700;margin-top:6px;display:none"></div>
-      <button class="shop-add-btn" id="pdp-add-btn" style="width:100%;padding:12px;margin-top:14px;font-size:14px" data-on-click="pdp_addToCart()">🛒 Ajouter au panier</button>
+      <button class="shop-add-btn" id="pdp-add-btn" style="width:100%;padding:12px;margin-top:14px;font-size:14px" data-on-click="pdp_addToCart()" data-i18n="sh_add_to_cart">🛒 أضف للسلة</button>
       <div style="margin-top:18px">
-        <div style="cursor:pointer;color:var(--accent);font-size:13px;font-weight:700" data-on-click="pdp_toggleReviews()">⭐ عرض التقييمات</div>
+        <div style="cursor:pointer;color:var(--accent);font-size:13px;font-weight:700" data-on-click="pdp_toggleReviews()" data-i18n="sh_show_reviews">⭐ عرض التقييمات</div>
         <div id="pdp-reviews" style="display:none;margin-top:10px"></div>
       </div>
     </div>

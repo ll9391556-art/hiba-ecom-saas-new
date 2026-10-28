@@ -53,6 +53,7 @@ _STORE_TEXT_LIMITS = {"name": 120, "tagline": 300, "logo": 32, "lang": 8}
 
 
 _STORE_CURRENCIES  = ("DZD", "EUR", "USD")
+_STORE_LANGS       = ("AR", "FR", "EN")  # لغة المتجر العام (D4a)؛ بلا lang = AR
 _STORE_DEFAULTS    = (("name","My Store"), ("tagline",""), ("logo","🛒"), ("logoImage",""), ("lang","AR"),
                       ("currency","DZD"), ("color", DEFAULT_STORE_COLOR))
 
@@ -81,6 +82,8 @@ def _clean_store_setting(field, value, current, uid=None):
         return (isinstance(value, str) and _is_own_logo_url(value, uid), value)
     if field == "currency":
         return (value in _STORE_CURRENCIES, value)
+    if field == "lang":
+        return (value in _STORE_LANGS, value)
     if field == "color":
         return (isinstance(value, str) and value in STORE_COLORS, value)
     if not isinstance(value, str) or len(value) > _STORE_TEXT_LIMITS[field]:

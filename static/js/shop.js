@@ -8,6 +8,7 @@ var SHOP_CURRENCY = "DZD";
 var SHOP_CATEGORY = "";
 var PDP_PRODUCT   = null;
 var PDP_SLIDER    = null;
+currentLang = "AR";  // لغة المتجر حتى توصل الإعدادات (ماشي of_lang تاع اللوحة)
 
 (function(){
   var p = new URLSearchParams(window.location.search);
@@ -32,13 +33,15 @@ function initShop(){
 async function loadShopData(){
   try{
     var sr = await apiGet("/getStoreSettings", {userId: SHOP_UID}, false);
-    if(sr.status==="ok" && sr.data && sr.data.storeOpen===false){
+    var s  = (sr.status==="ok" && sr.data) || {};
+    sh_applyLang(s.lang);
+    if(s.storeOpen===false){
       // store_unavailable: باقة المتجر ما فيهاش متجر عام (free أو اشتراك انتهى) — ما نطلبوش المنتجات
       document.getElementById("sh-loading").style.display = "none";
       var empty = document.getElementById("sh-empty");
       empty.style.display = "block";
-      empty.textContent = "هذا المتجر غير متاح حالياً";
-      if(sr.data.name) document.getElementById("sh-name").textContent = sr.data.name;
+      empty.textContent = t("sh_unavailable");
+      if(s.name) document.getElementById("sh-name").textContent = s.name;
       return;
     }
     var pr = await apiGet("/getStoreProducts", {userId: SHOP_UID}, false);
@@ -47,25 +50,22 @@ async function loadShopData(){
     SHOP_PRODUCTS = (pr.status==="ok" && pr.data) ? pr.data.filter(function(p){ return p.visible!=="no"; }) : [];
     SHOP_CITIES   = (cr.status==="ok" && cr.data) ? cr.data : [];
 
-    if(sr.status==="ok" && sr.data){
-      var s = sr.data;
-      SHOP_CURRENCY = s.currency || "DZD";
-      sh_applyColor(s.color);
-      var storeName = s.name||"Boutique";
-      sh_renderLogo(document.getElementById("sh-logo"), s.logoImage, storeName);
-      sh_renderLogo(document.getElementById("track-logo"), s.logoImage, storeName);
-      sh_setFavicon(s.logoImage, storeName);
-      document.getElementById("sh-name").textContent = storeName;
-      document.getElementById("track-name").textContent = storeName;
-      document.getElementById("sh-tag").textContent  = s.tagline||"Catalogue en ligne";
-      var pageTitle = (s.name||"Boutique")+" — "+(s.tagline||"OrderFlow");
-      document.title = pageTitle;
-      sh_setMeta("description", s.tagline || ("متجر "+(s.name||"")+" — تسوّق الآن"));
-      sh_setMeta("og:title", pageTitle, true);
-    }
+    SHOP_CURRENCY = s.currency || "DZD";
+    sh_applyColor(s.color);
+    var storeName = s.name||t("sh_default_name");
+    sh_renderLogo(document.getElementById("sh-logo"), s.logoImage, storeName);
+    sh_renderLogo(document.getElementById("track-logo"), s.logoImage, storeName);
+    sh_setFavicon(s.logoImage, storeName);
+    document.getElementById("sh-name").textContent = storeName;
+    document.getElementById("track-name").textContent = storeName;
+    document.getElementById("sh-tag").textContent  = s.tagline||t("sh_default_tag");
+    var pageTitle = storeName+" — "+(s.tagline||"OrderFlow");
+    document.title = pageTitle;
+    sh_setMeta("description", s.tagline || t("sh_meta_desc").replace("{name}", storeName));
+    sh_setMeta("og:title", pageTitle, true);
 
     var citySel = document.getElementById("sh-ccity");
-    citySel.innerHTML = '<option value="">— Choisir la ville —</option>'+
+    citySel.innerHTML = '<option value="">'+esc(t("sh_choose_city"))+'</option>'+
       SHOP_CITIES.map(function(c){ return '<option value="'+esc(c.name)+'" data-home-ship="'+esc(c.custShip||0)+'" data-desk-ship="'+esc(c.deskCust||0)+'">'+esc(c.name)+'</option>'; }).join("");
     citySel.addEventListener("change", sh_updateTotal);
     document.getElementById("sh-delivery").addEventListener("change", sh_updateTotal);
@@ -78,6 +78,24 @@ async function loadShopData(){
     document.getElementById("sh-empty").style.display   = "block";
     console.error(e);
   }
+}
+
+// ── لغة المتجر (D4a): storeSettings.lang (AR/FR/EN)، العربية افتراضياً. ماشي applyLang تاع
+// اللوحة: هاديك تكتب localStorage.of_lang، والمتجر فنفس الـ origin، فتبدّل لغة لوحة التاجر.
+var SHOP_LANGS = ["AR","FR","EN"];
+
+function sh_applyLang(lang){
+  currentLang = SHOP_LANGS.indexOf(lang)>=0 ? lang : "AR";
+  document.documentElement.setAttribute("lang", currentLang.toLowerCase());
+  document.documentElement.setAttribute("dir", currentLang==="AR" ? "rtl" : "ltr");
+  Array.prototype.forEach.call(document.querySelectorAll("[data-i18n]"), function(el){
+    el.textContent = t(el.getAttribute("data-i18n"));
+  });
+  ["placeholder","aria-label"].forEach(function(attr){
+    Array.prototype.forEach.call(document.querySelectorAll("[data-i18n-"+attr+"]"), function(el){
+      el.setAttribute(attr, t(el.getAttribute("data-i18n-"+attr)));
+    });
+  });
 }
 
 // ── شعار المتجر (D4a): الصورة، ولا أول حرف من الاسم فمربع بلون المتجر.
@@ -145,7 +163,7 @@ function sh_renderCategories(){
   var toolbar = document.getElementById("sh-toolbar");
   if(!cats.length){ toolbar.style.display="none"; return; }
   toolbar.style.display = "flex";
-  box.innerHTML = '<span class="shop-chip'+(SHOP_CATEGORY===""?" active":"")+'" data-cat="" data-on-click="sh_filterCategory(this.dataset.cat)">الكل</span>' +
+  box.innerHTML = '<span class="shop-chip'+(SHOP_CATEGORY===""?" active":"")+'" data-cat="" data-on-click="sh_filterCategory(this.dataset.cat)">'+esc(t("sh_all"))+'</span>' +
     cats.map(function(c){
       return '<span class="shop-chip'+(SHOP_CATEGORY===c?" active":"")+'" data-cat="'+esc(c)+'" data-on-click="sh_filterCategory(this.dataset.cat)">'+esc(c)+'</span>';
     }).join("");
@@ -166,7 +184,7 @@ var TRACK_PHONE = "";
 async function sh_trackOrder(){
   var phone = document.getElementById("track-phone").value.trim();
   var resBox = document.getElementById("track-results");
-  if(!phone){ resBox.innerHTML = '<div class="track-result">أدخل رقم الهاتف</div>'; return; }
+  if(!phone){ resBox.innerHTML = '<div class="track-result">'+esc(t("sh_enter_phone"))+'</div>'; return; }
   TRACK_PHONE = phone;
   resBox.innerHTML = '<div class="track-result"><span class="spinner"></span></div>';
   try{
@@ -177,15 +195,15 @@ async function sh_trackOrder(){
         var rateBlock = "";
         if(o.status==="Delivered"){
           if(o.rated){
-            rateBlock = '<div style="font-size:11px;color:var(--green);margin-top:6px">✅ تم تقييم هذا الطلب، شكراً لك</div>';
+            rateBlock = '<div style="font-size:11px;color:var(--green);margin-top:6px">'+esc(t("sh_rated"))+'</div>';
           } else {
             rateBlock = '<div class="rate-widget" data-order-id="'+esc(o.id)+'">'+
-              '<div style="font-size:12px;margin-bottom:6px">⭐ قيّم هذا المنتج:</div>'+
+              '<div style="font-size:12px;margin-bottom:6px">'+esc(t("sh_rate_prompt"))+'</div>'+
               '<div class="rate-stars" data-value="0">'+
                 [1,2,3,4,5].map(function(n){ return '<span data-n="'+n+'" data-on-click="setRateStar(this,parseInt(this.dataset.n))">☆</span>'; }).join("")+
               '</div>'+
-              '<textarea class="rate-comment" placeholder="تعليق (اختياري)"></textarea>'+
-              '<button class="btn-primary btn-sm" style="margin-top:8px" data-on-click="submitProductRating(this.closest(\'.rate-widget\').dataset.orderId,this)">إرسال التقييم</button>'+
+              '<textarea class="rate-comment" placeholder="'+esc(t("sh_rate_comment_ph"))+'"></textarea>'+
+              '<button class="btn-primary btn-sm" style="margin-top:8px" data-on-click="submitProductRating(this.closest(\'.rate-widget\').dataset.orderId,this)">'+esc(t("sh_send_rating"))+'</button>'+
             '</div>';
           }
         }
@@ -194,9 +212,9 @@ async function sh_trackOrder(){
           '<span class="badge '+stCls+'">'+esc(stLabel(o.status))+'</span></div>'+rateBlock+'</div>';
       }).join("");
     } else {
-      resBox.innerHTML = '<div class="track-result">لا توجد طلبات بهذا الرقم</div>';
+      resBox.innerHTML = '<div class="track-result">'+esc(t("sh_no_orders"))+'</div>';
     }
-  }catch(e){ resBox.innerHTML = '<div class="track-result">خطأ، حاول مرة أخرى</div>'; }
+  }catch(e){ resBox.innerHTML = '<div class="track-result">'+esc(t("sh_try_again"))+'</div>'; }
 }
      
 
@@ -213,23 +231,23 @@ async function submitProductRating(orderId, btnEl){
   var widget = btnEl.closest(".rate-widget");
   var value  = parseInt(widget.querySelector(".rate-stars").getAttribute("data-value")) || 0;
   var comment= widget.querySelector(".rate-comment").value.trim();
-  if(value < 1){ toast("اختر عدد النجوم أولاً","err"); return; }
+  if(value < 1){ toast(t("sh_pick_stars"),"err"); return; }
   btnEl.disabled = true;
   try{
     var r = await apiPost("/submitRating", {
       userId: SHOP_UID, orderId: orderId, phone: TRACK_PHONE, rating: value, comment: comment
     }, false);
     if(r.status==="ok"){
-      widget.outerHTML = '<div style="font-size:11px;color:var(--green);margin-top:6px">✅ شكراً، تم إرسال تقييمك</div>';
-      toast("✅ شكراً على تقييمك","ok");
+      widget.outerHTML = '<div style="font-size:11px;color:var(--green);margin-top:6px">'+esc(t("sh_rating_sent"))+'</div>';
+      toast(t("sh_rating_sent"),"ok");
     } else {
       toast("❌ "+r.message,"err");
       btnEl.disabled = false;
     }
-  }catch(e){ toast("خطأ، حاول مرة أخرى","err"); btnEl.disabled = false; }
+  }catch(e){ toast(t("sh_try_again"),"err"); btnEl.disabled = false; }
 }
 
-function sh_cur(){ return CURRENCY_SYMBOLS_PUBLIC[SHOP_CURRENCY] || esc(SHOP_CURRENCY); }
+function sh_cur(){ return SHOP_CURRENCY==="DZD" ? esc(t("sh_cur_dzd")) : (CURRENCY_SYMBOLS_PUBLIC[SHOP_CURRENCY] || esc(SHOP_CURRENCY)); }
 
 function starsHtml(avg, count){
   if(!count) return "";
@@ -238,7 +256,7 @@ function starsHtml(avg, count){
   for(var i=1;i<=5;i++) s += (i<=full ? "★" : "☆");
   return '<div class="stars-display">'+s+' <span style="color:var(--muted);font-weight:400">('+count+')</span></div>';
 }
-var CURRENCY_SYMBOLS_PUBLIC = {DZD:"دج", EUR:"€", USD:"$"};
+var CURRENCY_SYMBOLS_PUBLIC = {EUR:"€", USD:"$"};  // دج/DA/DZD حسب لغة المتجر (sh_cur_dzd)
 
 function sh_sortList(list){
   var sort = (document.getElementById("sh-sort")||{}).value || "default";
@@ -342,12 +360,12 @@ function sh_renderGrid(q){
         (p.category?'<div class="shop-card-cat">'+esc(p.category)+'</div>':'')+
         starsHtml(p.avgRating, p.ratingCount)+
         (p.description?'<div style="font-size:11px;color:var(--muted);margin-top:4px">'+esc(p.description)+'</div>':'')+
-        (av>0 && av<=5?'<div style="font-size:11px;color:var(--red);font-weight:700;margin-top:4px">⚡ متبقي '+av+' قطع فقط!</div>':'')+
+        (av>0 && av<=5?'<div style="font-size:11px;color:var(--red);font-weight:700;margin-top:4px">'+esc(t("sh_left").replace("{n}", av))+'</div>':'')+
       '</div>'+
       '<div class="shop-card-footer">'+
         '<div class="shop-price">'+esc(p.sell||0)+' '+sh_cur()+'</div>'+
         '<button class="shop-add-btn"'+(dis?' disabled':'')+' data-name="'+esc(p.name)+'" data-on-click="event.stopPropagation();sh_addToCart(this.dataset.name)">'+
-        (dis?'Rupture':'🛒 Ajouter')+'</button>'+
+        esc(t(dis?"sh_sold_out":"sh_add"))+'</button>'+
       '</div></div>';
   }).join("");
   sh_initSliders(grid);
@@ -367,11 +385,11 @@ function pdp_open(name){
   document.getElementById("pdp-reviews").style.display = "none";
   document.getElementById("pdp-reviews").innerHTML = "";
   var stCls = av<=0?"br":av<=5?"bn":"bs";
-  var stLbl = av<=0?"Rupture de stock":av<=5?"Stock faible":"En stock";
+  var stLbl = t(av<=0?"sh_stock_out":av<=5?"sh_stock_low":"sh_stock_in");
   var statEl = document.getElementById("pdp-stat");
   statEl.className = "badge "+stCls; statEl.textContent = stLbl;
   var urgEl = document.getElementById("pdp-urgency");
-  if(av>0 && av<=5){ urgEl.style.display="block"; urgEl.textContent="⚡ متبقي "+av+" قطع فقط!"; }
+  if(av>0 && av<=5){ urgEl.style.display="block"; urgEl.textContent=t("sh_left").replace("{n}", av); }
   else{ urgEl.style.display="none"; }
   document.getElementById("pdp-add-btn").disabled = av<=0;
   pdp_renderImage();
@@ -412,7 +430,7 @@ async function pdp_toggleReviews(){
   try{
     var r = await apiGet("/getProductRatings", {userId: SHOP_UID, product: PDP_PRODUCT.name}, false);
     var items = (r.status==="ok" && r.data) ? r.data : [];
-    if(!items.length){ box.innerHTML = '<div style="color:var(--muted);font-size:12px">لا توجد تقييمات بعد</div>'; return; }
+    if(!items.length){ box.innerHTML = '<div style="color:var(--muted);font-size:12px">'+esc(t("sh_no_reviews"))+'</div>'; return; }
     box.innerHTML = items.map(function(it){
       var rating = Math.max(0, Math.min(5, parseInt(it.rating)||0));
       var stars = "★".repeat(rating)+"☆".repeat(5-rating);
@@ -422,18 +440,18 @@ async function pdp_toggleReviews(){
         '<div style="font-size:10px;color:var(--muted);margin-top:4px">'+esc(it.date)+'</div>'+
       '</div>';
     }).join("");
-  }catch(e){ box.innerHTML = '<div style="color:var(--red);font-size:12px">خطأ فالتحميل</div>'; }
+  }catch(e){ box.innerHTML = '<div style="color:var(--red);font-size:12px">'+esc(t("sh_load_error"))+'</div>'; }
 }
 
 function sh_addToCart(name){
   var p = SHOP_PRODUCTS.find(function(x){ return x.name===name; });
   if(!p||p.available<=0) return;
   var ex = SHOP_CART.find(function(c){ return c.name===name; });
-  if(ex){ if(ex.qty<p.available) ex.qty++; else{ toast("Stock insuffisant","err"); return; } }
+  if(ex){ if(ex.qty<p.available) ex.qty++; else{ toast(t("sh_stock_short"),"err"); return; } }
   else SHOP_CART.push({name:p.name,sell:Number(p.sell)||0,qty:1,available:Number(p.available||0),image:p.image||""});
   sh_updateCartUI();
   trackShopEvent('AddToCart', {content_name:name, value:p.sell, currency:SHOP_CURRENCY});
-  toast("✅ Ajouté: "+name,"ok");
+  toast(t("sh_added")+name,"ok");
 }
 
 function sh_cartSubtotal(){ return SHOP_CART.reduce(function(s,c){ return s+(c.sell*c.qty); },0); }
@@ -446,7 +464,7 @@ function sh_updateCartUI(){
 
   var items = document.getElementById("cartItems");
   if(!SHOP_CART.length){
-    items.innerHTML='<div style="text-align:center;padding:40px;color:var(--muted)">Panier vide</div>';
+    items.innerHTML='<div style="text-align:center;padding:40px;color:var(--muted)">'+esc(t("sh_cart_empty"))+'</div>';
   } else {
     items.innerHTML = SHOP_CART.map(function(c){
       var img = c.image
@@ -495,7 +513,7 @@ function closeCart(){
 
 function goCheckout(){
   trackShopEvent('InitiateCheckout', {value:sh_cartSubtotal(), currency:SHOP_CURRENCY});
-  if(!SHOP_CART.length){ toast("Panier vide","err"); return; }
+  if(!SHOP_CART.length){ toast(t("sh_cart_empty"),"err"); return; }
   closeCart();
   document.getElementById("sh-checkout-items").innerHTML = SHOP_CART.map(function(c){
     return '<div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0">'+
@@ -526,8 +544,8 @@ async function sh_submitOrder(){
   var city  = document.getElementById("sh-ccity").value;
   var addr  = document.getElementById("sh-caddr").value.trim();
   var dtype = document.getElementById("sh-delivery").value;
-  if(!name||!phone||!city){ toast("Remplissez les champs *","err"); return; }
-  if(!dtype){ toast("اختر نوع التوصيل (منزل أو مكتب الاستلام)","err"); return; }
+  if(!name||!phone||!city){ toast(t("sh_fill_required"),"err"); return; }
+  if(!dtype){ toast(t("sh_pick_delivery"),"err"); return; }
 
   var sel  = document.getElementById("sh-ccity");
   var attr = dtype==="desk" ? "deskShip" : "homeShip";
@@ -553,7 +571,7 @@ async function sh_submitOrder(){
     sh_updateCartUI();
     sh_goStep("success");
   } else {
-    toast("❌ Erreur lors de l'envoi","err");
+    toast(t("sh_send_error"),"err");
   }
 }
 

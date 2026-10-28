@@ -165,7 +165,25 @@ var I18N = {
     early_offer:"Offre premiers marchands",early_full:"Toutes les places sont prises",instead_of_year:"au lieu de {x} DA par an",
     current_plan:"Votre plan actuel",plan_expires_on:"expire le {date}",plan_expires_soon:"expire bientôt : {date}",plan_grace_until:"expiré — délai de grâce jusqu'au {date}",plan_no_expiry:"sans date d'expiration",
     contact_us:"Nous contacter",
-    request_plan:"Demander ce plan"
+    request_plan:"Demander ce plan",
+    // المتجر العام (D4a): لغة المتجر من storeSettings.lang
+    store_lang:"Langue de la boutique",lang_ar:"العربية",lang_fr:"Français",lang_en:"English",sh_default_name:"Boutique",sh_default_tag:"Catalogue en ligne",sh_track_link:"📦 Suivre ma commande",
+    sh_search_ph:"🔍 Rechercher...",sh_cart:"Panier",sh_track_title:"Suivez votre commande",sh_phone_ph:"Numéro de téléphone",
+    sh_search_btn:"Rechercher",sh_sort_default:"Tri par défaut",sh_sort_price_asc:"Prix croissant",sh_sort_price_desc:"Prix décroissant",
+    sh_sort_newest:"Nouveautés",sh_sort_best:"Meilleures ventes",sh_no_products:"Aucun produit disponible",sh_back:"← Retour",
+    sh_checkout_title:"📋 Finaliser la commande",sh_subtotal:"Sous-total",sh_shipping:"Livraison",sh_total:"Total",
+    sh_name_ph:"Nom complet *",sh_phone_req_ph:"Téléphone *",sh_phone2_ph:"Téléphone 2",sh_choose_city:"— Choisir la ville —",
+    sh_choose_delivery:"— Mode de livraison * —",sh_home:"🏠 Livraison à domicile",sh_desk:"🏢 Livraison au point relais (Stop Desk)",sh_addr_ph:"Adresse de livraison",
+    sh_confirm:"✅ Confirmer la commande",sh_success_title:"Commande enregistrée !",sh_success_msg:"Nous vous contacterons bientôt pour confirmer.",sh_ref:"Réf :",
+    sh_continue:"🛍️ Continuer les achats",sh_powered:"Propulsé par",sh_cart_title:"🛍️ Panier",sh_cart_empty:"Panier vide",
+    sh_order_btn:"🚀 Commander",sh_prev_img:"Image précédente",sh_next_img:"Image suivante",sh_add_to_cart:"🛒 Ajouter au panier",
+    sh_show_reviews:"⭐ Voir les avis",sh_unavailable:"Cette boutique n'est pas disponible pour le moment",sh_meta_desc:"Boutique {name} — achetez maintenant",sh_all:"Tout",
+    sh_enter_phone:"Entrez votre numéro de téléphone",sh_rated:"✅ Commande déjà évaluée, merci",sh_rate_prompt:"⭐ Notez ce produit :",sh_rate_comment_ph:"Commentaire (facultatif)",
+    sh_send_rating:"Envoyer l'avis",sh_no_orders:"Aucune commande avec ce numéro",sh_try_again:"Erreur, réessayez",sh_pick_stars:"Choisissez d'abord le nombre d'étoiles",
+    sh_rating_sent:"✅ Merci, votre avis a été envoyé",sh_cur_dzd:"DA",sh_left:"⚡ Plus que {n} en stock !",sh_sold_out:"Rupture",
+    sh_add:"🛒 Ajouter",sh_stock_out:"Rupture de stock",sh_stock_low:"Stock faible",sh_stock_in:"En stock",
+    sh_no_reviews:"Aucun avis pour le moment",sh_load_error:"Erreur de chargement",sh_stock_short:"Stock insuffisant",sh_added:"✅ Ajouté : ",
+    sh_fill_required:"Remplissez les champs *",sh_pick_delivery:"Choisissez le mode de livraison (domicile ou point relais)",sh_send_error:"❌ Erreur lors de l'envoi"
   },
   AR:{
     nav_dashboard:"الرئيسية",nav_orders:"الطلبات",nav_products:"المنتجات",
@@ -265,7 +283,25 @@ var I18N = {
     early_offer:"عرض أوائل التجار",early_full:"اكتملت البلايص",instead_of_year:"بدل {x} دج في العام",
     current_plan:"باقتك الحالية",plan_expires_on:"تنتهي في {date}",plan_expires_soon:"تنتهي قريبًا: {date}",plan_grace_until:"انتهت — مهلة حتى {date}",plan_no_expiry:"بلا تاريخ انتهاء",
     contact_us:"تواصل معنا",
-    request_plan:"اطلب هذه الباقة"
+    request_plan:"اطلب هذه الباقة",
+    // المتجر العام (D4a): لغة المتجر من storeSettings.lang
+    store_lang:"لغة المتجر",lang_ar:"العربية",lang_fr:"Français",lang_en:"English",sh_default_name:"المتجر",sh_default_tag:"متجر إلكتروني",sh_track_link:"📦 تتبّع طلبيتي",
+    sh_search_ph:"🔍 ابحث عن منتج...",sh_cart:"السلة",sh_track_title:"تتبّع طلبيتك",sh_phone_ph:"رقم الهاتف",
+    sh_search_btn:"بحث",sh_sort_default:"الترتيب الافتراضي",sh_sort_price_asc:"السعر: الأقل أولاً",sh_sort_price_desc:"السعر: الأعلى أولاً",
+    sh_sort_newest:"الأحدث",sh_sort_best:"الأكثر طلباً",sh_no_products:"لا توجد منتجات حالياً",sh_back:"→ رجوع",
+    sh_checkout_title:"📋 إتمام الطلب",sh_subtotal:"المجموع الفرعي",sh_shipping:"التوصيل",sh_total:"المجموع",
+    sh_name_ph:"الاسم الكامل *",sh_phone_req_ph:"رقم الهاتف *",sh_phone2_ph:"رقم هاتف ثاني",sh_choose_city:"— اختر الولاية —",
+    sh_choose_delivery:"— اختر نوع التوصيل * —",sh_home:"🏠 توصيل للمنزل",sh_desk:"🏢 توصيل لمكتب الاستلام",sh_addr_ph:"عنوان التوصيل",
+    sh_confirm:"✅ تأكيد الطلب",sh_success_title:"تم تسجيل طلبك!",sh_success_msg:"سنتصل بك قريباً للتأكيد.",sh_ref:"رقم الطلب:",
+    sh_continue:"🛍️ مواصلة التسوق",sh_powered:"مدعوم بـ",sh_cart_title:"🛍️ السلة",sh_cart_empty:"السلة فارغة",
+    sh_order_btn:"🚀 اطلب الآن",sh_prev_img:"الصورة السابقة",sh_next_img:"الصورة التالية",sh_add_to_cart:"🛒 أضف للسلة",
+    sh_show_reviews:"⭐ عرض التقييمات",sh_unavailable:"هذا المتجر غير متاح حالياً",sh_meta_desc:"متجر {name} — تسوّق الآن",sh_all:"الكل",
+    sh_enter_phone:"أدخل رقم الهاتف",sh_rated:"✅ تم تقييم هذا الطلب، شكراً لك",sh_rate_prompt:"⭐ قيّم هذا المنتج:",sh_rate_comment_ph:"تعليق (اختياري)",
+    sh_send_rating:"إرسال التقييم",sh_no_orders:"لا توجد طلبات بهذا الرقم",sh_try_again:"خطأ، حاول مرة أخرى",sh_pick_stars:"اختر عدد النجوم أولاً",
+    sh_rating_sent:"✅ شكراً، تم إرسال تقييمك",sh_cur_dzd:"دج",sh_left:"⚡ متبقي {n} قطع فقط!",sh_sold_out:"نفد",
+    sh_add:"🛒 أضف",sh_stock_out:"نفد المخزون",sh_stock_low:"كمية محدودة",sh_stock_in:"متوفر",
+    sh_no_reviews:"لا توجد تقييمات بعد",sh_load_error:"خطأ في التحميل",sh_stock_short:"الكمية غير كافية",sh_added:"✅ تمت الإضافة: ",
+    sh_fill_required:"املأ الحقول المطلوبة *",sh_pick_delivery:"اختر نوع التوصيل (منزل أو مكتب الاستلام)",sh_send_error:"❌ خطأ في إرسال الطلب"
   },
   EN:{
     nav_dashboard:"Dashboard",nav_orders:"Orders",nav_products:"Products",
@@ -365,7 +401,25 @@ var I18N = {
     early_offer:"Early merchants offer",early_full:"All spots are taken",instead_of_year:"instead of {x} DZD a year",
     current_plan:"Your current plan",plan_expires_on:"expires on {date}",plan_expires_soon:"expires soon: {date}",plan_grace_until:"expired — grace period until {date}",plan_no_expiry:"no expiry date",
     contact_us:"Contact us",
-    request_plan:"Request this plan"
+    request_plan:"Request this plan",
+    // المتجر العام (D4a): لغة المتجر من storeSettings.lang
+    store_lang:"Store language",lang_ar:"العربية",lang_fr:"Français",lang_en:"English",sh_default_name:"Store",sh_default_tag:"Online store",sh_track_link:"📦 Track my order",
+    sh_search_ph:"🔍 Search...",sh_cart:"Cart",sh_track_title:"Track your order",sh_phone_ph:"Phone number",
+    sh_search_btn:"Search",sh_sort_default:"Default order",sh_sort_price_asc:"Price: low to high",sh_sort_price_desc:"Price: high to low",
+    sh_sort_newest:"Newest",sh_sort_best:"Best sellers",sh_no_products:"No products available",sh_back:"← Back",
+    sh_checkout_title:"📋 Checkout",sh_subtotal:"Subtotal",sh_shipping:"Shipping",sh_total:"Total",
+    sh_name_ph:"Full name *",sh_phone_req_ph:"Phone *",sh_phone2_ph:"Second phone",sh_choose_city:"— Choose your city —",
+    sh_choose_delivery:"— Delivery type * —",sh_home:"🏠 Home delivery",sh_desk:"🏢 Pickup desk (Stop Desk)",sh_addr_ph:"Delivery address",
+    sh_confirm:"✅ Confirm order",sh_success_title:"Order placed!",sh_success_msg:"We will contact you soon to confirm.",sh_ref:"Ref:",
+    sh_continue:"🛍️ Continue shopping",sh_powered:"Powered by",sh_cart_title:"🛍️ Cart",sh_cart_empty:"Your cart is empty",
+    sh_order_btn:"🚀 Order now",sh_prev_img:"Previous image",sh_next_img:"Next image",sh_add_to_cart:"🛒 Add to cart",
+    sh_show_reviews:"⭐ Show reviews",sh_unavailable:"This store is not available right now",sh_meta_desc:"{name} — shop now",sh_all:"All",
+    sh_enter_phone:"Enter your phone number",sh_rated:"✅ Already rated, thank you",sh_rate_prompt:"⭐ Rate this product:",sh_rate_comment_ph:"Comment (optional)",
+    sh_send_rating:"Send rating",sh_no_orders:"No orders with this number",sh_try_again:"Error, please try again",sh_pick_stars:"Pick the number of stars first",
+    sh_rating_sent:"✅ Thanks, your rating was sent",sh_cur_dzd:"DZD",sh_left:"⚡ Only {n} left!",sh_sold_out:"Sold out",
+    sh_add:"🛒 Add",sh_stock_out:"Out of stock",sh_stock_low:"Low stock",sh_stock_in:"In stock",
+    sh_no_reviews:"No reviews yet",sh_load_error:"Loading error",sh_stock_short:"Not enough stock",sh_added:"✅ Added: ",
+    sh_fill_required:"Fill in the required fields *",sh_pick_delivery:"Choose a delivery type (home or pickup desk)",sh_send_error:"❌ Error sending the order"
   }
 };
 
