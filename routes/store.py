@@ -16,7 +16,9 @@ from firebase_admin import storage as fb_storage
 from markupsafe import escape as _esc
 
 from core.config import (
+    DEFAULT_STORE_COLOR,
     FB_STORAGE_BUCKET,
+    STORE_COLORS,
 )
 from core.db import (
     _fb_delete,
@@ -51,6 +53,8 @@ _STORE_TEXT_LIMITS = {"name": 120, "tagline": 300, "logo": 32, "lang": 8}
 
 
 _STORE_CURRENCIES  = ("DZD", "EUR", "USD")
+_STORE_DEFAULTS    = (("name","My Store"), ("tagline",""), ("logo","🛒"), ("logoImage",""), ("lang","AR"),
+                      ("currency","DZD"), ("color", DEFAULT_STORE_COLOR))
 
 
 def _logo_blob_prefix(uid):
@@ -77,6 +81,8 @@ def _clean_store_setting(field, value, current, uid=None):
         return (isinstance(value, str) and _is_own_logo_url(value, uid), value)
     if field == "currency":
         return (value in _STORE_CURRENCIES, value)
+    if field == "color":
+        return (isinstance(value, str) and value in STORE_COLORS, value)
     if not isinstance(value, str) or len(value) > _STORE_TEXT_LIMITS[field]:
         return False, None
     return True, value
@@ -92,7 +98,7 @@ def api_update_store_settings():
     if not isinstance(d, dict): return err_json("Invalid data")
     existing = _fb_get(f"data/{uid}/storeSettings")
     patch = {}
-    for field, default in (("name","My Store"), ("tagline",""), ("logo","🛒"), ("logoImage",""), ("lang","AR"), ("currency","DZD")):
+    for field, default in _STORE_DEFAULTS:
         if field in d:
             ok, value = _clean_store_setting(field, d[field], (existing or {}).get(field), uid)
             if not ok:
@@ -102,7 +108,7 @@ def api_update_store_settings():
         if existing:
             _fb_patch(f"data/{uid}/storeSettings", patch)
         else:
-            for field, default in (("name","My Store"), ("tagline",""), ("logo","🛒"), ("logoImage",""), ("lang","AR"), ("currency","DZD")):
+            for field, default in _STORE_DEFAULTS:
                 patch.setdefault(field, default)
             _fb_put(f"data/{uid}/storeSettings", patch)
     return ok_json(True)

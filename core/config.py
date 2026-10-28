@@ -139,6 +139,18 @@ def normalize_plan(plan, default="starter"):
 
 CURRENCY_SYMBOLS_PY = {"DZD": "دج", "EUR": "€", "USD": "$"}
 
+# لون المتجر العام (D4a): storeSettings.color = المفتاح، (أساسي، فاتح). المتجر وصفحة التتبع برك؛
+# اللوحة تبقى بألوان OrderFlow. نفس الجدول فـ static/js/shop.js (SHOP_COLORS). بلا color = violet.
+STORE_COLORS = {
+    "violet":  ("#3B2BFF", "#E6E3FF"),
+    "blue":    ("#1D4ED8", "#DBEAFE"),
+    "emerald": ("#0F766E", "#CCFBF1"),
+    "orange":  ("#C2410C", "#FFEDD5"),
+    "pink":    ("#BE123C", "#FFE4E6"),
+    "mauve":   ("#7C3AED", "#EDE9FE"),
+}
+DEFAULT_STORE_COLOR = "violet"
+
 BOT_LAUNCHED = os.environ.get("BOT_LAUNCHED", "true").strip().lower() == "true"
 
 # ── فريق العمل (Team Members) ──────────────────────────────

@@ -826,6 +826,16 @@
         <option value="USD" data-i18n="cur_usd">$ — Dollar (USD)</option>
       </select>
     </div>
+    <div class="form-group"><label data-i18n="store_color">لون المتجر</label>
+      <div class="swatch-row" role="radiogroup">
+        <label class="swatch swatch-violet"><input type="radio" name="ss_color" value="violet"/><span data-i18n="color_violet">بنفسجي</span></label>
+        <label class="swatch swatch-blue"><input type="radio" name="ss_color" value="blue"/><span data-i18n="color_blue">أزرق</span></label>
+        <label class="swatch swatch-emerald"><input type="radio" name="ss_color" value="emerald"/><span data-i18n="color_emerald">زمردي</span></label>
+        <label class="swatch swatch-orange"><input type="radio" name="ss_color" value="orange"/><span data-i18n="color_orange">برتقالي</span></label>
+        <label class="swatch swatch-pink"><input type="radio" name="ss_color" value="pink"/><span data-i18n="color_pink">وردي</span></label>
+        <label class="swatch swatch-mauve"><input type="radio" name="ss_color" value="mauve"/><span data-i18n="color_mauve">موف</span></label>
+      </div>
+    </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
       <button class="btn-outline" data-on-click="closeModal('storeSettingsModal')"><span data-i18n="cancel">Annuler</span></button>
       <button class="btn-primary" data-on-click="saveStoreSettings()"><span data-i18n="save">Enregistrer</span></button>

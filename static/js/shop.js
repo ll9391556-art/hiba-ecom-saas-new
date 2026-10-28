@@ -50,6 +50,7 @@ async function loadShopData(){
     if(sr.status==="ok" && sr.data){
       var s = sr.data;
       SHOP_CURRENCY = s.currency || "DZD";
+      sh_applyColor(s.color);
       var storeName = s.name||"Boutique";
       sh_renderLogo(document.getElementById("sh-logo"), s.logoImage, storeName);
       sh_renderLogo(document.getElementById("track-logo"), s.logoImage, storeName);
@@ -82,6 +83,20 @@ async function loadShopData(){
 // ── شعار المتجر (D4a): الصورة، ولا أول حرف من الاسم فمربع بلون المتجر.
 // الإيموجي القديم (storeSettings.logo) يبقى فالبيانات وما يبانش هنا.
 var SHOP_COLOR_MAIN = "#3B2BFF";
+
+// ── لون المتجر (D4a): المفتاح من storeSettings.color → (أساسي، فاتح) من هاد الجدول الثابت
+// (نفس STORE_COLORS فـ core/config.py). قيمة السيرفر ما تدخلش للـ CSS مباشرة؛ غير معروف = violet.
+var SHOP_COLORS = {
+  violet:["#3B2BFF","#E6E3FF"], blue:["#1D4ED8","#DBEAFE"], emerald:["#0F766E","#CCFBF1"],
+  orange:["#C2410C","#FFEDD5"], pink:["#BE123C","#FFE4E6"], mauve:["#7C3AED","#EDE9FE"]
+};
+
+function sh_applyColor(key){
+  var c = Object.prototype.hasOwnProperty.call(SHOP_COLORS, key) ? SHOP_COLORS[key] : SHOP_COLORS.violet;
+  document.body.style.setProperty("--store", c[0]);
+  document.body.style.setProperty("--store-light", c[1]);
+  SHOP_COLOR_MAIN = c[0];
+}
 
 function sh_initial(name){
   return Array.from(String(name||"").trim())[0] || "?";  // Array.from: حرف عربي ولا إيموجي كامل

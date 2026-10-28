@@ -253,3 +253,45 @@ def test_legacy_external_logo_still_saves_when_unchanged(client, seed_owner, db)
     r = _save_settings(client, owner["headers"], name="A2", logoImage="https://old.example/l.gif")
     assert r.status_code == 200
     assert db.get(f"data/{owner['uid']}/storeSettings") == {"name": "A2", "logoImage": "https://old.example/l.gif"}
+
+
+# ── البند 3: لون المتجر ───────────────────────────────────────
+COLORS = ["violet", "blue", "emerald", "orange", "pink", "mauve"]
+
+
+def test_store_colors_table(app):
+    from core.config import STORE_COLORS
+    assert list(STORE_COLORS) == COLORS
+    assert STORE_COLORS["violet"] == ("#3B2BFF", "#E6E3FF")
+    assert STORE_COLORS["mauve"] == ("#7C3AED", "#EDE9FE")
+
+
+@pytest.mark.parametrize("color", COLORS)
+def test_valid_color_is_saved(client, seed_owner, db, color):
+    owner = seed_owner()
+    db.set(f"data/{owner['uid']}/storeSettings", {"name": "A"})
+    assert _save_settings(client, owner["headers"], color=color).status_code == 200
+    assert db.get(f"data/{owner['uid']}/storeSettings")["color"] == color
+
+
+@pytest.mark.parametrize("bad", ["red", "#3B2BFF", "Violet", "", 5, None, ["blue"], "__proto__"])
+def test_invalid_color_is_rejected(client, seed_owner, db, bad):
+    owner = seed_owner()
+    db.set(f"data/{owner['uid']}/storeSettings", {"name": "A", "color": "blue"})
+    assert _save_settings(client, owner["headers"], color=bad).status_code == 400
+    assert db.get(f"data/{owner['uid']}/storeSettings") == {"name": "A", "color": "blue"}
+
+
+def test_new_store_gets_violet(client, seed_owner, db):
+    owner = seed_owner()
+    assert _save_settings(client, owner["headers"], name="Jdid").status_code == 200
+    assert db.get(f"data/{owner['uid']}/storeSettings")["color"] == "violet"
+
+
+def test_old_store_without_color_still_saves(client, seed_owner, db):
+    owner = seed_owner()
+    db.set(f"data/{owner['uid']}/storeSettings", {"name": "Qdim", "logo": "🛒", "currency": "DZD"})
+    assert _save_settings(client, owner["headers"], name="Qdim 2", logo="🛒").status_code == 200
+    assert db.get(f"data/{owner['uid']}/storeSettings") == {"name": "Qdim 2", "logo": "🛒", "currency": "DZD"}
+    r = client.get(f"/api/getStoreSettings?userId={owner['uid']}")
+    assert "color" not in r.get_json()["data"]  # الواجهة تعتبرو violet

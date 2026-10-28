@@ -94,3 +94,41 @@ def test_dashboard_logo_upload():
     up = _fn(DASH, "uploadStoreLogoImage")
     assert '"/uploadStoreLogo"' in up and "1024*1024" in up.replace(" ", "")
     assert "logo:" not in _fn(DASH, "saveStoreSettings").replace("logoImage:", "")
+
+
+# ── البند 3: لون المتجر ───────────────────────────────────────
+APP_CSS = (STATIC / "css" / "app.css").read_text(encoding="utf-8")
+TOKENS_CSS = (STATIC / "css" / "tokens.css").read_text(encoding="utf-8")
+
+
+def test_shop_color_table_matches_server():
+    from core.config import STORE_COLORS
+    m = re.search(r"var SHOP_COLORS\s*=\s*\{(.*?)\};", SHOP, re.S)
+    assert m
+    js = dict((k, (a, b)) for k, a, b in re.findall(r'(\w+):\["(#[0-9A-F]{6})","(#[0-9A-F]{6})"\]', m.group(1)))
+    assert js == dict(STORE_COLORS)
+
+
+def test_color_is_applied_from_the_fixed_table():
+    fn = _fn(SHOP, "sh_applyColor")
+    assert "hasOwnProperty" in fn and '"--store"' in fn and '"--store-light"' in fn
+    assert "sh_applyColor(s.color)" in _fn(SHOP, "loadShopData")
+
+
+def test_store_tokens_only_on_shop_pages():
+    assert re.search(r'<body class="shop-page">', SHOP_HTML)
+    root = re.search(r":root\{([^}]*)\}", TOKENS_CSS).group(1)
+    assert "--store:#3B2BFF" in root and "--store-light:#E6E3FF" in root  # افتراضي (test_design_d1)
+    rule = re.search(r"\.shop-page\{([^}]*)\}", TOKENS_CSS).group(1)
+    for decl in ("--accent:var(--store)", "--brand:var(--store)", "--brand-light:var(--store-light)"):
+        assert decl in rule, decl
+    assert "--flash" not in rule and "--red" not in rule  # أحمر العروض ثابت
+    # اللوحة: --brand يبقى OrderFlow (ما كانش .shop-page، وما كانش var(--store) فـ index.html)
+    assert "shop-page" not in DASH and "var(--store" not in DASH
+
+
+def test_dashboard_color_picker():
+    modal = DASH[DASH.index('id="storeSettingsModal"'):][:5000]
+    values = re.findall(r'<input type="radio" name="ss_color" value="(\w+)"', modal)
+    assert values == ["violet", "blue", "emerald", "orange", "pink", "mauve"]
+    assert "color:" in _fn(DASH, "saveStoreSettings")
