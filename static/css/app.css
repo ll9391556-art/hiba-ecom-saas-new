@@ -238,10 +238,10 @@ html[dir=rtl] .modal-close{right:auto;left:16px}
 .track-brand{display:flex;align-items:center;gap:10px;margin-bottom:12px}
 /* اختيار لون المتجر (D4a): --sw من tokens.css */
 .swatch-row{display:flex;flex-wrap:wrap;gap:8px}
-.swatch{position:relative;display:inline-flex;align-items:center;gap:8px;min-height:var(--h-btn-sm);padding:0 12px 0 10px;border:1px solid var(--line);border-radius:var(--r-btn);background:var(--white);color:var(--ink);font-size:14px;cursor:pointer}
-.swatch::before{content:"";width:20px;height:20px;border-radius:6px;background:var(--sw)}
+.swatch-row .swatch{position:relative;display:inline-flex;align-items:center;gap:8px;min-height:var(--h-btn-sm);padding:0 12px 0 10px;margin:0;border:1px solid var(--line);border-radius:var(--r-btn);background:var(--white);color:var(--ink);font-size:14px;font-weight:500;cursor:pointer}
+.swatch::before{content:"";display:block;flex-shrink:0;width:20px;height:20px;border-radius:6px;background:var(--sw)}
 .swatch input{position:absolute;opacity:0;width:1px;height:1px;margin:0}
-.swatch:has(input:checked){border-color:var(--sw);box-shadow:0 0 0 2px var(--sw);font-weight:600}
+.swatch-row .swatch:has(input:checked){border-color:var(--sw);box-shadow:0 0 0 2px var(--sw);font-weight:700}
 .swatch:has(input:focus-visible){outline:2px solid var(--brand);outline-offset:2px}
 .shop-brand-name{font-size:16px;font-weight:800}
 .shop-brand-tag{font-size:11px;color:var(--muted)}
