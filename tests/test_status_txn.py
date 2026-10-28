@@ -376,3 +376,25 @@ def test_delivery_isolation_and_permissions(client, db, shop, seed_owner, seed_m
     no = seed_member(shop, "m_no", perms={"products": True})
     assert _set_delivery(client, no["headers"], oid, "desk").status_code == 403
     assert db.get(f"data/{uid}/orders/{oid}") == before and db.get("data/2002/orders") is None
+
+
+# ── BUG-005: updateStatus يقبل غير الحالات الخمسة ─────────
+@pytest.mark.parametrize("status", ["Shipped", "confirmed", "CONFIRMED", "No  Answer", "<b>x</b>", "Annulé", "1"])
+def test_unknown_status_is_400_and_writes_nothing(client, app, db, shop, status):
+    uid = shop["uid"]
+    oid = _order(client, uid)
+    _status(client, shop, oid, "Confirmed")
+    before, stats, log = db.get(f"data/{uid}/orders/{oid}"), db.get(f"data/{uid}/stats"), _audit(db, uid)
+    r = _set_status(client, shop["headers"], oid, status)
+    assert r.status_code == 400 and r.get_json()["message"] == "الحالة غير صالحة"
+    assert db.get(f"data/{uid}/orders/{oid}") == before and db.get(f"data/{uid}/stats") == stats
+    assert _audit(db, uid) == log
+
+
+@pytest.mark.parametrize("status", ["Pending", "Confirmed", "Delivered", "Refused", "No Answer"])
+def test_the_five_statuses_are_accepted(client, app, db, shop, status):
+    uid = shop["uid"]
+    oid = _order(client, uid)
+    _status(client, shop, oid, f" {status} ")                # strip كيما قبل
+    assert db.get(f"data/{uid}/orders/{oid}/status") == status
+    _assert_exact(app, db, uid)

@@ -229,6 +229,7 @@ def api_update_status():
     status = str(body.get("status")  or "").strip()
     if not oid or not status: return err_json("Missing fields")
     if not _valid_order_id(oid): return err_json("Invalid order id")
+    if status not in _ORDER_STATUSES: return err_json("الحالة غير صالحة")  # BUG-005
     now = time.strftime("%Y-%m-%d %H:%M")
 
     def apply(order, p_data, c_data):
